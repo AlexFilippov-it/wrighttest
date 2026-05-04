@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tests     Test[]
+  environments Environment[]
+  channels  NotificationChannel[]
+  suites    Suite[]
+  schedules Schedule[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Test {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  device    String?
+  steps     Json     @default("[]")
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  runs      TestRun[]
+  schedules Schedule[]
+}
+
+model TestRun {
+  id          String    @id @default(cuid())
+  status      RunStatus @default(PENDING)
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  durationMs  Int?
+  error       String?
+  tracePath   String?
+  screenshots Json      @default("[]")
+  currentStep Int?
+  totalSteps  Int?
+  environmentId String?
+  scheduleId  String?
+  testId      String
+  test        Test      @relation(fields: [testId], references: [id], onDelete: Cascade)
+  environment Environment? @relation(fields: [environmentId], references: [id])
+  schedule    Schedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+}
+
+model Suite {
+  id        String   @id @default(cuid())
+  name      String
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testIds   Json     @default("[]")
+  schedules Schedule[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Schedule {
+  id            String    @id @default(cuid())
+  name          String
+  cron          String
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  suiteId       String?
+  suite         Suite?    @relation(fields: [suiteId], references: [id], onDelete: SetNull)
+  testId        String?
+  test          Test?     @relation(fields: [testId], references: [id], onDelete: SetNull)
+  environmentId String?
+  environment   Environment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
+  enabled       Boolean   @default(true)
+  lastRunAt     DateTime?
+  createdAt     DateTime  @default(now())
+  runs          TestRun[]
+}
+
+model Environment {
+  id        String   @id @default(cuid())
+  name      String
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  variables Json     @default("{}")
+  runs      TestRun[]
+  schedules Schedule[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NotificationChannel {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      String
+  name      String
+  config    Json
+  onFailed  Boolean  @default(true)
+  onPassed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  PASSED
+  FAILED
+}

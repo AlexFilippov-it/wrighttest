@@ -1,0 +1,42 @@
+# Environment
+.env
+!.env.example
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build
+frontend/dist/
+backend/dist/
+
+# Artifacts (generated at runtime)
+backend/screenshots/
+backend/traces/
+
+# Prisma
+backend/prisma/migrations/dev.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# Local screenshots and validation artifacts
+/*.png
+/test-results/
+/validate-requests.txt
+
+# Docker
+docker-compose.override.yml

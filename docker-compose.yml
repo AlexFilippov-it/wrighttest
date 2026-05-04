@@ -1,0 +1,111 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: playwright_testing
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d playwright_testing"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  novnc:
+    build:
+      context: ./novnc
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${VNC_PORT:-5900}:5900"
+      - "${NOVNC_PORT:-6080}:6080"
+    environment:
+      VNC_PORT: ${VNC_PORT:-5900}
+      NOVNC_PORT: ${NOVNC_PORT:-6080}
+    volumes:
+      - x11_socket:/tmp/.X11-unix
+    shm_size: '256mb'
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${NOVNC_PORT:-6080}/vnc.html >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    environment:
+      BACKEND_PORT: ${BACKEND_PORT:-3000}
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/playwright_testing
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      FRONTEND_URL: http://localhost:${FRONTEND_PORT:-80}
+      FRONTEND_INTERNAL_URL: http://host.docker.internal:${FRONTEND_PORT:-80}
+      SCREENSHOTS_DIR: /app/backend/screenshots
+      TRACES_DIR: /app/backend/traces
+      DISPLAY: ":99"
+      NOVNC_HOST: novnc
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@wrighttest.app}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      NODE_ENV: production
+    volumes:
+      - screenshots:/app/backend/screenshots
+      - traces:/app/backend/traces
+      - x11_socket:/tmp/.X11-unix
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      novnc:
+        condition: service_healthy
+    shm_size: '1gb'
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${BACKEND_PORT:-3000}/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_BACKEND_URL: ${VITE_BACKEND_URL:-http://localhost:3000}
+        VITE_NOVNC_URL: ${VITE_NOVNC_URL:-http://localhost:6080}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  screenshots:
+  traces:
+  x11_socket:

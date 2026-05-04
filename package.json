@@ -1,0 +1,24 @@
+{
+  "name": "wrighttest",
+  "version": "0.1.0",
+  "description": "Low-code UI test automation platform powered by Playwright",
+  "private": true,
+  "homepage": "https://wrighttest.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AlexFilippov-it/wrighttest.git"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "dotenv-cli": "^11.0.0"
+  }
+}

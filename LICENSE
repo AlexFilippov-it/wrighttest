@@ -1,0 +1,111 @@
+WrightTest Source-Available License v1.0
+
+Copyright (c) 2026 WrightTest.app
+
+This license governs the use, copying, modification, and distribution of
+WrightTest, including its source code, documentation, user interface, and
+related assets.
+
+1. Definitions
+
+"Software" means the WrightTest project, including source code, documentation,
+configuration files, scripts, user interface, and related materials.
+
+"Licensor" means the copyright holder of the Software.
+
+"You" means any individual or legal entity using, copying, modifying, or
+distributing the Software.
+
+"Hosted Service" means making the Software, or a modified version of the
+Software, available to third parties over a network, including as a SaaS,
+cloud service, hosted platform, managed service, or similar offering.
+
+"Commercial Product" means a product, service, platform, or offering that is
+sold, licensed, monetized, or otherwise provided for commercial advantage.
+
+2. Permitted Uses
+
+You may use, copy, modify, and run the Software for the following purposes:
+
+a. personal use;
+b. educational use;
+c. research and evaluation;
+d. internal use within your own organization;
+e. testing your own applications, websites, services, or products;
+f. contributing improvements back to the WrightTest project.
+
+You may also create private modifications for the permitted uses listed above.
+
+3. Restrictions
+
+You may not, without prior written permission from the Licensor:
+
+a. sell, license, sublicense, rent, lease, or otherwise provide WrightTest as
+   a standalone commercial product;
+
+b. offer WrightTest, or a modified version of WrightTest, as a public Hosted
+   Service;
+
+c. use WrightTest to create or operate a competing hosted UI test automation
+   platform offered to third parties;
+
+d. remove or obscure copyright notices, license notices, or attribution notices;
+
+e. use the name "WrightTest", the WrightTest logo, or WrightTest branding to
+   promote a fork, derivative product, hosted service, or commercial offering
+   without written permission from the Licensor.
+
+4. Contributions
+
+Unless otherwise agreed in writing, any contribution submitted to the WrightTest
+project is provided under the terms of this license.
+
+By submitting a contribution, you represent that you have the right to submit it
+and that you grant the Licensor and other users the right to use the contribution
+under this license.
+
+5. Commercial Licensing
+
+The Software is currently available for the permitted uses listed in Section 2.
+
+The Licensor may offer separate commercial licenses in the future, including
+licenses for hosted services, commercial distribution, enterprise use, or cloud
+offerings.
+
+To request permission for a use not allowed by this license, contact the
+Licensor.
+
+6. Ownership
+
+The Software is licensed, not sold.
+
+The Licensor retains all right, title, and interest in and to the Software,
+including all copyrights, trademarks, service marks, logos, and branding.
+
+7. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR
+A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+8. Limitation of Liability
+
+IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+9. Termination
+
+If you violate this license, your rights under this license terminate
+automatically.
+
+Upon termination, you must stop using, copying, modifying, distributing, or
+hosting the Software, unless you have received separate written permission from
+the Licensor.
+
+10. Governing Terms
+
+This license is the entire agreement between You and the Licensor regarding the
+Software, unless You have entered into a separate written agreement with the
+Licensor.
