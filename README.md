@@ -39,14 +39,14 @@ docker compose up --build
 
 | Service | URL |
 |---|---|
-| App | http://localhost:80 |
+| App | http://localhost:5173 |
 | API | http://localhost:3000 |
 | noVNC | http://localhost:6080 |
 
-Default admin login:
+Default admin login is defined in `.env`:
 
-- `admin@wrighttest.com`
-- `changeme`
+- `ADMIN_EMAIL=admin@wrighttest.com`
+- `ADMIN_PASSWORD=changeme`
 
 On an empty database the seed also creates a `Docker Demo` project with two sample tests, a `DEV` environment, a `Smoke Test` suite, and an hourly schedule.
 

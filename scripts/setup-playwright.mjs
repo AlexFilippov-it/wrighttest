@@ -2,6 +2,10 @@ import { spawnSync } from 'node:child_process';
 
 function runPlaywrightInstall(args) {
   const result = spawnSync('npx', ['playwright', ...args], {
+    env: {
+      ...process.env,
+      PLAYWRIGHT_BROWSERS_PATH: '0'
+    },
     stdio: 'inherit',
     shell: process.platform === 'win32'
   });
@@ -14,12 +18,22 @@ function runPlaywrightInstall(args) {
 }
 
 const installArgs = ['install', 'chromium'];
-const shouldInstallDeps = process.platform === 'linux' && process.stdout.isTTY;
+const shouldInstallDeps = process.platform === 'linux';
 
 let exitCode = 0;
 
 if (shouldInstallDeps) {
-  exitCode = runPlaywrightInstall(['install', '--with-deps', 'chromium']);
+  exitCode = runPlaywrightInstall(installArgs);
+  if (exitCode === 0) {
+    const depsExitCode = runPlaywrightInstall(['install-deps', 'chromium']);
+    if (depsExitCode !== 0) {
+      console.warn(
+        '\n[setup-playwright] Chromium browser deps could not be installed automatically. ' +
+        '[setup-playwright] If validation still fails on Ubuntu/Linux, run: sudo npx playwright install-deps chromium\n'
+      );
+    }
+  }
+
   if (exitCode !== 0) {
     console.warn(
       '\n[setup-playwright] Chromium browser deps could not be installed automatically. ' +
