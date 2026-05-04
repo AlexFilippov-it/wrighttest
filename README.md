@@ -7,6 +7,9 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)
 ![Playwright](https://img.shields.io/badge/Playwright-1.59-green)
 ![Docker](https://img.shields.io/badge/Docker-Compose-blue)
+[![Stars](https://img.shields.io/github/stars/AlexFilippov-it/wrighttest?style=social)](https://github.com/AlexFilippov-it/wrighttest/stargazers)
+[![Last Commit](https://img.shields.io/github/last-commit/AlexFilippov-it/wrighttest)](https://github.com/AlexFilippov-it/wrighttest/commits/main)
+[![CI](https://github.com/AlexFilippov-it/wrighttest/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexFilippov-it/wrighttest/actions/workflows/ci.yml)
 
 ## ✨ Features
 
@@ -22,6 +25,18 @@
 - **Export** - download tests as `.spec.ts`, run with `npx playwright test`
 - **Import** - paste existing Playwright script, get a visual test
 - **Dashboard** - pass rate over time and flaky test detection
+
+## How WrightTest compares
+
+| Feature | WrightTest | Cypress | Selenium IDE | Playwright UI |
+|---|---|---|---|---|
+| No-code recorder | ✅ | ❌ | ✅ | ❌ |
+| Docker one-command | ✅ | ❌ | ❌ | ❌ |
+| Mobile emulation | ✅ | ⚠️ | ❌ | ✅ |
+| Built-in scheduler | ✅ | ❌ | ❌ | ❌ |
+| Export to `.spec.ts` | ✅ | ❌ | ❌ | ❌ |
+| Self-hosted | ✅ | ✅ | ✅ | ❌ |
+| Trace Viewer built-in | ✅ | ❌ | ❌ | ✅ |
 
 ## 🚀 Quick Start (Docker-first)
 
@@ -51,6 +66,14 @@ Default admin login is defined in `.env`:
 On an empty database the seed also creates a `Docker Demo` project with two sample tests, a `DEV` environment, a `Smoke Test` suite, and an hourly schedule.
 
 This path is the recommended first launch on any machine. The backend image is built on the Playwright-ready base image and includes the browser bundle, so no host browser or system library setup is required.
+
+## 🤖 AI Quick Start
+
+If you are working with an AI coding agent, start here first:
+
+- [AGENTS.md](./AGENTS.md)
+
+It contains the canonical repo workflow, startup order, and environment rules for WrightTest.
 
 ## 🛠 Host Fallback (optional)
 
@@ -124,6 +147,10 @@ docker compose up --build -d
 
 ## 📸 Screenshots
 
+Demo recording:
+
+![Screen Recording](./docs/Screen_Recording.gif)
+
 Screenshots will be added in `docs/`:
 
 - `docs/screenshot-projects.png`
@@ -174,6 +201,10 @@ Playwright headless
 - [ ] Export full Playwright project
 - [ ] Test-to-Doc export
 - [ ] Allure / TestIT integration
+
+## 📦 Docker Image
+
+The Docker image badge will be added after the first public image publish.
 
 ## 📄 License
 
