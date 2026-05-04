@@ -28,6 +28,8 @@ const envCandidates = [
   path.resolve(process.cwd(), '.env'),
   path.resolve(process.cwd(), '..', '.env')
 ];
+const screenshotsDir = path.resolve(process.env.SCREENSHOTS_DIR || './screenshots');
+const tracesDir = path.resolve(process.env.TRACES_DIR || './traces');
 const traceViewerRoot = path.join(
   path.dirname(require.resolve('playwright-core/package.json')),
   'lib/vite/traceViewer'
@@ -40,6 +42,9 @@ for (const envPath of envCandidates) {
     break;
   }
 }
+
+fs.mkdirSync(screenshotsDir, { recursive: true });
+fs.mkdirSync(tracesDir, { recursive: true });
 
 async function start() {
   const fastify = Fastify({ logger: true });
@@ -97,7 +102,7 @@ async function start() {
   await fastify.register(authRoutes);
 
   await fastify.register(fastifyStatic, {
-    root: path.resolve(process.env.SCREENSHOTS_DIR || './screenshots'),
+    root: screenshotsDir,
     prefix: '/screenshots/',
     decorateReply: false,
     setHeaders: (res) => {
@@ -106,7 +111,7 @@ async function start() {
   });
 
   await fastify.register(fastifyStatic, {
-    root: path.resolve(process.env.TRACES_DIR || './traces'),
+    root: tracesDir,
     prefix: '/traces/',
     decorateReply: false,
     setHeaders: (res) => {

@@ -1,4 +1,4 @@
-import { chromium, type Page } from 'playwright';
+import { type Page } from 'playwright';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,6 +8,7 @@ import { resolveLocator } from '../utils/locator';
 import { deriveSelectorCandidates } from '../utils/selector-variants';
 import { hasUnresolvedVariables, interpolateStep } from '../utils/interpolate';
 import { resolveDeviceConfig } from '../utils/devices';
+import { chromium, getChromiumLaunchOptions, getBrowserName } from '../utils/browser';
 
 export type StepValidationResult = {
   index: number;
@@ -77,7 +78,7 @@ async function performValidationAction(page: Page, step: Step, selector: string)
 }
 
 export async function validateSteps(url: string, steps: Step[], device?: string): Promise<ValidationReport> {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(getChromiumLaunchOptions());
   const context = await browser.newContext({
     ...resolveDeviceConfig(device)
   });
@@ -92,6 +93,7 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
   await fs.mkdir(TRACES_DIR, { recursive: true });
 
   try {
+    console.log(`[Validator] Using ${getBrowserName()}`);
     await context.tracing.start({ screenshots: true, snapshots: true });
     tracingStarted = true;
 

@@ -13,6 +13,8 @@
     "backend"
   ],
   "scripts": {
+    "postinstall": "node scripts/setup-playwright.mjs",
+    "setup": "node scripts/setup-playwright.mjs",
     "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "dev:backend": "npm run dev -w backend",
     "dev:frontend": "npm run dev -w frontend"

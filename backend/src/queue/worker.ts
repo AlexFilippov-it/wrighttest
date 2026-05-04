@@ -1,5 +1,5 @@
 import { Worker, Job } from 'bullmq';
-import { chromium, devices } from 'playwright';
+import { devices } from 'playwright';
 import { expect } from '@playwright/test';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -12,6 +12,7 @@ import { resolveLocator } from '../utils/locator';
 import { hasUnresolvedVariables, interpolateStep } from '../utils/interpolate';
 import { notifyRunResult } from '../services/notifier';
 import { deriveSelectorCandidates } from '../utils/selector-variants';
+import { chromium, getChromiumLaunchOptions, getBrowserName } from '../utils/browser';
 
 const SCREENSHOTS_DIR = path.resolve(process.env.SCREENSHOTS_DIR || './screenshots');
 const TRACES_DIR = path.resolve(process.env.TRACES_DIR || './traces');
@@ -79,7 +80,7 @@ async function runTest(job: Job<TestJobData>) {
     console.warn(`[Worker] Unknown device "${test.device}", using desktop`);
   }
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(getChromiumLaunchOptions());
   const context = await browser.newContext({
     ...deviceConfig
   });
@@ -89,6 +90,8 @@ async function runTest(job: Job<TestJobData>) {
   const screenshots: string[] = [];
   const startedAt = Date.now();
   let currentStep = 0;
+
+  console.log(`[Worker] Using ${getBrowserName()} for test run ${testRunId}`);
 
   await prisma.testRun.update({
     where: { id: testRunId },

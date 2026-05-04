@@ -300,8 +300,17 @@ export default function TestEditorPage() {
       }
 
       await saveTest(values, fixedSteps);
-    } catch {
-      message.error('Validation failed');
+    } catch (error) {
+      const responseError =
+        error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { data?: { error?: string; message?: string } } }).response?.data
+          : undefined;
+      const validationMessage =
+        responseError?.error ??
+        responseError?.message ??
+        'Validation failed';
+
+      message.error(validationMessage);
     } finally {
       setValidating(false);
     }
