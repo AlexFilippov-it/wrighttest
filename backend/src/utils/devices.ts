@@ -1,3 +1,4 @@
+import '../setup-playwright-env';
 import { devices, type BrowserContextOptions } from 'playwright';
 
 export const POPULAR_DEVICES = [

@@ -1,3 +1,4 @@
+import '../setup-playwright-env';
 import fs from 'node:fs';
 import { chromium, type LaunchOptions } from 'playwright';
 
@@ -56,7 +57,7 @@ export async function launchChromium() {
     message.includes('Executable doesn\'t exist') ||
     message.includes('cannot open shared object file') ||
     message.includes('error while loading shared libraries')
-      ? 'Playwright Chromium is not ready on this machine. Run `npm run setup` from the repo root. On Ubuntu/Linux you may also need `sudo npx playwright install-deps chromium` if system libraries are missing.'
+      ? 'Playwright Chromium is not ready on this machine. Run `npm run setup` from the repo root, then if needed run `npx playwright install-deps chromium` on Ubuntu/Linux.'
       : 'Failed to launch Chromium.';
 
   throw new Error(`${hint} Original error: ${message}`);

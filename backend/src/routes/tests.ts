@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../prisma';
 import { CreateTestSchema, StepSchema, UpdateTestSchema } from '../schemas/test.schema';
-import { validateSteps } from '../services/validator';
+import { runValidationInSubprocess } from '../services/validation-runner';
 import { getAvailableDevices } from '../utils/devices';
 
 const urlOrTemplate = z.string().refine((value) => {
@@ -113,7 +113,7 @@ export async function testRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const report = await validateSteps(result.data.url, result.data.steps, result.data.device);
+      const report = runValidationInSubprocess(result.data.url, result.data.steps, result.data.device);
       return report;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Validation failed';

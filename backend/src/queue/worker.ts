@@ -1,3 +1,4 @@
+import '../setup-playwright-env';
 import { Worker, Job } from 'bullmq';
 import { devices } from 'playwright';
 import { expect } from '@playwright/test';

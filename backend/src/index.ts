@@ -50,8 +50,9 @@ async function start() {
   const fastify = Fastify({ logger: true });
   const port = Number(process.env.BACKEND_PORT) || 3000;
   const frontendOrigins = [
-    process.env.FRONTEND_URL || 'http://localhost:80',
-    process.env.FRONTEND_DEV_URL || 'http://localhost:5173'
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    process.env.FRONTEND_DEV_URL || 'http://localhost:5173',
+    'http://127.0.0.1:5173'
   ];
 
   await fastify.register(cors, {
