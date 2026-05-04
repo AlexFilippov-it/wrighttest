@@ -112,8 +112,13 @@ export async function testRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: result.error.flatten() });
     }
 
-    const report = await validateSteps(result.data.url, result.data.steps, result.data.device);
-    return report;
+    try {
+      const report = await validateSteps(result.data.url, result.data.steps, result.data.device);
+      return report;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Validation failed';
+      return reply.status(500).send({ error: message });
+    }
   });
 
   fastify.get('/devices', async () => getAvailableDevices());

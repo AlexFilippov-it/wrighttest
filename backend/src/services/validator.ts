@@ -8,7 +8,7 @@ import { resolveLocator } from '../utils/locator';
 import { deriveSelectorCandidates } from '../utils/selector-variants';
 import { hasUnresolvedVariables, interpolateStep } from '../utils/interpolate';
 import { resolveDeviceConfig } from '../utils/devices';
-import { chromium, getChromiumLaunchOptions, getBrowserName } from '../utils/browser';
+import { getBrowserName, launchChromium } from '../utils/browser';
 
 export type StepValidationResult = {
   index: number;
@@ -78,11 +78,6 @@ async function performValidationAction(page: Page, step: Step, selector: string)
 }
 
 export async function validateSteps(url: string, steps: Step[], device?: string): Promise<ValidationReport> {
-  const browser = await chromium.launch(getChromiumLaunchOptions());
-  const context = await browser.newContext({
-    ...resolveDeviceConfig(device)
-  });
-  const page = await context.newPage();
   const results: StepValidationResult[] = [];
   const canNavigateInitialUrl = !hasUnresolvedVariables(url);
   let pageKnown = canNavigateInitialUrl;
@@ -91,6 +86,12 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
   let tracingStarted = false;
 
   await fs.mkdir(TRACES_DIR, { recursive: true });
+
+  const browser = await launchChromium();
+  const context = await browser.newContext({
+    ...resolveDeviceConfig(device)
+  });
+  const page = await context.newPage();
 
   try {
     console.log(`[Validator] Using ${getBrowserName()}`);

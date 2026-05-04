@@ -28,4 +28,20 @@ export function getBrowserName() {
   return resolveBrowserExecutablePath() ? 'system chromium' : 'playwright chromium';
 }
 
+export async function launchChromium() {
+  try {
+    return await chromium.launch(getChromiumLaunchOptions());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const hint =
+      message.includes('Executable doesn\'t exist') ||
+      message.includes('cannot open shared object file') ||
+      message.includes('error while loading shared libraries')
+        ? 'Playwright Chromium is not ready on this machine. Run `npm run setup` from the repo root, then if needed run `npx playwright install-deps chromium` on Ubuntu/Linux.'
+        : 'Failed to launch Chromium.';
+
+    throw new Error(`${hint} Original error: ${message}`);
+  }
+}
+
 export { chromium };
