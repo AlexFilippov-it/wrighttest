@@ -14,6 +14,7 @@ ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/playwright_testin
 
 RUN cd backend && npx prisma generate
 RUN cd backend && npx tsc -p tsconfig.json
+RUN cd backend && npx playwright install chromium
 
 RUN mkdir -p /app/backend/screenshots /app/backend/traces
 

@@ -23,7 +23,7 @@
 - **Import** - paste existing Playwright script, get a visual test
 - **Dashboard** - pass rate over time and flaky test detection
 
-## 🚀 Quick Start (Docker)
+## 🚀 Quick Start (Docker-first)
 
 **Requirements:** Docker, Docker Compose
 
@@ -50,7 +50,11 @@ Default admin login:
 
 On an empty database the seed also creates a `Docker Demo` project with two sample tests, a `DEV` environment, a `Smoke Test` suite, and an hourly schedule.
 
-## 🛠 Local Development (macOS / Linux)
+This path is the recommended first launch on any machine. The backend image is built on the Playwright-ready base image and includes the browser bundle, so no host browser or system library setup is required.
+
+## 🛠 Host Fallback (optional)
+
+Use this only if you want to run the frontend with Vite and the backend on the host.
 
 **Requirements:** Node.js 20+, PostgreSQL 16, Redis 7
 
@@ -62,6 +66,7 @@ cp .env.example .env
 # Edit DATABASE_URL for local PostgreSQL
 
 npm install
+npm run setup
 cd backend && npx prisma migrate dev && npx prisma db seed && cd ..
 npm run dev
 ```
@@ -81,6 +86,8 @@ sudo npx playwright install-deps chromium
 |---|---|
 | Frontend | http://localhost:5173 |
 | Backend | http://localhost:3000 |
+
+If the host environment still reports missing Playwright libraries, rerun `npm run setup` once from the repo root. On Ubuntu/Linux this may fall back to `npx playwright install-deps chromium` when needed.
 
 ## 🔄 Updating
 
