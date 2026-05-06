@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { parseExpression } from 'cron-parser';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../prisma';
@@ -95,6 +96,17 @@ function groupRunsByTick(runs: Array<{
   });
 }
 
+function getNextRunAt(cronExpression: string, referenceDate: Date) {
+  try {
+    const interval = parseExpression(cronExpression, {
+      currentDate: referenceDate
+    });
+    return interval.next().toDate();
+  } catch {
+    return null;
+  }
+}
+
 export async function scheduleRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { projectId: string } }>('/projects/:projectId/schedules', async (req, reply) => {
     const project = await prisma.project.findUnique({
@@ -133,6 +145,9 @@ export async function scheduleRoutes(fastify: FastifyInstance) {
         enabled: schedule.enabled,
         lastRunAt: lastRun?.startedAt ?? schedule.lastRunAt,
         lastRunStatus: lastRun?.status ?? null,
+        nextRunAt: schedule.enabled
+          ? getNextRunAt(schedule.cron, lastRun?.startedAt ?? schedule.lastRunAt ?? schedule.createdAt)
+          : null,
         createdAt: schedule.createdAt
       };
     }));

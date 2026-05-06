@@ -21,7 +21,11 @@ function createRow(key = '', value = ''): VariableRow {
 }
 
 function isSecretKey(key: string) {
-  return /password|secret|token|key/i.test(key);
+  return /password|token|secret|api_key|key/i.test(key);
+}
+
+function isEmptyRow(row: VariableRow) {
+  return !row.key.trim() && !row.value.trim();
 }
 
 function toRows(variables: Record<string, string>): VariableRow[] {
@@ -30,7 +34,30 @@ function toRows(variables: Record<string, string>): VariableRow[] {
 }
 
 function toRecord(rows: VariableRow[]) {
-  return Object.fromEntries(rows.filter((row) => row.key.trim()).map((row) => [row.key.trim(), row.value]));
+  return Object.fromEntries(
+    rows
+      .filter((row) => row.key.trim() && row.value.trim())
+      .map((row) => [row.key.trim(), row.value.trim()])
+  );
+}
+
+function validateRows(name: string, rows: VariableRow[]) {
+  if (!name.trim()) return 'Environment name is required';
+
+  const used = new Set<string>();
+  for (const row of rows) {
+    if (isEmptyRow(row)) continue;
+
+    const key = row.key.trim();
+    const value = row.value.trim();
+    if (!key) return 'Variable name is required';
+    if (!value) return 'Variable value is required';
+    if (!/^[A-Z0-9_]+$/.test(key)) return 'Variable names should use uppercase letters, numbers, and underscores';
+    if (used.has(key)) return `Variable name "${key}" must be unique`;
+    used.add(key);
+  }
+
+  return null;
 }
 
 export default function EnvironmentsPage() {
@@ -77,11 +104,21 @@ export default function EnvironmentsPage() {
   };
 
   const addRow = () => setRows((current) => [...current, createRow()]);
-  const removeRow = (index: number) => setRows((current) => current.filter((_, idx) => idx !== index));
+  const removeRow = (index: number) =>
+    setRows((current) => {
+      if (current.length === 1) return current;
+      return current.filter((_, idx) => idx !== index);
+    });
   const updateRow = (index: number, field: keyof Omit<VariableRow, 'id'>, value: string) =>
     setRows((current) => current.map((row, idx) => (idx === index ? { ...row, [field]: value } : row)));
 
   const handleSave = async () => {
+    const validationError = validateRows(name, rows);
+    if (validationError) {
+      message.error(validationError);
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = { name, variables: toRecord(rows) };
@@ -168,7 +205,12 @@ export default function EnvironmentsPage() {
         onOk={() => void handleSave()}
         onCancel={() => setModalOpen(false)}
         confirmLoading={saving}
-        width={760}
+        width={920}
+        centered
+        style={{ top: 24 }}
+        styles={{
+          body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }
+        }}
       >
         <Form layout="vertical">
           <Form.Item label="Environment name" required>
@@ -177,37 +219,76 @@ export default function EnvironmentsPage() {
 
           <Form.Item label="Variables">
             <div style={{ display: 'grid', gap: 12 }}>
-              {rows.map((row, index) => (
-                <Space key={row.id} align="start" style={{ width: '100%' }}>
-                  <Input
-                    value={row.key}
-                    onChange={(event) => updateRow(index, 'key', event.target.value)}
-                    placeholder="BASE_URL"
-                    style={{ width: 220 }}
-                  />
-                  {isSecretKey(row.key) ? (
-                    <Input.Password
-                      value={row.value}
-                      onChange={(event) => updateRow(index, 'value', event.target.value)}
-                      placeholder="https://dev.example.com"
-                      style={{ width: 360 }}
-                    />
-                  ) : (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '240px minmax(0, 1fr) 112px',
+                  gap: 12,
+                  padding: '0 4px'
+                }}
+              >
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Variable name
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Value
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12, textAlign: 'right' }}>
+                  Actions
+                </Text>
+              </div>
+
+              {rows.map((row, index) => {
+                const removeDisabled = rows.length === 1;
+                return (
+                  <div
+                    key={row.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '240px minmax(0, 1fr) 112px',
+                      gap: 12,
+                      alignItems: 'start'
+                    }}
+                  >
                     <Input
-                      value={row.value}
-                      onChange={(event) => updateRow(index, 'value', event.target.value)}
-                      placeholder="https://dev.example.com"
-                      style={{ width: 360 }}
+                      value={row.key}
+                      onChange={(event) => updateRow(index, 'key', event.target.value)}
+                      placeholder="BASE_URL"
+                      style={{ width: '100%' }}
                     />
-                  )}
-                  <Button danger onClick={() => removeRow(index)}>
+                    {isSecretKey(row.key) ? (
+                      <Input.Password
+                        value={row.value}
+                        onChange={(event) => updateRow(index, 'value', event.target.value)}
+                        placeholder="https://dev.example.com"
+                        style={{ width: '100%' }}
+                      />
+                    ) : (
+                      <Input
+                        value={row.value}
+                        onChange={(event) => updateRow(index, 'value', event.target.value)}
+                        placeholder="https://dev.example.com"
+                        style={{ width: '100%' }}
+                      />
+                    )}
+                  <Button danger onClick={() => removeRow(index)} disabled={removeDisabled} style={{ justifySelf: 'end' }}>
                     Remove
                   </Button>
-                </Space>
-              ))}
-              <Button type="dashed" onClick={addRow} block>
-                Add variable
-              </Button>
+                  </div>
+                );
+              })}
+
+              <div style={{ display: 'grid', gap: 8 }}>
+                <Button type="dashed" onClick={addRow} block>
+                  Add variable
+                </Button>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Use variables in checks as {'{{BASE_URL}}'}, {'{{USERNAME}}'}, or {'{{PASSWORD}}'}.
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Variable names should use uppercase letters, numbers, and underscores.
+                </Text>
+              </div>
             </div>
           </Form.Item>
         </Form>

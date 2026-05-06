@@ -8,6 +8,7 @@ import ProjectsPage from './pages/ProjectsPage';
 import EnvironmentsPage from './pages/EnvironmentsPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ProjectPage from './pages/ProjectPage';
+import RunsPage from './pages/RunsPage';
 import SchedulesPage from './pages/SchedulesPage';
 import ScheduleHistoryPage from './pages/ScheduleHistoryPage';
 import SuitesPage from './pages/SuitesPage';
@@ -42,8 +43,13 @@ export default function App() {
                   <Routes>
                     <Route path="/" element={<Navigate to="/projects" replace />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/runs" element={<RunsPage />} />
                     <Route path="/projects" element={<ProjectsPage />} />
                     <Route path="/projects/:projectId" element={<ProjectPage />} />
+                    <Route path="/projects/:projectId/checks" element={<ProjectPage />} />
+                    <Route path="/projects/:projectId/overview" element={<ProjectPage />} />
+                    <Route path="/projects/:projectId/runs" element={<ProjectPage />} />
+                    <Route path="/projects/:projectId/settings" element={<ProjectPage />} />
                     <Route path="/projects/:projectId/environments" element={<EnvironmentsPage />} />
                     <Route path="/projects/:projectId/notifications" element={<NotificationsPage />} />
                     <Route path="/projects/:projectId/suites" element={<SuitesPage />} />

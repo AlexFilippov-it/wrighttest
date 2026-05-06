@@ -48,7 +48,9 @@ model TestRun {
   durationMs  Int?
   error       String?
   tracePath   String?
+  traceUnavailableReason String?
   screenshots Json      @default("[]")
+  stepResults Json      @default("[]")
   currentStep Int?
   totalSteps  Int?
   environmentId String?
@@ -108,7 +110,11 @@ model NotificationChannel {
   name      String
   config    Json
   onFailed  Boolean  @default(true)
+  onRecovered Boolean @default(true)
   onPassed  Boolean  @default(false)
+  enabled   Boolean  @default(true)
+  lastTestAt DateTime?
+  lastTestStatus String?
   createdAt DateTime @default(now())
 }
 

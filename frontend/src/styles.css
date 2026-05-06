@@ -32,3 +32,7 @@ a {
 .clickable-row:hover > td {
   background: #fafafa !important;
 }
+
+.run-row-failed:hover > td {
+  background: #fff1f2 !important;
+}

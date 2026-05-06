@@ -9,7 +9,7 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-blue)
 [![Stars](https://img.shields.io/github/stars/AlexFilippov-it/wrighttest?style=social)](https://github.com/AlexFilippov-it/wrighttest/stargazers)
 [![Last Commit](https://img.shields.io/github/last-commit/AlexFilippov-it/wrighttest)](https://github.com/AlexFilippov-it/wrighttest/commits/main)
-[![CI](https://github.com/AlexFilippov-it/wrighttest/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexFilippov-it/wrighttest/actions/workflows/ci.yml)
+[![CI](https://github.com/AlexFilippov-it/wrighttest/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AlexFilippov-it/wrighttest/actions/workflows/ci.yml?query=branch%3Amain)
 
 ## ✨ Features
 
@@ -145,19 +145,29 @@ Then restart:
 docker compose up --build -d
 ```
 
-## 📸 Screenshots
+## 📸 Product Tour
 
-Demo recording:
+<p align="center">
+  <img src="./docs/Screenshot_1.png" alt="Projects overview" width="100%" />
+</p>
+<p align="center"><em>Projects overview with health summaries, project status, and onboarding.</em></p>
 
-![Screen Recording](./docs/Screen_Recording.gif)
+<p align="center">
+  <img src="./docs/Screenshot_2.png" alt="Project workspace checks tab" width="49%" />
+  <img src="./docs/Screenshot_3.png" alt="Project alerts tab" width="49%" />
+</p>
+<p align="center"><em>Project workspace with checks, schedules, alerts, and operational summaries.</em></p>
 
-Screenshots will be added in `docs/`:
+<p align="center">
+  <img src="./docs/Screenshot_4.png" alt="Check editor" width="49%" />
+  <img src="./docs/Screenshot_6.png" alt="Global runs page" width="49%" />
+</p>
+<p align="center"><em>Edit browser checks visually and review global execution history across projects.</em></p>
 
-- `docs/screenshot-projects.png`
-- `docs/screenshot-editor.png`
-- `docs/screenshot-result.png`
-- `docs/screenshot-novnc.png`
-- `docs/screenshot-dashboard.png`
+<p align="center">
+  <img src="./docs/Screenshot_5.png" alt="Live browser recording" width="100%" />
+</p>
+<p align="center"><em>Live recording captures Playwright-ready selectors directly from the browser session.</em></p>
 
 ## 🏗 Architecture
 

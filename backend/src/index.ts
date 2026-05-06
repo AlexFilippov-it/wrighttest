@@ -88,7 +88,8 @@ async function start() {
     ];
 
     const isPublic = publicRoutes.some((route) =>
-      route.method === req.method && req.url.startsWith(route.url)
+      req.url.startsWith(route.url) &&
+      (route.method === req.method || (req.method === 'HEAD' && route.method === 'GET'))
     );
 
     if (isPublic) return;

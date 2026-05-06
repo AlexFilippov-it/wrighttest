@@ -14,7 +14,9 @@ type ChannelFormValues = {
   name: string;
   config: Record<string, string>;
   onFailed: boolean;
+  onRecovered: boolean;
   onPassed: boolean;
+  enabled: boolean;
 };
 
 export default function NotificationsPage() {
@@ -50,7 +52,9 @@ export default function NotificationsPage() {
     form.resetFields();
     form.setFieldsValue({
       onFailed: true,
+      onRecovered: true,
       onPassed: false,
+      enabled: true,
       config: type === 'telegram' ? { botToken: '', chatId: '' } : { webhookUrl: '' }
     });
     setModalOpen(true);
@@ -65,7 +69,9 @@ export default function NotificationsPage() {
         name: values.name,
         config: values.config,
         onFailed: values.onFailed ?? true,
-        onPassed: values.onPassed ?? false
+        onRecovered: values.onRecovered ?? true,
+        onPassed: values.onPassed ?? false,
+        enabled: values.enabled ?? true
       });
       message.success('Channel created');
       setModalOpen(false);
@@ -167,38 +173,54 @@ export default function NotificationsPage() {
       </Content>
 
       <Modal
-        title={modalType === 'telegram' ? 'Add Telegram Channel' : 'Add Slack Channel'}
+        title={modalType === 'telegram' ? 'Add Telegram alert' : 'Add Slack alert'}
         open={modalOpen}
         onOk={() => void handleCreate()}
         onCancel={() => setModalOpen(false)}
         confirmLoading={submitting}
         width={640}
       >
-        <Form form={form} layout="vertical" initialValues={{ onFailed: true, onPassed: false }}>
-          <Form.Item name="name" label="Channel name" rules={[{ required: true, message: 'Channel name is required' }]}>
-            <Input placeholder="Dev alerts" />
+        <Form form={form} layout="vertical" initialValues={{ onFailed: true, onRecovered: true, onPassed: false, enabled: true }}>
+          <Form.Item name="name" label="Alert name" rules={[{ required: true, message: 'Alert name is required' }]}>
+            <Input placeholder={modalType === 'telegram' ? 'Dev alerts' : 'Production alerts'} />
           </Form.Item>
 
           {modalType === 'telegram' ? (
             <>
-              <Form.Item name={['config', 'botToken']} label="Bot Token" rules={[{ required: true, message: 'Bot token is required' }]}>
-                <Input.Password placeholder="1234567890:ABC..." />
+              <Form.Item name={['config', 'botToken']} label="Bot token" rules={[{ required: true, message: 'Bot token is required' }]}>
+                <Input.Password placeholder="123456789:AA..." autoComplete="new-password" />
               </Form.Item>
               <Form.Item name={['config', 'chatId']} label="Chat ID" rules={[{ required: true, message: 'Chat ID is required' }]}>
                 <Input placeholder="-1001234567890" />
+                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+                  Add the bot to your Telegram chat or channel, then paste the chat ID here.
+                </Typography.Text>
               </Form.Item>
             </>
           ) : (
-            <Form.Item name={['config', 'webhookUrl']} label="Webhook URL" rules={[{ required: true, message: 'Webhook URL is required' }, { type: 'url', message: 'Enter a valid URL' }]}>
-              <Input placeholder="https://hooks.slack.com/services/..." />
-            </Form.Item>
+            <>
+              <Form.Item name={['config', 'webhookUrl']} label="Webhook URL" rules={[{ required: true, message: 'Webhook URL is required' }, { type: 'url', message: 'Enter a valid URL' }, { validator: async (_, value) => {
+                if (value && !String(value).startsWith('https://hooks.slack.com/services/')) {
+                  throw new Error('Webhook URL must start with https://hooks.slack.com/services/');
+                }
+              } }]}>
+                <Input placeholder="https://hooks.slack.com/services/..." autoComplete="off" />
+              </Form.Item>
+              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: -8, marginBottom: 8 }}>
+                Paste an incoming webhook URL from your Slack workspace.
+              </Typography.Text>
+            </>
           )}
 
+          <Typography.Title level={5} style={{ marginTop: 8 }}>Notification rules</Typography.Title>
           <Form.Item name="onFailed" valuePropName="checked">
-            <Checkbox defaultChecked>Notify on FAILED</Checkbox>
+            <Checkbox>Failed runs</Checkbox>
+          </Form.Item>
+          <Form.Item name="onRecovered" valuePropName="checked">
+            <Checkbox>Recovered runs</Checkbox>
           </Form.Item>
           <Form.Item name="onPassed" valuePropName="checked">
-            <Checkbox>Notify on PASSED</Checkbox>
+            <Checkbox>Passed runs</Checkbox>
           </Form.Item>
         </Form>
       </Modal>

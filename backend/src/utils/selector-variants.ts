@@ -32,31 +32,42 @@ function extractGetByText(selector: string): string | null {
   return match?.[2] ?? null;
 }
 
+function shouldUseTextFallback(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length > 3 && /[A-Za-z]/.test(trimmed) && !/^\d+$/.test(trimmed);
+}
+
 export function deriveSelectorCandidates(selector: string): string[] {
   const normalized = selector.trim();
   const candidates: string[] = [];
 
   const role = extractRoleName(normalized);
   if (role?.name) {
-    candidates.push(`page.getByText(${quote(role.name)})`);
+    candidates.push(`page.getByRole(${quote(role.role)}, { name: ${quote(role.name)}, exact: true })`);
 
-    if (role.role === 'link') {
-      candidates.push(`page.locator('a', { hasText: ${quote(role.name)} })`);
-    }
+    if (shouldUseTextFallback(role.name)) {
+      candidates.push(`page.getByText(${quote(role.name)})`);
 
-    if (role.role === 'button') {
-      candidates.push(`page.locator('button', { hasText: ${quote(role.name)} })`);
-    }
+      if (role.role === 'link') {
+        candidates.push(`page.locator('a', { hasText: ${quote(role.name)} })`);
+      }
 
-    if (role.role === 'option') {
-      candidates.push(`page.locator('option', { hasText: ${quote(role.name)} })`);
+      if (role.role === 'button') {
+        candidates.push(`page.locator('button', { hasText: ${quote(role.name)} })`);
+      }
+
+      if (role.role === 'option') {
+        candidates.push(`page.locator('option', { hasText: ${quote(role.name)} })`);
+      }
     }
   }
 
   const text = extractGetByText(normalized);
   if (text) {
-    candidates.push(`page.locator('text=${text.replace(/'/g, "\\'")}')`);
-    candidates.push(`page.getByText(${quote(text)})`);
+    if (shouldUseTextFallback(text)) {
+      candidates.push(`page.locator('text=${text.replace(/'/g, "\\'")}')`);
+      candidates.push(`page.getByText(${quote(text)})`);
+    }
   }
 
   const labelText = extractQuotedArgument(normalized, 'name');

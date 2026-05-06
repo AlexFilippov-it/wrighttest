@@ -3,6 +3,7 @@ import {
   CheckSquareOutlined,
   DeleteOutlined,
   EditOutlined,
+  DownOutlined,
   InfoCircleOutlined,
   EyeInvisibleOutlined,
   EyeOutlined,
@@ -13,10 +14,12 @@ import {
   LinkOutlined,
   OrderedListOutlined,
   PlusOutlined,
+  HolderOutlined,
+  CopyOutlined,
   TagOutlined,
   UnorderedListOutlined
 } from '@ant-design/icons';
-import { Button, Card, Checkbox, Select, Space, Tooltip, Typography } from 'antd';
+import { Button, Card, Checkbox, Dropdown, Input, Select, Space, Tooltip, Typography } from 'antd';
 import type { ReactNode } from 'react';
 import type { Step, StepAction, StepValidationResult } from '../types';
 import VariableAutocompleteInput from './VariableAutocompleteInput';
@@ -56,11 +59,17 @@ interface Props {
   steps: Step[];
   onChange: (steps: Step[]) => void;
   validationResults?: StepValidationResult[];
+  stepIssues?: Array<{
+    message?: string;
+    selector?: string;
+    value?: string;
+    expected?: string;
+  } | undefined>;
   variableNames?: string[];
 }
 
 const statusStyles: Record<StepValidationResult['status'], { backgroundColor?: string; border?: string }> = {
-  ok: { backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' },
+  ok: {},
   ambiguous: { backgroundColor: '#fffbe6', border: '1px solid #ffe58f' },
   not_found: { backgroundColor: '#fff2f0', border: '1px solid #ffccc7' },
   skipped: {}
@@ -123,10 +132,26 @@ function variableHint(value?: string) {
   );
 }
 
-export default function StepEditor({ steps, onChange, validationResults, variableNames = [] }: Props) {
+export default function StepEditor({ steps, onChange, validationResults, stepIssues = [], variableNames = [] }: Props) {
   const addStep = () => onChange([...steps, { action: 'goto', value: '' }]);
 
   const removeStep = (index: number) => onChange(steps.filter((_, idx) => idx !== index));
+
+  const duplicateStep = (index: number) => {
+    const cloned = { ...steps[index] };
+    const nextSteps = [...steps];
+    nextSteps.splice(index + 1, 0, cloned);
+    onChange(nextSteps);
+  };
+
+  const moveStep = (index: number, direction: -1 | 1) => {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= steps.length) return;
+    const nextSteps = [...steps];
+    const [moved] = nextSteps.splice(index, 1);
+    nextSteps.splice(nextIndex, 0, moved);
+    onChange(nextSteps);
+  };
 
   const updateStep = (index: number, patch: Partial<Step>) =>
     onChange(steps.map((step, idx) => (idx === index ? { ...step, ...patch } : step)));
@@ -136,11 +161,15 @@ export default function StepEditor({ steps, onChange, validationResults, variabl
       {steps.map((step, index) => {
         const opt = ACTION_OPTIONS.find((candidate) => candidate.value === step.action)!;
         const validation = validationResults?.[index];
+        const fieldIssue = stepIssues[index];
+        const hasLocalIssue = Boolean(fieldIssue?.message || fieldIssue?.selector || fieldIssue?.value || fieldIssue?.expected);
+        const isHardInvalid = validation?.status === 'not_found' || hasLocalIssue;
         const cardStyle = validation ? statusStyles[validation.status] : {};
         const showExactToggle = ['assertText', 'assertTitle', 'assertURL'].includes(step.action);
         const needsSelector = opt.needsSelector;
         const needsValue = opt.needsValue;
         const needsExpected = opt.needsExpected;
+        const stepLabel = opt.label;
         const rowStyle = {
           display: 'flex',
           alignItems: 'flex-start',
@@ -155,16 +184,53 @@ export default function StepEditor({ steps, onChange, validationResults, variabl
             size="small"
             style={{
               borderRadius: 16,
-              borderLeft: opt.group === 'Assertions' ? '3px solid #52c41a' : '3px solid #1677ff',
+              scrollMarginTop: 120,
+              scrollMarginBottom: 120,
+              borderLeft: isHardInvalid
+                ? '3px solid #ff4d4f'
+                : opt.group === 'Assertions'
+                  ? '3px solid #722ed1'
+                  : '3px solid #1677ff',
               ...cardStyle
             }}
-            extra={<Button danger icon={<DeleteOutlined />} size="small" onClick={() => removeStep(index)} />}
-            title={
-              <Space size={8}>
-                <span style={{ color: opt.group === 'Assertions' ? '#52c41a' : '#1677ff' }}>
+            data-step-index={index}
+            extra={
+              <Dropdown
+                trigger={['click']}
+                menu={{
+                  items: [
+                    { key: 'duplicate', icon: <CopyOutlined />, label: 'Duplicate step' },
+                    { key: 'move-up', icon: <HolderOutlined />, label: 'Move up', disabled: index === 0 },
+                    { key: 'move-down', icon: <HolderOutlined />, label: 'Move down', disabled: index === steps.length - 1 },
+                    { type: 'divider' },
+                    { key: 'delete', icon: <DeleteOutlined />, label: 'Delete', danger: true }
+                  ],
+                  onClick: ({ key, domEvent }) => {
+                    domEvent.stopPropagation();
+                    if (key === 'duplicate') duplicateStep(index);
+                    if (key === 'move-up') moveStep(index, -1);
+                    if (key === 'move-down') moveStep(index, 1);
+                    if (key === 'delete') removeStep(index);
+                  }
+                }}
+              >
+                <Button icon={<DownOutlined />} size="small">
+                  More
+                </Button>
+              </Dropdown>
+            }
+              title={
+                <Space size={8}>
+                  <HolderOutlined style={{ color: '#8c8c8c', cursor: 'grab' }} />
+                <span style={{ color: opt.group === 'Assertions' ? '#722ed1' : '#1677ff' }}>
                   {opt.icon}
                 </span>
-                <span>Step {index + 1}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  <span>Step {index + 1}</span>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {stepLabel}
+                  </Text>
+                </div>
                 {validation?.status === 'ambiguous' && <span style={{ color: '#ad8b00', fontSize: 12 }}>selector ambiguous</span>}
                 {validation?.status === 'not_found' && <span style={{ color: '#cf1322', fontSize: 12 }}>selector not found</span>}
               </Space>
@@ -206,23 +272,46 @@ export default function StepEditor({ steps, onChange, validationResults, variabl
                     placeholder="CSS selector or Playwright locator"
                     value={step.selector ?? ''}
                     style={{ width: '100%' }}
+                    status={fieldIssue?.selector ? 'error' : undefined}
                     suffix={variableHint(step.selector)}
                     variableNames={variableNames}
                     onValueChange={(nextValue) => updateStep(index, { selector: nextValue })}
                   />
+                  {fieldIssue?.selector ? (
+                    <Text type="danger" style={{ fontSize: 12, lineHeight: 1.4 }}>
+                      {fieldIssue.selector}
+                    </Text>
+                  ) : null}
                 </div>
               )}
 
               {needsValue && (
-                <div style={{ flex: '1 1 320px', minWidth: 0 }}>
-                  <VariableAutocompleteInput
-                    placeholder={step.action === 'goto' ? 'https://example.com' : 'Value'}
-                    value={step.value ?? ''}
-                    style={{ width: '100%' }}
-                    suffix={variableHint(step.value)}
-                    variableNames={variableNames}
-                    onValueChange={(nextValue) => updateStep(index, { value: nextValue })}
-                  />
+                <div style={{ flex: '1 1 320px', minWidth: 0, display: 'grid', gap: 4 }}>
+                  {step.action === 'fill' ? (
+                    <Input
+                      placeholder="Value"
+                      value={step.value ?? ''}
+                      style={{ width: '100%' }}
+                      status={fieldIssue?.value ? 'error' : undefined}
+                      onChange={(event) => updateStep(index, { value: event.target.value })}
+                      onInput={(event) => updateStep(index, { value: event.currentTarget.value })}
+                    />
+                  ) : (
+                    <VariableAutocompleteInput
+                      placeholder={step.action === 'goto' ? 'https://example.com' : 'Value'}
+                      value={step.value ?? ''}
+                      style={{ width: '100%' }}
+                      status={fieldIssue?.value ? 'error' : undefined}
+                      suffix={variableHint(step.value)}
+                      variableNames={variableNames}
+                      onValueChange={(nextValue) => updateStep(index, { value: nextValue })}
+                    />
+                  )}
+                  {fieldIssue?.value ? (
+                    <Text type="danger" style={{ fontSize: 12, lineHeight: 1.4 }}>
+                      {fieldIssue.value}
+                    </Text>
+                  ) : null}
                 </div>
               )}
 
@@ -231,11 +320,17 @@ export default function StepEditor({ steps, onChange, validationResults, variabl
                   <VariableAutocompleteInput
                     placeholder={getExpectedPlaceholder(step.action)}
                     value={step.expected ?? ''}
-                    style={{ width: '100%', borderColor: '#52c41a' }}
+                    style={{ width: '100%' }}
+                    status={fieldIssue?.expected ? 'error' : undefined}
                     suffix={variableHint(step.expected)}
                     variableNames={variableNames}
                     onValueChange={(nextValue) => updateStep(index, { expected: nextValue })}
                   />
+                  {fieldIssue?.expected ? (
+                    <Text type="danger" style={{ fontSize: 12, lineHeight: 1.4 }}>
+                      {fieldIssue.expected}
+                    </Text>
+                  ) : null}
                   {getExpectedHint(step.action, step.options?.exact) && (
                     <Text
                       type="secondary"

@@ -53,6 +53,175 @@ export interface Project {
   _count?: { tests: number };
 }
 
+export interface ProjectWorkspaceSummary {
+  checksCount: number;
+  lastResult: RunStatus | null;
+  lastRunAt: string | null;
+  passRate30d: number | null;
+  totalRuns30d: number;
+  passedRuns30d: number;
+  failedRuns30d: number;
+  activeSchedulesCount: number;
+  alertChannelsCount: number;
+  avgDurationMs: number | null;
+  failedChecks: number;
+  flakyChecks: number;
+}
+
+export interface ProjectCheckSchedule {
+  id: string;
+  name: string;
+  cron: string;
+  enabled: boolean;
+}
+
+export interface ProjectCheckLatestRun {
+  id: string;
+  status: RunStatus;
+  startedAt: string;
+  durationMs?: number | null;
+  error?: string | null;
+  tracePath?: string | null;
+}
+
+export interface ProjectCheck extends Test {
+  runCount: number;
+  lastRunAt: string | null;
+  lastRunStatus: RunStatus | null;
+  lastRunDurationMs: number | null;
+  latestRun?: ProjectCheckLatestRun | null;
+  scheduleCount: number;
+  schedules: ProjectCheckSchedule[];
+}
+
+export interface ProjectWorkspace extends Project {
+  updatedAt: string;
+  summary: ProjectWorkspaceSummary;
+  tests: ProjectCheck[];
+  suites?: Array<Suite & { schedules: ProjectCheckSchedule[] }>;
+}
+
+export type ProjectHealth = 'passing' | 'failing' | 'flaky' | 'no_runs';
+
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  checksCount: number;
+  activeSchedulesCount: number;
+  alertChannelsCount: number;
+  alertChannelTypes: string[];
+  lastRunAt: string | null;
+  lastRunStatus: RunStatus | null;
+  passRate30d: number | null;
+  totalRuns30d: number;
+  passedRuns30d: number;
+  failedRuns30d: number;
+  failedChecks: number;
+  flakyChecks: number;
+  health: ProjectHealth;
+}
+
+export interface DashboardChartPoint {
+  date: string;
+  passed: number;
+  failed: number;
+  total: number;
+  passRate: number;
+}
+
+export interface DashboardSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  passRate: number;
+  avgDurationMs: number;
+  activeFailures: number;
+  flakyChecks: number;
+}
+
+export interface DashboardRecentRun {
+  runId: string;
+  testId: string;
+  checkName: string;
+  projectId: string;
+  projectName: string;
+  status: RunStatus;
+  durationMs: number | null;
+  startedAt: string;
+  trigger: 'Manual' | 'Schedule';
+  scheduleName: string | null;
+  environmentId: string | null;
+}
+
+export interface RunsSummarySlowestRun {
+  runId: string;
+  testId: string;
+  checkName: string;
+  projectId: string;
+  projectName: string;
+  durationMs: number | null;
+}
+
+export interface RunsSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  passRate: number;
+  avgDurationMs: number | null;
+  slowestRun: RunsSummarySlowestRun | null;
+}
+
+export interface DashboardIssue {
+  testId: string;
+  checkName: string;
+  projectId: string;
+  projectName: string;
+  status: 'Failed' | 'Flaky' | 'Failing repeatedly';
+  latestRunId: string;
+  latestRunAt: string;
+  latestFailedRunId: string;
+  latestFailedAt: string;
+  latestRunStatus: RunStatus;
+  errorSummary: string | null;
+  environmentId: string | null;
+  passedRuns: number;
+  failedRuns: number;
+  totalRuns: number;
+}
+
+export interface DashboardFlakyCheck {
+  testId: string;
+  checkName: string;
+  projectId: string;
+  projectName: string;
+  totalRuns: number;
+  passed: number;
+  failed: number;
+  passRate: number;
+  lastFailure: string | null;
+  latestFailedRunId: string;
+  errorSummary: string | null;
+  latestRunId: string;
+}
+
+export interface DashboardResponse {
+  summary: DashboardSummary;
+  recentRuns: DashboardRecentRun[];
+  activeIssues: DashboardIssue[];
+  flakyChecks: DashboardFlakyCheck[];
+  chart: DashboardChartPoint[];
+}
+
+export interface RunsResponse {
+  runs: DashboardRecentRun[];
+  total: number;
+  days: number;
+  limit: number;
+  summary: RunsSummary;
+}
+
 export interface Suite {
   id: string;
   name: string;
@@ -81,7 +250,11 @@ export interface NotificationChannel {
   name: string;
   config: Record<string, string>;
   onFailed: boolean;
+  onRecovered: boolean;
   onPassed: boolean;
+  enabled: boolean;
+  lastTestAt?: string | null;
+  lastTestStatus?: RunStatus | null;
   createdAt: string;
 }
 
@@ -99,6 +272,7 @@ export interface Schedule {
   enabled: boolean;
   lastRunAt?: string | null;
   lastRunStatus?: RunStatus | null;
+  nextRunAt?: string | null;
   createdAt: string;
 }
 
@@ -156,9 +330,30 @@ export interface TestRun {
   durationMs?: number;
   error?: string;
   tracePath?: string;
+  traceUnavailableReason?: string | null;
+  trace?: {
+    available: boolean;
+    downloadUrl?: string;
+    viewerUrl?: string;
+    reason?: string;
+  };
   screenshots: string[];
   currentStep?: number | null;
   totalSteps?: number | null;
   testId: string;
   environmentId?: string | null;
+  stepResults?: Array<{
+    index: number;
+    action: StepAction;
+    target: string;
+    status: 'passed' | 'failed';
+    durationMs: number;
+    screenshot?: string | null;
+    error?: string | null;
+  }>;
+  test?: (Test & {
+    project?: Project | null;
+  }) | null;
+  environment?: Environment | null;
+  schedule?: Schedule | null;
 }

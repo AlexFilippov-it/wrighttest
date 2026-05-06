@@ -1,6 +1,7 @@
-import { AutoComplete, Input } from 'antd';
+import { Input } from 'antd';
 import type { InputProps } from 'antd';
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
+import type { FormEvent } from 'react';
 
 type VariableAutocompleteInputProps = Omit<InputProps, 'value' | 'onChange'> & {
   value?: string;
@@ -14,15 +15,6 @@ function getActiveVariableQuery(value: string) {
   return match ? match[1] : null;
 }
 
-function insertVariablePlaceholder(value: string, variableName: string) {
-  const lastOpen = value.lastIndexOf('{{');
-  if (lastOpen < 0) {
-    return `${value}{{${variableName}}}`;
-  }
-
-  return `${value.slice(0, lastOpen)}{{${variableName}}}`;
-}
-
 export default function VariableAutocompleteInput({
   value = '',
   onChange,
@@ -32,8 +24,11 @@ export default function VariableAutocompleteInput({
   suffix,
   style,
   size,
-  disabled
+  disabled,
+  ...inputProps
 }: VariableAutocompleteInputProps) {
+  const listId = useId();
+
   const options = useMemo(() => {
     const query = getActiveVariableQuery(value);
     if (query === null) return [];
@@ -43,10 +38,7 @@ export default function VariableAutocompleteInput({
       .filter((name) => name.toLowerCase().includes(normalized))
       .sort((a, b) => a.localeCompare(b))
       .slice(0, 10)
-      .map((name) => ({
-        value: name,
-        label: <span>{`{{${name}}}`}</span>
-      }));
+      .map((name) => ({ value: name }));
   }, [value, variableNames]);
 
   const emitChange = (nextValue: string) => {
@@ -54,23 +46,30 @@ export default function VariableAutocompleteInput({
     onValueChange?.(nextValue);
   };
 
+  const handleInputChange = (event: FormEvent<HTMLInputElement>) => {
+    emitChange(event.currentTarget.value);
+  };
+
   return (
-    <AutoComplete
-      value={value}
-      options={options}
-      filterOption={false}
-      onSelect={(selected) => emitChange(insertVariablePlaceholder(value, selected))}
-      style={style}
-    >
+    <>
       <Input
         value={value}
-        onChange={(event) => emitChange(event.target.value)}
+        onChange={handleInputChange}
+        onInput={handleInputChange}
         placeholder={placeholder}
         suffix={suffix}
         size={size}
         disabled={disabled}
         autoComplete="off"
+        list={options.length > 0 ? listId : undefined}
+        style={style}
+        {...inputProps}
       />
-    </AutoComplete>
+      <datalist id={listId}>
+        {options.map((option) => (
+          <option key={option.value} value={`{{${option.value}}}`} />
+        ))}
+      </datalist>
+    </>
   );
 }

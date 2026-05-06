@@ -1,15 +1,19 @@
 import axios from 'axios';
 import type {
+  DashboardResponse,
   Environment,
   NotificationChannel,
   NotificationChannelType,
   Project,
+  ProjectWorkspace,
+  ProjectSummary,
   Schedule,
   ScheduleHistoryResponse,
   Suite,
   Step,
   Test,
   TestRun,
+  RunsResponse,
   ValidationReport
 } from '../types';
 
@@ -18,13 +22,42 @@ export const api = axios.create({
 });
 
 export const getProjects = () =>
-  api.get<Project[]>('/projects').then((r) => r.data);
+  api.get<ProjectSummary[]>('/projects').then((r) => r.data);
 
-export const getDashboard = (days: number) =>
-  api.get(`/dashboard?days=${days}`).then((r) => r.data);
+export const getDashboard = (days: number, projectId?: string) =>
+  api
+    .get<DashboardResponse>('/dashboard', {
+      params: { days, ...(projectId ? { projectId } : {}) }
+    })
+    .then((r) => r.data);
 
-export const getFlakyTests = () =>
-  api.get('/dashboard/flaky').then((r) => r.data);
+export const getRuns = (days: number, projectId?: string, limit = 100) =>
+  api
+    .get<RunsResponse>('/runs', {
+      params: { days, limit, ...(projectId ? { projectId } : {}) }
+    })
+    .then((r) => r.data);
+
+export const getRunHistory = (
+  filters: {
+    days: number;
+    limit: number;
+    projectId?: string;
+    status?: 'all' | 'passed' | 'failed';
+    trigger?: 'all' | 'manual' | 'schedule';
+  }
+) =>
+  api
+    .get<RunsResponse>('/runs', {
+      params: {
+        days: filters.days,
+        limit: filters.limit,
+        ...(filters.projectId ? { projectId: filters.projectId } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.trigger ? { trigger: filters.trigger } : {})
+      }
+    })
+    .then((r) => r.data);
 
 export const createProject = (name: string) =>
   api.post<Project>('/projects', { name }).then((r) => r.data);
@@ -32,8 +65,11 @@ export const createProject = (name: string) =>
 export const deleteProject = (id: string) =>
   api.delete(`/projects/${id}`);
 
+export const updateProject = (id: string, data: { name: string }) =>
+  api.patch<Project>(`/projects/${id}`, data).then((r) => r.data);
+
 export const getProject = (id: string) =>
-  api.get<Project & { tests: Test[] }>(`/projects/${id}`).then((r) => r.data);
+  api.get<ProjectWorkspace>(`/projects/${id}`).then((r) => r.data);
 
 export const getDevices = () =>
   api.get<{ label: string; value: string }[]>('/devices').then((r) => r.data);
@@ -119,15 +155,38 @@ export const createChannel = (
     name: string;
     config: Record<string, string>;
     onFailed: boolean;
+    onRecovered?: boolean;
     onPassed: boolean;
+    enabled?: boolean;
   }
 ) => api.post<NotificationChannel>(`/projects/${projectId}/channels`, data).then((r) => r.data);
+
+export const updateChannel = (
+  id: string,
+  data: Partial<{
+    name: string;
+    config: Record<string, string>;
+    onFailed: boolean;
+    onRecovered: boolean;
+    onPassed: boolean;
+    enabled: boolean;
+  }>
+) => api.patch<NotificationChannel>(`/channels/${id}`, data).then((r) => r.data);
 
 export const deleteChannel = (id: string) =>
   api.delete(`/channels/${id}`);
 
 export const testChannel = (id: string) =>
   api.post<{ ok: boolean }>(`/channels/${id}/test`).then((r) => r.data);
+
+export const testChannelDraft = (
+  projectId: string,
+  data: {
+    type: NotificationChannelType;
+    name: string;
+    config: Record<string, string>;
+  }
+) => api.post<{ ok: boolean }>(`/projects/${projectId}/channels/test`, data).then((r) => r.data);
 
 export const createTest = (
   projectId: string,

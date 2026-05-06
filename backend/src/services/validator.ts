@@ -9,6 +9,7 @@ import { deriveSelectorCandidates } from '../utils/selector-variants';
 import { hasUnresolvedVariables, interpolateStep } from '../utils/interpolate';
 import { resolveDeviceConfig } from '../utils/devices';
 import { getBrowserName, launchChromium } from '../utils/browser';
+import { validateStepRequirements } from '../utils/step-validation';
 
 export type StepValidationResult = {
   index: number;
@@ -105,6 +106,17 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
     for (const [index, step] of steps.entries()) {
       const normalizedStep = interpolateStep(step, {});
 
+      const requirementIssue = validateStepRequirements(step);
+      if (requirementIssue) {
+        results.push({
+          index,
+          status: 'not_found',
+          selector: step.selector,
+          error: requirementIssue.message
+        });
+        continue;
+      }
+
       if (step.action === 'goto') {
         if (!normalizedStep.value || hasUnresolvedVariables(normalizedStep.value)) {
           pageKnown = false;
@@ -132,12 +144,12 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
         continue;
       }
 
-      if (step.action === 'assertCount') {
-        if (!step.expected || hasUnresolvedVariables(step.expected)) {
-          results.push({ index, status: 'skipped', selector: step.selector });
-          continue;
-        }
+      if (step.action === 'assertHidden') {
+        results.push({ index, status: 'skipped', selector: step.selector });
+        continue;
+      }
 
+      if (step.action === 'assertCount') {
         const expectedCount = Number(step.expected);
         if (Number.isNaN(expectedCount)) {
           results.push({
@@ -145,21 +157,12 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
             status: 'not_found',
             selector: step.selector,
             resolvedCount: 0,
-            error: 'assertCount requires a numeric expected value'
+            error: 'Expected count must be numeric'
           });
           continue;
         }
 
-        if (!step.selector) {
-          results.push({
-            index,
-            status: 'not_found',
-            error: 'assertCount requires a selector'
-          });
-          continue;
-        }
-
-        const locator = resolveLocator(page, step.selector);
+        const locator = resolveLocator(page, step.selector!);
         const count = await locator.count();
         if (count === expectedCount) {
           results.push({ index, status: 'ok', selector: step.selector, resolvedCount: count });
@@ -172,11 +175,6 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
             error: `Expected ${expectedCount} elements, found ${count}`
           });
         }
-        continue;
-      }
-
-      if (step.action === 'assertHidden') {
-        results.push({ index, status: 'skipped', selector: step.selector });
         continue;
       }
 

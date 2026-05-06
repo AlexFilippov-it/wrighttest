@@ -6,6 +6,7 @@
     "prisma:migrate": "dotenv -e ../.env -- prisma migrate dev",
     "prisma:generate": "dotenv -e ../.env -- prisma generate",
     "prisma:studio": "dotenv -e ../.env -- prisma studio",
+    "test:trace": "dotenv -e ../.env -- tsx --test tests/failed-run-trace.test.ts",
     "prisma:seed": "ts-node prisma/seed.ts"
   },
   "prisma": {
