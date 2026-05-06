@@ -41,7 +41,7 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <Routes>
-                    <Route path="/" element={<Navigate to="/projects" replace />} />
+                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/runs" element={<RunsPage />} />
                     <Route path="/projects" element={<ProjectsPage />} />

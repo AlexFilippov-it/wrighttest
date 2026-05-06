@@ -3,6 +3,7 @@ import { CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, Th
 import { Button, Card, Col, Layout, Row, Select, Space, Statistic, Table, Tag, Tooltip, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../components/AppHeader';
+import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
 import RunStatusBadge from '../components/RunStatusBadge';
 import { getDashboard, getProjects, runTest, runTestWithEnvironment } from '../api/client';
@@ -557,6 +558,7 @@ export default function DashboardPage() {
           </>
         )}
       </Content>
+      <AppFooter />
     </Layout>
   );
 }

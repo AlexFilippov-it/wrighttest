@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Col, Layout, Row, Select, Space, Table, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../components/AppHeader';
+import AppFooter from '../components/AppFooter';
 import RunStatusBadge from '../components/RunStatusBadge';
 import UserMenu from '../components/UserMenu';
 import { getProjects, getRunHistory } from '../api/client';
@@ -476,6 +477,7 @@ export default function RunsPage() {
           </div>
         </Card>
       </Content>
+      <AppFooter />
     </Layout>
   );
 }

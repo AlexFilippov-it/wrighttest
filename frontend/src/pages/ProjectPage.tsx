@@ -64,6 +64,7 @@ import {
   updateProject
 } from '../api/client';
 import AppHeader from '../components/AppHeader';
+import AppFooter from '../components/AppFooter';
 import RunStatusBadge from '../components/RunStatusBadge';
 import UserMenu from '../components/UserMenu';
 import {
@@ -1441,7 +1442,15 @@ export default function ProjectPage() {
                     </Title>
                     <Text
                       type="secondary"
-                      style={{ maxWidth: 760, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      style={{
+                        maxWidth: 760,
+                        overflowWrap: 'anywhere',
+                        wordBreak: 'break-word',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden'
+                      }}
                     >
                       {projectHeaderDescription}
                     </Text>
@@ -2979,6 +2988,7 @@ export default function ProjectPage() {
           </div>
         </Space>
       </Modal>
+      <AppFooter />
     </Layout>
   );
 }

@@ -1,6 +1,6 @@
 {
   "name": "wrighttest",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Low-code UI test automation platform powered by Playwright",
   "private": true,
   "homepage": "https://wrighttest.com",

@@ -4,6 +4,7 @@ import { DownloadOutlined, PlayCircleOutlined, StopOutlined, VideoCameraOutlined
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { createTest, getDevices, getEnvironments, getProject, getTest, startRecording, stopRecording, updateTest, validateTestSteps, runTestWithEnvironment } from '../api/client';
 import AppHeader from '../components/AppHeader';
+import AppFooter from '../components/AppFooter';
 import StepEditor from '../components/StepEditor';
 import VariableAutocompleteInput from '../components/VariableAutocompleteInput';
 import UserMenu from '../components/UserMenu';
@@ -995,6 +996,8 @@ export default function TestEditorPage() {
           </Space>
         </div>
       </div>
+      <div style={{ height: 96 }} />
+      <AppFooter bottomPadding={24} />
       <Modal
         title="Select Environment for Recording"
         open={recordModalOpen}

@@ -4,6 +4,7 @@ import { AppstoreOutlined, EllipsisOutlined, FileTextOutlined, HistoryOutlined, 
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { createSchedule, deleteSchedule, getEnvironments, getProject, getSchedules, getSuites, runSuite, runTestWithEnvironment, updateSchedule } from '../api/client';
 import AppHeader from '../components/AppHeader';
+import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
 import RunStatusBadge from '../components/RunStatusBadge';
 import type { Environment, ProjectWorkspace, Schedule, Suite, Test } from '../types';
@@ -348,12 +349,7 @@ export default function SchedulesPage() {
 
   return (
     <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 55%, #ffffff 100%)' }}>
-      <AppHeader
-        actions={[
-          <Link key="project" to={`/projects/${projectId}`} style={{ color: '#fff' }}>Back to project</Link>,
-          <UserMenu key="menu" />
-        ]}
-      />
+      <AppHeader actions={[<UserMenu key="menu" />]} />
       <Content style={{ padding: 32, maxWidth: 1280, width: '100%', margin: '0 auto' }}>
         <Row gutter={[24, 24]}>
           <Col span={24}>
@@ -669,6 +665,7 @@ export default function SchedulesPage() {
           </div>
         </Space>
       </Modal>
+      <AppFooter />
     </Layout>
   );
 }

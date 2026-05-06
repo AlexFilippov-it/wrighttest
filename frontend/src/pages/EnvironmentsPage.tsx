@@ -4,6 +4,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Link, useParams } from 'react-router-dom';
 import { createEnvironment, deleteEnvironment, getEnvironments, getProject, updateEnvironment } from '../api/client';
 import AppHeader from '../components/AppHeader';
+import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
 import type { Environment, Project } from '../types';
 
@@ -293,6 +294,7 @@ export default function EnvironmentsPage() {
           </Form.Item>
         </Form>
       </Modal>
+      <AppFooter />
     </Layout>
   );
 }

@@ -31,6 +31,7 @@ import {
 } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import AppHeader from '../components/AppHeader';
+import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
 import { createProject, deleteProject, getProjects, updateProject } from '../api/client';
 import { getProjectDescription } from '../utils/projectSettings';
@@ -515,6 +516,7 @@ export default function ProjectsPage() {
           </Form.Item>
         </Form>
       </Modal>
+      <AppFooter />
     </Layout>
   );
 }

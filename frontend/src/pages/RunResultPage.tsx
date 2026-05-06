@@ -19,6 +19,7 @@ import {
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getRun, runTest, runTestWithEnvironment } from '../api/client';
 import AppHeader from '../components/AppHeader';
+import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
 import RunStatusBadge from '../components/RunStatusBadge';
 import type { RunStatus, StepAction, TestRun } from '../types';
@@ -268,16 +269,16 @@ export default function RunResultPage() {
       {traceAvailable ? (
         <>
           <Tag color="green">Available</Tag>
-          <Space wrap>
+          <Space wrap size={8}>
             {traceViewerUrl && (
-              <a href={traceViewerUrl} target="_blank" rel="noreferrer">
+              <Button type="link" href={traceViewerUrl} target="_blank" rel="noreferrer" style={{ paddingInline: 0 }}>
                 Open trace
-              </a>
+              </Button>
             )}
             {traceDownloadUrl && (
-              <a href={traceDownloadUrl} target="_blank" rel="noreferrer">
+              <Button type="link" href={traceDownloadUrl} target="_blank" rel="noreferrer" style={{ paddingInline: 0 }}>
                 Download trace.zip
-              </a>
+              </Button>
             )}
           </Space>
         </>
@@ -294,14 +295,7 @@ export default function RunResultPage() {
 
   return (
     <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #ffffff 100%)' }}>
-      <AppHeader
-        actions={[
-          <Link key="dashboard" to="/dashboard" style={{ color: '#fff' }}>
-            Dashboard
-          </Link>,
-          <UserMenu key="menu" />
-        ]}
-      />
+      <AppHeader actions={[<UserMenu key="menu" />]} />
       <Content style={{ padding: 32, maxWidth: 1440, width: '100%', margin: '0 auto' }}>
         <Row gutter={[24, 24]}>
           <Col span={24}>
@@ -310,11 +304,14 @@ export default function RunResultPage() {
                 <Text type="secondary">
                   <Link to="/projects">Projects</Link> / Run Result
                 </Text>
-                <Space wrap align="start">
+                <Space wrap align="center" size={[12, 12]}>
                   <div>
-                    <Title level={2} style={{ margin: 0 }}>
-                      Run Result
-                    </Title>
+                    <Space wrap align="center" size={10}>
+                      <Title level={2} style={{ margin: 0 }}>
+                        Run Result
+                      </Title>
+                      {run && <RunStatusBadge status={run.status} />}
+                    </Space>
                     <Text type="secondary">
                       Debug a browser check execution, step by step.
                     </Text>
@@ -327,7 +324,6 @@ export default function RunResultPage() {
                     )}
                   </div>
                   {isActive && <Tag color="processing">Live polling</Tag>}
-                  {run && <RunStatusBadge status={run.status} />}
                 </Space>
               </div>
             </Card>
@@ -503,9 +499,11 @@ export default function RunResultPage() {
                       title: 'Target',
                       dataIndex: 'target',
                       render: (value: string) => (
-                        <Text style={{ maxWidth: 360 }} ellipsis>
-                          {value}
-                        </Text>
+                        <Tooltip title={value} placement="topLeft">
+                          <Text style={{ maxWidth: 360 }} ellipsis>
+                            {value}
+                          </Text>
+                        </Tooltip>
                       )
                     },
                     {
@@ -623,6 +621,7 @@ export default function RunResultPage() {
           background: #fff1f0 !important;
         }
       `}</style>
+      <AppFooter />
     </Layout>
   );
 }
