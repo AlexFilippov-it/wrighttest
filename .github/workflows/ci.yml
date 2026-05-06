@@ -7,6 +7,8 @@ on:
 jobs:
   typecheck:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/playwright_testing
 
     steps:
       - uses: actions/checkout@v4
@@ -17,5 +19,6 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm exec -w backend prisma generate
       - run: npm exec -w backend tsc -- --noEmit -p tsconfig.json
       - run: npm exec -w frontend tsc -- --noEmit -p tsconfig.json
