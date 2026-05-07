@@ -29,6 +29,13 @@ function normalizeDevice(device?: string) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function normalizeEnvironmentId(environmentId?: string | null) {
+  if (environmentId === undefined) return undefined;
+  if (environmentId === null) return null;
+  const trimmed = environmentId.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export async function testRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { projectId: string } }>('/projects/:projectId/tests', async (req, reply) => {
     const project = await prisma.project.findUnique({
@@ -70,6 +77,7 @@ export async function testRoutes(fastify: FastifyInstance) {
       data: {
         ...result.data,
         device: normalizeDevice(result.data.device),
+        environmentId: normalizeEnvironmentId(result.data.environmentId),
         projectId: req.params.projectId
       }
     });
@@ -88,7 +96,8 @@ export async function testRoutes(fastify: FastifyInstance) {
         where: { id: req.params.id },
         data: {
           ...result.data,
-          device: normalizeDevice(result.data.device)
+          device: normalizeDevice(result.data.device),
+          environmentId: normalizeEnvironmentId(result.data.environmentId)
         }
       });
       return test;

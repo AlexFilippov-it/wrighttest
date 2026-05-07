@@ -49,7 +49,8 @@ export const CreateTestSchema = z.object({
   name: z.string().min(1).max(200),
   url: urlOrTemplate,
   steps: z.array(StepSchema).default([]),
-  device: z.string().optional()
+  device: z.string().optional(),
+  environmentId: z.string().optional().nullable()
 });
 
 export const UpdateTestSchema = CreateTestSchema.partial();

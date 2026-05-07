@@ -316,6 +316,7 @@ export interface Test {
   name: string;
   url: string;
   device?: string | null;
+  environmentId?: string | null;
   steps: Step[];
   projectId: string;
   createdAt: string;

@@ -184,6 +184,7 @@ export default function TestEditorPage() {
       setSteps(stepsRef.current);
       setRecordingProjectId(projectId);
       setCurrentProjectId(projectId);
+      setSelectedRecordingEnvironmentId(undefined);
       setValidationTracePath(undefined);
       setValidationFeedback(null);
       setStepIssues([]);
@@ -198,6 +199,7 @@ export default function TestEditorPage() {
       setSteps(stepsRef.current);
       setRecordingProjectId(test.projectId);
       setCurrentProjectId(test.projectId);
+      setSelectedRecordingEnvironmentId(test.environmentId ?? undefined);
       setValidationTracePath(undefined);
       setValidationFeedback(null);
       setStepIssues([]);
@@ -305,6 +307,7 @@ export default function TestEditorPage() {
       const payload = {
         ...values,
         device: form.getFieldValue('device') || undefined,
+        environmentId: selectedRecordingEnvironmentId ?? null,
         steps: stepsToSave
       };
 
@@ -590,6 +593,7 @@ export default function TestEditorPage() {
         name: saved.name,
         url: saved.url,
         device: saved.device ?? null,
+        environmentId: saved.environmentId ?? null,
         steps: currentSteps
       });
       setValidationFeedback({
@@ -617,6 +621,7 @@ export default function TestEditorPage() {
       name: saved.name,
       url: saved.url,
       device: saved.device ?? null,
+      environmentId: saved.environmentId ?? null,
       steps: prepared.fixedSteps
     });
     setValidationFeedback({
@@ -666,9 +671,10 @@ export default function TestEditorPage() {
         name: checkName ?? '',
         url: selectedUrl ?? '',
         device: selectedDevice ?? null,
+        environmentId: selectedRecordingEnvironmentId ?? null,
         steps
       }),
-    [checkName, selectedUrl, selectedDevice, steps]
+    [checkName, selectedUrl, selectedDevice, selectedRecordingEnvironmentId, steps]
   );
 
   useEffect(() => {
