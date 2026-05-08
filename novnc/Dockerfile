@@ -5,11 +5,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     bash \
     curl \
+    dbus-x11 \
     fluxbox \
     novnc \
+    tigervnc-common \
+    tigervnc-standalone-server \
+    xauth \
+    xfonts-base \
     websockify \
-    x11vnc \
-    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 COPY start.sh /start.sh
