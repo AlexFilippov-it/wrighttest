@@ -5,15 +5,21 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Step } from '../types/step';
 import { resolveBrowserUrl } from '../utils/runtime-url';
 import { resolveLocator } from '../utils/locator';
-import { deriveSelectorCandidates } from '../utils/selector-variants';
 import { hasUnresolvedVariables, interpolateStep } from '../utils/interpolate';
 import { resolveDeviceConfig } from '../utils/devices';
 import { getBrowserName, launchChromium } from '../utils/browser';
 import { validateStepRequirements } from '../utils/step-validation';
+import {
+  buildActionCandidates,
+  uniqueCandidate,
+  scopedVariants,
+  waitForUniqueSelector,
+  dedupe
+} from '../utils/selector-helpers';
 
 export type StepValidationResult = {
   index: number;
-  status: 'ok' | 'ambiguous' | 'not_found' | 'skipped';
+  status: 'ok' | 'ambiguous' | 'not_found' | 'action_failed' | 'skipped';
   selector?: string;
   resolvedCount?: number;
   suggestion?: string;
@@ -27,66 +33,6 @@ export type ValidationReport = {
 };
 
 const TRACES_DIR = path.resolve(process.env.TRACES_DIR || './traces');
-const PRIMARY_SELECTOR_WAIT_MS = 2000;
-const SELECTOR_POLL_INTERVAL_MS = 100;
-
-function dedupe(values: string[]) {
-  return [...new Set(values.filter(Boolean))];
-}
-
-function uniqueCandidate(pageCounts: Map<string, number>, candidates: string[]) {
-  return candidates.find((candidate) => pageCounts.get(candidate) === 1);
-}
-
-function stripLeadingScope(selector: string) {
-  return selector.replace(
-    /^(?:main|nav|header|footer|form|section|article|aside|dialog|\[role="navigation"\]|\[role="main"\])\s+/,
-    ''
-  );
-}
-
-function scopedVariants(selector: string) {
-  if (selector.trim().startsWith('page.')) return [];
-
-  const baseSelector = stripLeadingScope(selector);
-  const scopes = ['main', 'nav', 'header', 'footer', 'form', 'section', 'article', 'aside'];
-  return scopes.map((scope) => `${scope} ${baseSelector}`);
-}
-
-function buildActionCandidates(step: Step) {
-  const base = dedupe([
-    step.selector ?? '',
-    ...(step.selectorCandidates ?? [])
-  ]);
-  const derived = step.action === 'click' && step.selector
-    ? deriveSelectorCandidates(step.selector)
-    : [];
-  const scoped = dedupe([...base, ...derived].flatMap((candidate) => scopedVariants(candidate)));
-  return dedupe([...base, ...derived, ...scoped]);
-}
-
-async function waitForUniqueSelector(page: Page, selector: string, timeoutMs = PRIMARY_SELECTOR_WAIT_MS) {
-  const startedAt = Date.now();
-  let lastCount = 0;
-  let lastError: string | null = null;
-
-  while (Date.now() - startedAt <= timeoutMs) {
-    try {
-      lastCount = await resolveLocator(page, selector).count();
-      lastError = null;
-      if (lastCount === 1) {
-        return { count: 1, error: null };
-      }
-    } catch (error) {
-      lastCount = 0;
-      lastError = error instanceof Error ? error.message : String(error);
-    }
-
-    await page.waitForTimeout(SELECTOR_POLL_INTERVAL_MS);
-  }
-
-  return { count: lastCount, error: lastError };
-}
 
 async function performValidationAction(page: Page, step: Step, selector: string) {
   const locator = resolveLocator(page, selector);
@@ -122,6 +68,7 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
   const traceName = `validation-${uuidv4()}.zip`;
   const tracePath = path.join(TRACES_DIR, traceName);
   let tracingStarted = false;
+  let savedTracePath: string | undefined;
 
   await fs.mkdir(TRACES_DIR, { recursive: true });
 
@@ -235,9 +182,7 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
         continue;
       }
 
-      const candidates = dedupe([
-        ...buildActionCandidates(step)
-      ]);
+      const candidates = buildActionCandidates(step, step.action === 'click' ? 'click' : 'waitForSelector');
       const scopedSuggestions = scopedVariants(step.selector);
       const counts = new Map<string, number>();
       const preferred = await waitForUniqueSelector(page, step.selector);
@@ -272,6 +217,7 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
       if (step.action === 'click') {
         let clicked = false;
         let lastError: unknown;
+        let primaryActionError: unknown = null;
 
         if (preferred.count === 1) {
           try {
@@ -279,6 +225,7 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
             results.push({ index, status: 'ok', selector: step.selector, resolvedCount: 1 });
             continue;
           } catch (error) {
+            primaryActionError = error;
             lastError = error;
           }
         }
@@ -298,6 +245,17 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
         }
 
         if (clicked) {
+          continue;
+        }
+
+        if (preferred.count === 1 && primaryActionError) {
+          results.push({
+            index,
+            status: 'action_failed',
+            selector: step.selector,
+            resolvedCount: 1,
+            error: primaryActionError instanceof Error ? primaryActionError.message : String(primaryActionError)
+          });
           continue;
         }
 
@@ -373,20 +331,37 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
         continue;
       }
 
-      if (['click', 'fill', 'press', 'selectOption', 'waitForSelector'].includes(step.action)) {
-        await performValidationAction(page as never, step, step.selector);
+      if (['fill', 'press', 'selectOption', 'waitForSelector'].includes(step.action)) {
+        try {
+          await performValidationAction(page, step, step.selector);
+          results.push({ index, status: 'ok', selector: step.selector, resolvedCount: 1 });
+        } catch (error) {
+          results.push({
+            index,
+            status: 'action_failed',
+            selector: step.selector,
+            resolvedCount: 1,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+        continue;
       }
 
       results.push({ index, status: 'ok', selector: step.selector, resolvedCount: 1 });
     }
   } finally {
     if (tracingStarted) {
-      await context.tracing.stop({ path: tracePath }).catch(() => undefined);
+      try {
+        await context.tracing.stop({ path: tracePath });
+        savedTracePath = traceName;
+      } catch {
+        savedTracePath = undefined;
+      }
     }
     await context.close().catch(() => undefined);
     await browser.close().catch(() => undefined);
   }
 
   const valid = results.every((result) => result.status === 'ok' || result.status === 'skipped');
-  return { valid, results, tracePath: traceName };
+  return { valid, results, tracePath: savedTracePath };
 }

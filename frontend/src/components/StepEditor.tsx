@@ -72,6 +72,7 @@ const statusStyles: Record<StepValidationResult['status'], { backgroundColor?: s
   ok: {},
   ambiguous: { backgroundColor: '#fffbe6', border: '1px solid #ffe58f' },
   not_found: { backgroundColor: '#fff2f0', border: '1px solid #ffccc7' },
+  action_failed: { backgroundColor: '#fff2f0', border: '1px solid #ffccc7' },
   skipped: {}
 };
 
@@ -163,7 +164,7 @@ export default function StepEditor({ steps, onChange, validationResults, stepIss
         const validation = validationResults?.[index];
         const fieldIssue = stepIssues[index];
         const hasLocalIssue = Boolean(fieldIssue?.message || fieldIssue?.selector || fieldIssue?.value || fieldIssue?.expected);
-        const isHardInvalid = validation?.status === 'not_found' || hasLocalIssue;
+        const isHardInvalid = validation?.status === 'not_found' || validation?.status === 'action_failed' || hasLocalIssue;
         const cardStyle = validation ? statusStyles[validation.status] : {};
         const showExactToggle = ['assertText', 'assertTitle', 'assertURL'].includes(step.action);
         const needsSelector = opt.needsSelector;
@@ -233,6 +234,7 @@ export default function StepEditor({ steps, onChange, validationResults, stepIss
                 </div>
                 {validation?.status === 'ambiguous' && <span style={{ color: '#ad8b00', fontSize: 12 }}>selector ambiguous</span>}
                 {validation?.status === 'not_found' && <span style={{ color: '#cf1322', fontSize: 12 }}>selector not found</span>}
+                {validation?.status === 'action_failed' && <span style={{ color: '#cf1322', fontSize: 12 }}>action failed</span>}
               </Space>
             }
           >
@@ -281,6 +283,10 @@ export default function StepEditor({ steps, onChange, validationResults, stepIss
                     <Text type="danger" style={{ fontSize: 12, lineHeight: 1.4 }}>
                       {fieldIssue.selector}
                     </Text>
+                  ) : validation?.status === 'action_failed' && validation.error ? (
+                    <Text type="danger" style={{ fontSize: 12, lineHeight: 1.4 }}>
+                      {validation.error}
+                    </Text>
                   ) : null}
                 </div>
               )}
@@ -311,6 +317,10 @@ export default function StepEditor({ steps, onChange, validationResults, stepIss
                     <Text type="danger" style={{ fontSize: 12, lineHeight: 1.4 }}>
                       {fieldIssue.value}
                     </Text>
+                  ) : validation?.status === 'action_failed' && validation.error ? (
+                    <Text type="danger" style={{ fontSize: 12, lineHeight: 1.4 }}>
+                      {validation.error}
+                    </Text>
                   ) : null}
                 </div>
               )}
@@ -329,6 +339,10 @@ export default function StepEditor({ steps, onChange, validationResults, stepIss
                   {fieldIssue?.expected ? (
                     <Text type="danger" style={{ fontSize: 12, lineHeight: 1.4 }}>
                       {fieldIssue.expected}
+                    </Text>
+                  ) : validation?.status === 'action_failed' && validation.error ? (
+                    <Text type="danger" style={{ fontSize: 12, lineHeight: 1.4 }}>
+                      {validation.error}
                     </Text>
                   ) : null}
                   {getExpectedHint(step.action, step.options?.exact) && (

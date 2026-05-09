@@ -12,39 +12,24 @@ import { resolveBrowserUrl } from '../utils/runtime-url';
 import { resolveLocator } from '../utils/locator';
 import { hasUnresolvedVariables, interpolateStep } from '../utils/interpolate';
 import { notifyRunResult } from '../services/notifier';
-import { deriveSelectorCandidates } from '../utils/selector-variants';
 import { getBrowserName, launchChromium } from '../utils/browser';
 import { validateStepRequirements } from '../utils/step-validation';
+import {
+  buildActionCandidates,
+  dedupe,
+  formatSelectorAttempts,
+  scopedVariants,
+  summarizePlaywrightError,
+  type SelectorAttempt,
+  type TargetAction,
+  waitForUniqueSelector
+} from '../utils/selector-helpers';
 
 const SCREENSHOTS_DIR = path.resolve(process.env.SCREENSHOTS_DIR || './screenshots');
 const TRACES_DIR = path.resolve(process.env.TRACES_DIR || './traces');
-const PRIMARY_SELECTOR_WAIT_MS = 2000;
-const SELECTOR_POLL_INTERVAL_MS = 100;
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function dedupe(values: string[]) {
-  return [...new Set(values.filter(Boolean))];
-}
-
-function stripLeadingScope(selector: string) {
-  return selector.replace(
-    /^(?:main|nav|header|footer|form|section|article|aside|dialog|\[role="navigation"\]|\[role="main"\])\s+/,
-    ''
-  );
-}
-
-function scopedVariants(selector: string) {
-  const normalized = selector.trim();
-  if (!normalized || normalized.startsWith('page.') || normalized.startsWith('//') || normalized.startsWith('(')) {
-    return [];
-  }
-
-  const baseSelector = stripLeadingScope(normalized);
-  const scopes = ['main', 'nav', 'header', 'footer', 'form', 'section', 'article', 'aside'];
-  return scopes.map((scope) => `${scope} ${baseSelector}`);
 }
 
 function getStepTarget(step: Step) {
@@ -53,65 +38,6 @@ function getStepTarget(step: Step) {
   if ('selector' in step && step.selector) return step.selector;
   if ('expected' in step && step.expected) return step.expected;
   return '';
-}
-
-type SelectorAttempt = {
-  candidate: string;
-  count: number;
-  error?: string | null;
-};
-
-type TargetAction = 'click' | 'fill' | 'press' | 'selectOption' | 'waitForSelector';
-
-function summarizePlaywrightError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error ?? 'Unknown error');
-  const firstLine = message
-    .replace(/\r/g, '')
-    .split('\n')
-    .map((line) => line.trim())
-    .find(Boolean);
-  return firstLine ?? message;
-}
-
-function formatSelectorAttempts(attempts: SelectorAttempt[]) {
-  return attempts
-    .map((attempt) => `${attempt.candidate} => ${attempt.count}${attempt.error ? ` (${attempt.error})` : ''}`)
-    .join('; ');
-}
-
-function buildActionCandidates(step: Step, action: TargetAction) {
-  const base = dedupe([
-    step.selector ?? '',
-    ...(step.selectorCandidates ?? [])
-  ]);
-  const derived = action === 'click' && step.selector
-    ? deriveSelectorCandidates(step.selector)
-    : [];
-  const scoped = dedupe([...base, ...derived].flatMap((candidate) => scopedVariants(candidate)));
-  return dedupe([...base, ...derived, ...scoped]);
-}
-
-async function waitForUniqueSelector(page: Page, selector: string, timeoutMs = PRIMARY_SELECTOR_WAIT_MS) {
-  const startedAt = Date.now();
-  let lastCount = 0;
-  let lastError: string | null = null;
-
-  while (Date.now() - startedAt <= timeoutMs) {
-    try {
-      lastCount = await resolveLocator(page, selector).count();
-      lastError = null;
-      if (lastCount === 1) {
-        return { count: 1, error: null };
-      }
-    } catch (error) {
-      lastCount = 0;
-      lastError = summarizePlaywrightError(error);
-    }
-
-    await page.waitForTimeout(SELECTOR_POLL_INTERVAL_MS);
-  }
-
-  return { count: lastCount, error: lastError };
 }
 
 async function runSingleTargetAction(
@@ -314,7 +240,6 @@ async function runTest(job: Job<TestJobData>) {
       currentStep = index + 1;
       const stepStartedAt = Date.now();
       let stepError: Error | null = null;
-      let screenshotName: string | null = null;
 
       await prisma.testRun.update({
         where: { id: testRunId },
@@ -440,7 +365,6 @@ async function runTest(job: Job<TestJobData>) {
         }
       } catch (error) {
         stepError = error instanceof Error ? error : new Error(String(error));
-        runError = stepError;
       } finally {
         const screenshotName = `${testRunId}_step${index + 1}${stepError ? '_failed' : ''}.png`;
         const screenshotPath = path.join(SCREENSHOTS_DIR, screenshotName);

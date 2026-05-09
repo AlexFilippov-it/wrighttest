@@ -386,7 +386,8 @@ export default function TestEditorPage() {
 
       const hasUnfixable = report.results.some(
         (result) =>
-          (result.status === 'ambiguous' || result.status === 'not_found') && !result.suggestion
+          result.status === 'action_failed' ||
+          ((result.status === 'ambiguous' || result.status === 'not_found') && !result.suggestion)
       );
       const fixedCount = report.results.filter(
         (result) =>
@@ -397,11 +398,14 @@ export default function TestEditorPage() {
       setSteps(fixedSteps);
 
       if (hasUnfixable) {
+        const blockingResult = report.results.find(
+          (result) => result.status === 'action_failed' || ((result.status === 'ambiguous' || result.status === 'not_found') && !result.suggestion)
+        );
         setValidationFeedback({
           type: 'error',
-          text: 'Some selectors need manual review before saving this check.'
+          text: blockingResult?.error ?? 'Some selectors need manual review before saving this check.'
         });
-        message.warning('Some selectors need manual review');
+        message.warning(blockingResult?.error ?? 'Some selectors need manual review');
         return null;
       }
 

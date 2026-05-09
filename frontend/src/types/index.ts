@@ -33,7 +33,7 @@ export interface Step {
 
 export interface StepValidationResult {
   index: number;
-  status: 'ok' | 'ambiguous' | 'not_found' | 'skipped';
+  status: 'ok' | 'ambiguous' | 'not_found' | 'action_failed' | 'skipped';
   selector?: string;
   resolvedCount?: number;
   suggestion?: string;
