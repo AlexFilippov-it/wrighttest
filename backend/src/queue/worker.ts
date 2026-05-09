@@ -1,6 +1,6 @@
 import '../setup-playwright-env';
 import { Worker, Job } from 'bullmq';
-import { devices } from 'playwright';
+import { devices, type Page } from 'playwright';
 import { expect } from '@playwright/test';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -18,6 +18,8 @@ import { validateStepRequirements } from '../utils/step-validation';
 
 const SCREENSHOTS_DIR = path.resolve(process.env.SCREENSHOTS_DIR || './screenshots');
 const TRACES_DIR = path.resolve(process.env.TRACES_DIR || './traces');
+const PRIMARY_SELECTOR_WAIT_MS = 2000;
+const SELECTOR_POLL_INTERVAL_MS = 100;
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -51,6 +53,181 @@ function getStepTarget(step: Step) {
   if ('selector' in step && step.selector) return step.selector;
   if ('expected' in step && step.expected) return step.expected;
   return '';
+}
+
+type SelectorAttempt = {
+  candidate: string;
+  count: number;
+  error?: string | null;
+};
+
+type TargetAction = 'click' | 'fill' | 'press' | 'selectOption' | 'waitForSelector';
+
+function summarizePlaywrightError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? 'Unknown error');
+  const firstLine = message
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .find(Boolean);
+  return firstLine ?? message;
+}
+
+function formatSelectorAttempts(attempts: SelectorAttempt[]) {
+  return attempts
+    .map((attempt) => `${attempt.candidate} => ${attempt.count}${attempt.error ? ` (${attempt.error})` : ''}`)
+    .join('; ');
+}
+
+function buildActionCandidates(step: Step, action: TargetAction) {
+  const base = dedupe([
+    step.selector ?? '',
+    ...(step.selectorCandidates ?? [])
+  ]);
+  const derived = action === 'click' && step.selector
+    ? deriveSelectorCandidates(step.selector)
+    : [];
+  const scoped = dedupe([...base, ...derived].flatMap((candidate) => scopedVariants(candidate)));
+  return dedupe([...base, ...derived, ...scoped]);
+}
+
+async function waitForUniqueSelector(page: Page, selector: string, timeoutMs = PRIMARY_SELECTOR_WAIT_MS) {
+  const startedAt = Date.now();
+  let lastCount = 0;
+  let lastError: string | null = null;
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    try {
+      lastCount = await resolveLocator(page, selector).count();
+      lastError = null;
+      if (lastCount === 1) {
+        return { count: 1, error: null };
+      }
+    } catch (error) {
+      lastCount = 0;
+      lastError = summarizePlaywrightError(error);
+    }
+
+    await page.waitForTimeout(SELECTOR_POLL_INTERVAL_MS);
+  }
+
+  return { count: lastCount, error: lastError };
+}
+
+async function runSingleTargetAction(
+  page: Page,
+  index: number,
+  action: TargetAction,
+  step: Step
+) {
+  if (!step.selector) {
+    throw new Error(`${action} failed: selector is required for step ${index + 1}.`);
+  }
+
+  const preferred = await waitForUniqueSelector(page, step.selector);
+  if (preferred.count === 1) {
+    try {
+      const locator = resolveLocator(page, step.selector);
+      switch (action) {
+        case 'click':
+          await locator.click({ timeout: 10000 });
+          break;
+        case 'fill':
+          await locator.fill(step.value!);
+          break;
+        case 'press':
+          await locator.press(step.value!);
+          break;
+        case 'selectOption':
+          await locator.selectOption(step.value!);
+          break;
+        case 'waitForSelector':
+          await locator.waitFor({ timeout: 10000 });
+          break;
+      }
+      return;
+    } catch (error) {
+      throw new Error(
+        `${action} failed for step ${index + 1}. Unique selector found: ${step.selector}. ${summarizePlaywrightError(error)}`
+      );
+    }
+  }
+
+  const allCandidates = buildActionCandidates(step, action);
+  const attempts: SelectorAttempt[] = [];
+  let lastUniqueActionError: { candidate: string; error: unknown } | null = null;
+
+  for (const candidate of allCandidates) {
+    if (candidate === step.selector) {
+      attempts.push({
+        candidate,
+        count: preferred.count,
+        error: preferred.error
+      });
+      continue;
+    }
+
+    let count = 0;
+    try {
+      count = await resolveLocator(page, candidate).count();
+    } catch (error) {
+      attempts.push({
+        candidate,
+        count: 0,
+        error: summarizePlaywrightError(error)
+      });
+      continue;
+    }
+
+    attempts.push({ candidate, count });
+
+    if (count !== 1) {
+      continue;
+    }
+
+    try {
+      const locator = resolveLocator(page, candidate);
+      switch (action) {
+        case 'click':
+          await locator.click({ timeout: 10000 });
+          break;
+        case 'fill':
+          await locator.fill(step.value!);
+          break;
+        case 'press':
+          await locator.press(step.value!);
+          break;
+        case 'selectOption':
+          await locator.selectOption(step.value!);
+          break;
+        case 'waitForSelector':
+          await locator.waitFor({ timeout: 10000 });
+          break;
+      }
+      return;
+    } catch (error) {
+      lastUniqueActionError = { candidate, error };
+    }
+  }
+
+  const tried = formatSelectorAttempts(attempts);
+  const ambiguousAttempt = attempts.find((attempt) => attempt.count > 1);
+
+  if (lastUniqueActionError) {
+    throw new Error(
+      `${action} failed for step ${index + 1}. Unique selector found: ${lastUniqueActionError.candidate}. ${summarizePlaywrightError(lastUniqueActionError.error)}`
+    );
+  }
+
+  if (ambiguousAttempt) {
+    throw new Error(
+      `${action} failed: selector ambiguous for step ${index + 1}. "${ambiguousAttempt.candidate}" matched ${ambiguousAttempt.count} elements. Tried: ${tried}`
+    );
+  }
+
+  throw new Error(
+    `${action} failed: selector not found for step ${index + 1}. Tried: ${tried}`
+  );
 }
 
 type RunStepResult = {
@@ -166,41 +343,17 @@ async function runTest(job: Job<TestJobData>) {
           case 'goto':
             await page.goto(resolveBrowserUrl(step.value!), { waitUntil: 'domcontentloaded' });
             break;
-          case 'click': {
-            const candidates = dedupe([
-              step.selector!,
-              ...(step.selectorCandidates ?? []),
-              ...deriveSelectorCandidates(step.selector!)
-            ]);
-            const scoped = dedupe(candidates.flatMap((candidate) => scopedVariants(candidate)));
-            const allCandidates = dedupe([...candidates, ...scoped]);
-            let clicked = false;
-
-            for (const candidate of allCandidates) {
-              try {
-                await resolveLocator(page, candidate).click({ timeout: 10000 });
-                clicked = true;
-                break;
-              } catch {
-                // try next candidate
-              }
-            }
-
-            if (!clicked) {
-              throw new Error(
-                `click failed: no unique selector found for step ${index + 1}. Tried: ${allCandidates.join(', ')}`
-              );
-            }
+          case 'click':
+            await runSingleTargetAction(page, index, 'click', step);
             break;
-          }
           case 'fill':
-            await resolveLocator(page, step.selector!).fill(step.value!);
+            await runSingleTargetAction(page, index, 'fill', step);
             break;
           case 'press':
-            await resolveLocator(page, step.selector!).press(step.value!);
+            await runSingleTargetAction(page, index, 'press', step);
             break;
           case 'selectOption':
-            await resolveLocator(page, step.selector!).selectOption(step.value!);
+            await runSingleTargetAction(page, index, 'selectOption', step);
             break;
           case 'assertVisible': {
             const locator = resolveLocator(page, step.selector!);
@@ -280,7 +433,7 @@ async function runTest(job: Job<TestJobData>) {
             break;
           }
           case 'waitForSelector':
-            await resolveLocator(page, step.selector!).waitFor();
+            await runSingleTargetAction(page, index, 'waitForSelector', step);
             break;
           default:
             throw new Error(`Unsupported action: ${step.action}`);
