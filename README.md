@@ -103,6 +103,36 @@ For a server deployment:
 
 If you place nginx in front of the app, proxy the public frontend domain to the frontend container and route backend/API traffic to the backend container. The backend already exposes `/health` and `/health/db` for readiness checks.
 
+## noVNC Local / Server Modes
+
+WrightTest uses a single `VITE_NOVNC_URL` value and derives the websocket path from it at runtime.
+
+### Local Development
+
+Use this when noVNC is exposed directly on `localhost`:
+
+```env
+VITE_NOVNC_URL=http://localhost:6080
+```
+
+The recorder iframe connects to:
+
+- `ws://localhost:6080/websockify`
+
+### Server Behind Reverse Proxy
+
+Use this when nginx exposes noVNC under a path prefix:
+
+```env
+VITE_NOVNC_URL=/vnc
+```
+
+The recorder iframe connects to:
+
+- `wss://your-domain.example/vnc/websockify`
+
+This keeps the container image unchanged and moves the deployment-specific part into configuration only.
+
 ## 🤖 AI Quick Start
 
 If you are working with an AI coding agent, start here first:
