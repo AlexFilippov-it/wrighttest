@@ -17,7 +17,7 @@ function runPlaywrightInstall(args) {
   return result.status ?? 1;
 }
 
-const installArgs = ['install', 'chromium'];
+const installArgs = ['install', 'chromium', 'webkit'];
 const shouldInstallDeps = process.platform === 'linux';
 
 let exitCode = 0;
@@ -25,20 +25,20 @@ let exitCode = 0;
 if (shouldInstallDeps) {
   exitCode = runPlaywrightInstall(installArgs);
   if (exitCode === 0) {
-    const depsExitCode = runPlaywrightInstall(['install-deps', 'chromium']);
+    const depsExitCode = runPlaywrightInstall(['install-deps', 'chromium', 'webkit']);
     if (depsExitCode !== 0) {
       console.warn(
-        '\n[setup-playwright] Chromium browser deps could not be installed automatically. ' +
-        '[setup-playwright] If validation still fails on Ubuntu/Linux, run: sudo npx playwright install-deps chromium\n'
+        '\n[setup-playwright] Playwright browser deps could not be installed automatically. ' +
+        '[setup-playwright] If validation still fails on Ubuntu/Linux, run: sudo npx playwright install-deps chromium webkit\n'
       );
     }
   }
 
   if (exitCode !== 0) {
     console.warn(
-      '\n[setup-playwright] Chromium browser deps could not be installed automatically. ' +
+      '\n[setup-playwright] Playwright browser deps could not be installed automatically. ' +
       'Falling back to browser-only install.\n' +
-      '[setup-playwright] If validation still fails on Ubuntu/Linux, run: sudo npx playwright install-deps chromium\n'
+      '[setup-playwright] If validation still fails on Ubuntu/Linux, run: sudo npx playwright install-deps chromium webkit\n'
     );
     exitCode = runPlaywrightInstall(installArgs);
   }

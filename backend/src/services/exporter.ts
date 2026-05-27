@@ -106,6 +106,8 @@ function stepToCode(step: Step, variables: Record<string, string>, useEnvVars: b
       return `${indent}await ${selectorExpr}.fill(${valueExpr});`;
     case 'press':
       return `${indent}await ${selectorExpr}.press(${valueExpr});`;
+    case 'keyboardPress':
+      return `${indent}await page.keyboard.press(${valueExpr});`;
     case 'selectOption':
       return `${indent}await ${selectorExpr}.selectOption(${valueExpr});`;
     case 'assertVisible':

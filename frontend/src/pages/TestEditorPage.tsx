@@ -82,6 +82,10 @@ function validateRequiredStepFields(step: Step): StepIssue | null {
         ...(step.selector?.trim() ? {} : { selector: 'Target is required.' }),
         ...(step.value?.trim() ? {} : { value: 'Key is required.' })
       });
+    case 'keyboardPress':
+      return buildStepIssue({
+        ...(step.value?.trim() ? {} : { value: 'Key is required.' })
+      });
     case 'selectOption':
       return buildStepIssue({
         ...(step.selector?.trim() ? {} : { selector: 'Target is required.' }),
@@ -136,7 +140,24 @@ function validateCurrentSteps(steps: Step[]) {
 }
 
 function formatStepIssueSummary(step: Step, index: number, issue: StepIssue) {
-  const label = `${index + 1}. ${step.action === 'goto' ? 'Navigate to URL' : step.action}`;
+  const actionLabels: Record<Step['action'], string> = {
+    goto: 'Navigate to URL',
+    click: 'Click element',
+    fill: 'Fill input',
+    press: 'Press key',
+    keyboardPress: 'Keyboard press',
+    selectOption: 'Select option',
+    assertVisible: 'Assert visible',
+    assertHidden: 'Assert hidden',
+    assertText: 'Assert text',
+    assertValue: 'Assert value',
+    assertURL: 'Assert URL',
+    assertTitle: 'Assert title',
+    assertChecked: 'Assert checked',
+    assertCount: 'Assert count',
+    waitForSelector: 'Wait for element'
+  };
+  const label = `${index + 1}. ${actionLabels[step.action] ?? step.action}`;
   const fieldMessage = issue.selector ?? issue.value ?? issue.expected ?? issue.message;
   return `${label}: ${fieldMessage}`;
 }

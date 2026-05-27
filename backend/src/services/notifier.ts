@@ -80,6 +80,8 @@ function formatStepAction(action?: string) {
       return 'Fill input';
     case 'press':
       return 'Press key';
+    case 'keyboardPress':
+      return 'Keyboard press';
     case 'selectOption':
       return 'Select option';
     case 'waitForSelector':

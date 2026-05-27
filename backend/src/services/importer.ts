@@ -85,6 +85,13 @@ export function parsePlaywrightSpec(code: string): { testName: string; steps: St
       continue;
     }
 
+    const keyboardPressMatch = t.match(/await page\.keyboard\.press\((.+)\);?$/);
+    if (keyboardPressMatch) {
+      const key = expressionToTemplate(keyboardPressMatch[1]);
+      steps.push({ action: 'keyboardPress', value: key });
+      continue;
+    }
+
     const clickMatch = t.match(/await (page\..+?)\.click\(\);?$/);
     if (clickMatch) {
       steps.push({ action: 'click', selector: parseLocatorExpression(clickMatch[1]) });

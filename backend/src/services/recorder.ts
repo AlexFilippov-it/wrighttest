@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
+import { chromium, devices, firefox, webkit } from 'playwright';
 import { resolveBrowserUrl } from '../utils/runtime-url';
 import { resolveDeviceConfig } from '../utils/devices';
 import { deriveSelectorCandidates } from '../utils/selector-variants';
@@ -24,6 +25,19 @@ const BACKEND_DIR = fs.existsSync(path.resolve(process.cwd(), 'src', 'index.ts')
   ? process.cwd()
   : path.resolve(process.cwd(), 'backend');
 const DESKTOP_DEVICE_PRESETS = new Set(['Desktop Chrome', 'Desktop Chrome HiDPI']);
+
+function getBrowserExecutablePath(browserType: 'chromium' | 'firefox' | 'webkit') {
+  switch (browserType) {
+    case 'chromium':
+      return chromium.executablePath();
+    case 'firefox':
+      return firefox.executablePath();
+    case 'webkit':
+      return webkit.executablePath();
+    default:
+      return chromium.executablePath();
+  }
+}
 
 function extractStringLiteral(value: string): string | null {
   const trimmed = value.trim();
@@ -49,6 +63,13 @@ function parseCodegenLine(trimmed: string): Step | null {
     const url = extractFirstStringArgument(gotoMatch[1]);
     if (!url) return null;
     return { action: 'goto', value: url };
+  }
+
+  const keyboardPressMatch = trimmed.match(/^await\s+page\.keyboard\.press\((.+)\);?$/);
+  if (keyboardPressMatch) {
+    const key = extractFirstStringArgument(keyboardPressMatch[1]);
+    if (!key) return null;
+    return { action: 'keyboardPress', value: key };
   }
 
   const actionMatch = trimmed.match(
@@ -220,6 +241,23 @@ async function stopActiveSessions() {
   sessions.clear();
 }
 
+async function assertRecordingBrowserAvailable(device?: string) {
+  if (!device || !(device in devices)) return;
+
+  const browserType = devices[device as keyof typeof devices].defaultBrowserType;
+  if (!browserType || browserType === 'chromium') return;
+
+  const browserPath = getBrowserExecutablePath(browserType as 'chromium' | 'firefox' | 'webkit');
+  try {
+    await fsPromises.access(browserPath);
+  } catch {
+    throw new Error(
+      `Recording with "${device}" requires Playwright ${browserType}, but it is not installed on this machine. ` +
+        `Run "PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install ${browserType}" or choose a Chromium-based desktop preset.`
+    );
+  }
+}
+
 export async function startRecording(startUrl: string, device?: string, projectId?: string, userId?: string): Promise<string> {
   await fsPromises.mkdir(TMP_DIR, { recursive: true });
 
@@ -228,6 +266,7 @@ export async function startRecording(startUrl: string, device?: string, projectI
   const resolvedUrl = resolveBrowserUrl(startUrl);
   const env = { ...process.env };
   await stopActiveSessions();
+  await assertRecordingBrowserAvailable(device);
 
   const isDesktopPreset = device ? DESKTOP_DEVICE_PRESETS.has(device) : false;
   const deviceArgs = device && !isDesktopPreset ? ['--device', device] : [];

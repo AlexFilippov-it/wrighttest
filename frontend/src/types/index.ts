@@ -5,6 +5,7 @@ export type StepAction =
   | 'click'
   | 'fill'
   | 'press'
+  | 'keyboardPress'
   | 'selectOption'
   | 'assertVisible'
   | 'assertHidden'

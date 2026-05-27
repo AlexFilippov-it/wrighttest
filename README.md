@@ -160,15 +160,15 @@ cd backend && npx prisma migrate dev && npx prisma db seed && cd ..
 npm run dev
 ```
 
-`npm install` now runs a Playwright bootstrap step for Chromium. On Ubuntu/Linux
+`npm install` now runs a Playwright bootstrap step for Chromium and WebKit. On Ubuntu/Linux
 it will also try to install system dependencies when the terminal session allows
-it. If Playwright still cannot launch Chromium, run the same bootstrap manually
-and then install Linux deps:
+it. If Playwright still cannot launch Chromium or mobile recording needs WebKit,
+run the same bootstrap manually and then install Linux deps:
 
 ```bash
 npm run setup
-npx playwright install chromium
-sudo npx playwright install-deps chromium
+npx playwright install chromium webkit
+sudo npx playwright install-deps chromium webkit
 ```
 
 | Service | URL |
@@ -176,7 +176,7 @@ sudo npx playwright install-deps chromium
 | Frontend | http://localhost:5173 |
 | Backend | http://localhost:3000 |
 
-If the host environment still reports missing Playwright libraries, rerun `npm run setup` once from the repo root. On Ubuntu/Linux this may fall back to `npx playwright install-deps chromium` when needed.
+If the host environment still reports missing Playwright libraries, rerun `npm run setup` once from the repo root. On Ubuntu/Linux this may fall back to `npx playwright install-deps chromium webkit` when needed.
 
 ## 🔄 Updating
 

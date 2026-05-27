@@ -4,6 +4,7 @@ export interface Step {
     | 'click'
     | 'fill'
     | 'press'
+    | 'keyboardPress'
     | 'selectOption'
     | 'assertVisible'
     | 'assertHidden'

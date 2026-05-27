@@ -40,6 +40,10 @@ export function validateStepRequirements(step: Step): StepRequirementIssue | nul
         ...(step.selector?.trim() ? {} : { selector: required('Target') }),
         ...(step.value?.trim() ? {} : { value: required('Key') })
       });
+    case 'keyboardPress':
+      return buildIssue({
+        ...(step.value?.trim() ? {} : { value: required('Key') })
+      });
     case 'selectOption':
       return buildIssue({
         ...(step.selector?.trim() ? {} : { selector: required('Target') }),

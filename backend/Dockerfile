@@ -15,7 +15,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH=0
 
 RUN cd backend && npx prisma generate
 RUN cd backend && npx tsc -p tsconfig.json
-RUN cd backend && npx playwright install chromium
+RUN cd backend && npx playwright install chromium webkit
 
 RUN mkdir -p /app/backend/screenshots /app/backend/traces
 

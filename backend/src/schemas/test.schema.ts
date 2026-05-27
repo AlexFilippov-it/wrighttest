@@ -18,6 +18,7 @@ export const StepSchema = z.object({
     'click',
     'fill',
     'press',
+    'keyboardPress',
     'selectOption',
     'assertVisible',
     'assertHidden',

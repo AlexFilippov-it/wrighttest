@@ -43,6 +43,7 @@ const ACTION_OPTIONS: ActionOption[] = [
   { value: 'click', label: 'Click element', icon: <AimOutlined />, group: 'Actions', needsSelector: true, needsValue: false, needsExpected: false },
   { value: 'fill', label: 'Fill input', icon: <EditOutlined />, group: 'Actions', needsSelector: true, needsValue: true, needsExpected: false },
   { value: 'press', label: 'Press key', icon: <KeyOutlined />, group: 'Actions', needsSelector: true, needsValue: true, needsExpected: false },
+  { value: 'keyboardPress', label: 'Keyboard press', icon: <KeyOutlined />, group: 'Actions', needsSelector: false, needsValue: true, needsExpected: false },
   { value: 'selectOption', label: 'Select option', icon: <UnorderedListOutlined />, group: 'Actions', needsSelector: true, needsValue: true, needsExpected: false },
   { value: 'assertVisible', label: 'Assert visible', icon: <EyeOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: false },
   { value: 'assertHidden', label: 'Assert hidden', icon: <EyeInvisibleOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: false },
@@ -124,6 +125,43 @@ function getExpectedHint(action: StepAction, exact?: boolean) {
   return null;
 }
 
+function humanizeStepAction(action: StepAction) {
+  switch (action) {
+    case 'goto':
+      return 'Navigate to URL';
+    case 'click':
+      return 'Click element';
+    case 'fill':
+      return 'Fill input';
+    case 'press':
+      return 'Press key';
+    case 'keyboardPress':
+      return 'Keyboard press';
+    case 'selectOption':
+      return 'Select option';
+    case 'assertVisible':
+      return 'Assert visible';
+    case 'assertHidden':
+      return 'Assert hidden';
+    case 'assertText':
+      return 'Assert text';
+    case 'assertValue':
+      return 'Assert value';
+    case 'assertURL':
+      return 'Assert URL';
+    case 'assertTitle':
+      return 'Assert title';
+    case 'assertChecked':
+      return 'Assert checked';
+    case 'assertCount':
+      return 'Assert count';
+    case 'waitForSelector':
+      return 'Wait for element';
+    default:
+      return action;
+  }
+}
+
 function variableHint(value?: string) {
   if (!value || !value.includes('{{')) return null;
 
@@ -171,7 +209,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
         const needsSelector = opt.needsSelector;
         const needsValue = opt.needsValue;
         const needsExpected = opt.needsExpected;
-        const stepLabel = opt.label;
+        const stepLabel = humanizeStepAction(step.action);
         const rowStyle = {
           display: 'flex',
           alignItems: 'flex-start',

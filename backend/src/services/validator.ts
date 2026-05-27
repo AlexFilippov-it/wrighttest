@@ -14,7 +14,8 @@ import {
   uniqueCandidate,
   scopedVariants,
   waitForUniqueSelector,
-  dedupe
+  dedupe,
+  summarizePlaywrightError
 } from '../utils/selector-helpers';
 
 export type StepValidationResult = {
@@ -35,6 +36,11 @@ export type ValidationReport = {
 const TRACES_DIR = path.resolve(process.env.TRACES_DIR || './traces');
 
 async function performValidationAction(page: Page, step: Step, selector: string) {
+  if (step.action === 'keyboardPress') {
+    await page.keyboard.press(step.value ?? '');
+    return;
+  }
+
   const locator = resolveLocator(page, selector);
 
   switch (step.action) {
@@ -179,6 +185,20 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
 
       if (hasUnresolvedVariables(step.selector)) {
         results.push({ index, status: 'skipped', selector: step.selector });
+        continue;
+      }
+
+      if (step.action === 'keyboardPress') {
+        try {
+          await performValidationAction(page, step, '');
+          results.push({ index, status: 'ok' });
+        } catch (error) {
+          results.push({
+            index,
+            status: 'action_failed',
+            error: summarizePlaywrightError(error)
+          });
+        }
         continue;
       }
 
@@ -341,7 +361,7 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
             status: 'action_failed',
             selector: step.selector,
             resolvedCount: 1,
-            error: error instanceof Error ? error.message : String(error)
+            error: summarizePlaywrightError(error)
           });
         }
         continue;

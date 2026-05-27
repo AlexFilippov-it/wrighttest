@@ -14,18 +14,51 @@ export type SelectorAttempt = {
 
 export type TargetAction = 'click' | 'fill' | 'press' | 'selectOption' | 'waitForSelector';
 
+const PLAYWRIGHT_ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
+  {
+    pattern: /intercepts pointer events/i,
+    message: 'The target is blocked by another element or overlay intercepting pointer events.'
+  },
+  {
+    pattern: /strict mode violation/i,
+    message: 'The locator matched multiple elements in strict mode.'
+  },
+  {
+    pattern: /element is not visible/i,
+    message: 'The target element is not visible.'
+  },
+  {
+    pattern: /outside of the viewport/i,
+    message: 'The target element is outside of the viewport.'
+  },
+  {
+    pattern: /element is disabled/i,
+    message: 'The target element is disabled.'
+  },
+  {
+    pattern: /detached from the DOM|frame was detached/i,
+    message: 'The target element was detached before the action completed.'
+  }
+];
+
 export function dedupe(values: string[]) {
   return [...new Set(values.filter(Boolean))];
 }
 
 export function summarizePlaywrightError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? 'Unknown error');
-  const firstLine = message
+  const lines = message
     .replace(/\r/g, '')
     .split('\n')
     .map((line) => line.trim())
+    .filter(Boolean);
+
+  const summary = lines[0] ?? message;
+  const hint = lines
+    .map((line) => PLAYWRIGHT_ERROR_HINTS.find((entry) => entry.pattern.test(line))?.message)
     .find(Boolean);
-  return firstLine ?? message;
+
+  return hint ? `${summary} Likely cause: ${hint}` : summary;
 }
 
 export function formatSelectorAttempts(attempts: SelectorAttempt[]) {

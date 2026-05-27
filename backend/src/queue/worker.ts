@@ -34,10 +34,18 @@ function escapeRegExp(value: string) {
 
 function getStepTarget(step: Step) {
   if (step.action === 'goto') return step.value ?? '';
-  if (step.action === 'press' || step.action === 'selectOption') return step.value ?? '';
+  if (step.action === 'press' || step.action === 'keyboardPress' || step.action === 'selectOption') return step.value ?? '';
   if ('selector' in step && step.selector) return step.selector;
   if ('expected' in step && step.expected) return step.expected;
   return '';
+}
+
+async function runKeyboardPress(page: Page, index: number, step: Step) {
+  if (!step.value?.trim()) {
+    throw new Error(`keyboardPress failed: key is required for step ${index + 1}.`);
+  }
+
+  await page.keyboard.press(step.value);
 }
 
 async function runSingleTargetAction(
@@ -276,6 +284,9 @@ async function runTest(job: Job<TestJobData>) {
             break;
           case 'press':
             await runSingleTargetAction(page, index, 'press', step);
+            break;
+          case 'keyboardPress':
+            await runKeyboardPress(page, index, step);
             break;
           case 'selectOption':
             await runSingleTargetAction(page, index, 'selectOption', step);

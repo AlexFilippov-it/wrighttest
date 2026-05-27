@@ -50,6 +50,7 @@ function humanizeAction(action: StepAction | string) {
     click: 'Click element',
     fill: 'Fill input',
     press: 'Press key',
+    keyboardPress: 'Keyboard press',
     selectOption: 'Select option',
     waitForSelector: 'Wait for element',
     assertVisible: 'Assert visible',
@@ -483,7 +484,7 @@ export default function RunResultPage() {
                   rowKey="key"
                   size="small"
                   pagination={false}
-                  rowClassName={(record) => (record.status === 'failed' ? 'run-step-row-failed' : '')}
+                  rowClassName={(record?: StepResultRow) => (record?.status === 'failed' ? 'run-step-row-failed' : '')}
                   columns={[
                     {
                       title: 'Step',
@@ -517,6 +518,26 @@ export default function RunResultPage() {
                           status === 'passed' ? 'Passed' : status === 'failed' ? 'Failed' : 'Pending';
                         return <Tag color={color}>{label}</Tag>;
                       }
+                    },
+                    {
+                      title: 'Error',
+                      dataIndex: 'error',
+                      render: (error?: string | null, record?: StepResultRow) =>
+                        error ? (
+                          <Tooltip title={error} placement="topLeft">
+                            <Text
+                              style={{
+                                maxWidth: 420,
+                                color: record?.status === 'failed' ? '#cf1322' : undefined
+                              }}
+                              ellipsis
+                            >
+                              {error}
+                            </Text>
+                          </Tooltip>
+                        ) : (
+                          '—'
+                        )
                     },
                     {
                       title: 'Duration',
