@@ -68,6 +68,19 @@ On an empty database the seed also creates a `Docker Demo` project with two samp
 
 This path is the recommended first launch on any machine. The backend image is built on the Playwright-ready base image and includes the browser bundle, so no host browser or system library setup is required.
 
+## 🌐 Live Demo
+
+A public demo UI is available at:
+
+- https://demo.wrighttest.com
+
+Demo credentials:
+
+- Email: `demo@wrighttest.com`
+- Password: `demo`
+
+The demo account has read-only access only.
+
 ## 🖥 Server Prerequisites
 
 For a VPS or bare-metal deploy, make sure these are available first:
