@@ -241,6 +241,7 @@ export default function RunResultPage() {
       run.test?.name,
       run.test?.project?.name,
       run.environment?.name,
+      run.dataCaseName ? `Test data case: ${run.dataCaseName}` : undefined,
       run.test?.device,
       run.schedule?.name ?? 'Manual run'
     ].filter(Boolean) as string[];
@@ -252,8 +253,8 @@ export default function RunResultPage() {
     setRerunning(true);
     try {
       const nextRun = run.environmentId
-        ? await runTestWithEnvironment(run.testId, run.environmentId)
-        : await runTest(run.testId);
+        ? await runTestWithEnvironment(run.testId, run.environmentId, run.dataCaseIndex ?? undefined)
+        : await runTest(run.testId, run.dataCaseIndex ?? undefined);
       navigate(`/runs/${nextRun.testRunId}`);
     } finally {
       setRerunning(false);

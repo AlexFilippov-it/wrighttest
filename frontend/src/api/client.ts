@@ -18,6 +18,15 @@ import type {
   ValidationReport
 } from '../types';
 
+export type TestPayload = {
+  name: string;
+  url: string;
+  steps: Step[];
+  testData?: Test['testData'];
+  device?: string | null;
+  environmentId?: string | null;
+};
+
 export const api = axios.create({
   baseURL: import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:3000'
 });
@@ -213,10 +222,10 @@ export const testChannelDraft = (
 
 export const createTest = (
   projectId: string,
-  data: Omit<Test, 'id' | 'projectId' | 'createdAt' | '_count'>
+  data: TestPayload
 ) => api.post<Test>(`/projects/${projectId}/tests`, data).then((r) => r.data);
 
-export const updateTest = (id: string, data: Partial<Test>) =>
+export const updateTest = (id: string, data: Partial<TestPayload>) =>
   api.patch<Test>(`/tests/${id}`, data).then((r) => r.data);
 
 export const getTest = (id: string) =>
@@ -228,15 +237,19 @@ export const deleteTest = (id: string) =>
 export const importTestSpec = (projectId: string, code: string, name?: string) =>
   api.post<{ test: Test; parsedSteps: number }>(`/projects/${projectId}/import`, { code, name }).then((r) => r.data);
 
-export const runTest = (testId: string) =>
+export const runTest = (testId: string, dataCaseIndex?: number) =>
   api
-    .post<{ testRunId: string; jobId?: string; status: string }>(`/tests/${testId}/run`)
+    .post<{ testRunId: string; jobId?: string; status: string }>(
+      `/tests/${testId}/run`,
+      dataCaseIndex === undefined ? {} : { dataCaseIndex }
+    )
     .then((r) => r.data);
 
-export const runTestWithEnvironment = (testId: string, environmentId?: string) =>
+export const runTestWithEnvironment = (testId: string, environmentId?: string, dataCaseIndex?: number) =>
   api
     .post<{ testRunId: string; jobId?: string; status: string }>(`/tests/${testId}/run`, {
-      environmentId
+      ...(environmentId ? { environmentId } : {}),
+      ...(dataCaseIndex === undefined ? {} : { dataCaseIndex })
     })
     .then((r) => r.data);
 

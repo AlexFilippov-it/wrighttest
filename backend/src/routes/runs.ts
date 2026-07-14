@@ -5,11 +5,13 @@ import { z } from 'zod';
 import prisma from '../prisma';
 import { testQueue } from '../queue/queue';
 import { getAccessibleProjectIds, getAuthUser, getProjectAccessStatusCode, requireProjectRole } from '../utils/project-access';
+import { buildDataCaseSnapshot, getTestDataCases } from '../utils/test-data';
 
 const TRACES_DIR = path.resolve(process.env.TRACES_DIR || './traces');
 
 const RunSchema = z.object({
-  environmentId: z.string().optional()
+  environmentId: z.string().optional(),
+  dataCaseIndex: z.number().int().nonnegative().optional()
 });
 
 export async function runRoutes(fastify: FastifyInstance) {
@@ -61,6 +63,25 @@ export async function runRoutes(fastify: FastifyInstance) {
       return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
     }
 
+    const testDataCases = getTestDataCases(test.testData);
+    let dataCaseSnapshot: ReturnType<typeof buildDataCaseSnapshot> | null = null;
+
+    if (testDataCases.length === 0) {
+      if (body.data.dataCaseIndex !== undefined) {
+        return reply.status(400).send({ error: 'This test does not have test data cases.' });
+      }
+    } else {
+      if (body.data.dataCaseIndex === undefined) {
+        return reply.status(400).send({ error: 'Select a test data case before running this test.' });
+      }
+
+      try {
+        dataCaseSnapshot = buildDataCaseSnapshot(test.testData, body.data.dataCaseIndex);
+      } catch (error) {
+        return reply.status(400).send({ error: error instanceof Error ? error.message : 'Invalid test data case.' });
+      }
+    }
+
     if (body.data.environmentId) {
       const environment = await prisma.environment.findUnique({
         where: { id: body.data.environmentId }
@@ -75,7 +96,8 @@ export async function runRoutes(fastify: FastifyInstance) {
       data: {
         testId: test.id,
         status: 'PENDING',
-        environmentId: body.data.environmentId
+        environmentId: body.data.environmentId,
+        ...(dataCaseSnapshot ?? {})
       }
     });
 

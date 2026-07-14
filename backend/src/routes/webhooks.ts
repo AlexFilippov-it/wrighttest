@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../prisma';
 import { testQueue } from '../queue/queue';
+import { DATA_DRIVEN_CASE_REQUIRED_ERROR, hasTestDataCases } from '../utils/test-data';
 
 const WebhookPayloadSchema = z.object({
   testId: z.string().optional(),
@@ -43,6 +44,21 @@ export async function webhookRoutes(fastify: FastifyInstance) {
       const test = await prisma.test.findUnique({ where: { id: testId } });
       if (!test) return reply.status(404).send({ error: 'Test not found' });
 
+      if (hasTestDataCases(test.testData)) {
+        const run = await prisma.testRun.create({
+          data: {
+            testId,
+            status: 'FAILED',
+            environmentId,
+            finishedAt: new Date(),
+            durationMs: 0,
+            error: DATA_DRIVEN_CASE_REQUIRED_ERROR
+          }
+        });
+        jobs.push({ testRunId: run.id, testId });
+        return reply.status(202).send({ queued: jobs.length, jobs });
+      }
+
       const run = await prisma.testRun.create({
         data: { testId, status: 'PENDING', environmentId }
       });
@@ -55,6 +71,21 @@ export async function webhookRoutes(fastify: FastifyInstance) {
       }
 
       for (const test of tests) {
+        if (hasTestDataCases(test.testData)) {
+          const run = await prisma.testRun.create({
+            data: {
+              testId: test.id,
+              status: 'FAILED',
+              environmentId,
+              finishedAt: new Date(),
+              durationMs: 0,
+              error: DATA_DRIVEN_CASE_REQUIRED_ERROR
+            }
+          });
+          jobs.push({ testRunId: run.id, testId: test.id });
+          continue;
+        }
+
         const run = await prisma.testRun.create({
           data: { testId: test.id, status: 'PENDING', environmentId }
         });

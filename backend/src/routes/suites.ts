@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../prisma';
 import { testQueue } from '../queue/queue';
 import { getAuthUser, getProjectAccessStatusCode, requireProjectRole } from '../utils/project-access';
+import { DATA_DRIVEN_CASE_REQUIRED_ERROR, hasTestDataCases } from '../utils/test-data';
 
 const SuiteSchema = z.object({
   name: z.string().min(1).max(100),
@@ -175,6 +176,23 @@ export async function suiteRoutes(fastify: FastifyInstance) {
     for (const testId of testIds) {
       const test = await prisma.test.findUnique({ where: { id: testId } });
       if (!test || test.projectId !== suite.projectId) continue;
+
+      if (hasTestDataCases(test.testData)) {
+        const run = await prisma.testRun.create({
+          data: {
+            testId: test.id,
+            status: 'FAILED',
+            environmentId: result.data.environmentId,
+            finishedAt: new Date(),
+            durationMs: 0,
+            error: DATA_DRIVEN_CASE_REQUIRED_ERROR
+          }
+        });
+
+        jobs.push({ testRunId: run.id, testId: test.id });
+        console.log(`[Suite] Skipped data-driven test "${test.name}" without explicit case`);
+        continue;
+      }
 
       const run = await prisma.testRun.create({
         data: {

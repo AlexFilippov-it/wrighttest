@@ -7,9 +7,19 @@ import { api, createTest, getDevices, getEnvironments, getProject, getTest, star
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import StepEditor from '../components/StepEditor';
+import TestDataEditor from '../components/test-data/TestDataEditor';
 import VariableAutocompleteInput from '../components/VariableAutocompleteInput';
 import UserMenu from '../components/UserMenu';
 import type { Environment, Step, StepValidationResult, Test } from '../types';
+import {
+  hasTestDataValidationErrors,
+  getEnabledTestDataCaseOptions,
+  shouldBlockRunForTestData,
+  toApiTestData,
+  toEditableTestData,
+  validateEditableTestData,
+  type EditableTestDataCase
+} from '../utils/testData';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -42,6 +52,32 @@ function extractVariableNames(value: string | null | undefined) {
     names.push(match[1]);
   }
   return names;
+}
+
+function normalizeTestData(test?: Partial<Test> | null) {
+  return Array.isArray(test?.testData) ? test.testData : [];
+}
+
+function selectedDataCaseStorageKey(testId: string) {
+  return `wrighttest:selected-data-case:${testId}`;
+}
+
+function readSelectedDataCaseIndex(testId: string, testData: Test['testData']) {
+  const raw = window.localStorage.getItem(selectedDataCaseStorageKey(testId));
+  if (raw === null) return undefined;
+  const value = Number(raw);
+  if (!Number.isInteger(value)) return undefined;
+  return testData[value]?.enabled ? value : undefined;
+}
+
+function writeSelectedDataCaseIndex(testId: string, value: number | undefined) {
+  const key = selectedDataCaseStorageKey(testId);
+  if (value === undefined) {
+    window.localStorage.removeItem(key);
+    return;
+  }
+
+  window.localStorage.setItem(key, String(value));
 }
 
 type StepIssue = {
@@ -192,6 +228,9 @@ export default function TestEditorPage() {
   const [stepIssues, setStepIssues] = useState<Array<StepIssue | undefined>>([]);
   const [firstInvalidStepIndex, setFirstInvalidStepIndex] = useState<number | null>(null);
   const [initialSnapshotReady, setInitialSnapshotReady] = useState(false);
+  const [useTestData, setUseTestData] = useState(false);
+  const [editableTestData, setEditableTestData] = useState<EditableTestDataCase[]>([]);
+  const [selectedDataCaseIndex, setSelectedDataCaseIndex] = useState<number | undefined>(undefined);
   const stepsRef = useRef<Step[]>([]);
   const initialSnapshotRef = useRef<string>('');
   const navigate = useNavigate();
@@ -221,6 +260,9 @@ export default function TestEditorPage() {
     if (!testId) {
       form.setFieldsValue({ name: '', url: '', device: undefined });
       stepsRef.current = [{ action: 'goto', value: '' }];
+      setUseTestData(false);
+      setEditableTestData([]);
+      setSelectedDataCaseIndex(undefined);
       setSteps(stepsRef.current);
       setRecordingProjectId(projectId);
       setCurrentProjectId(projectId);
@@ -236,6 +278,10 @@ export default function TestEditorPage() {
     void getTest(testId).then((test) => {
       form.setFieldsValue({ name: test.name, url: test.url, device: test.device ?? undefined });
       stepsRef.current = test.steps.length > 0 ? test.steps : [{ action: 'goto', value: '' }];
+      const existingTestData = normalizeTestData(test);
+      setUseTestData(existingTestData.length > 0);
+      setEditableTestData(toEditableTestData(existingTestData));
+      setSelectedDataCaseIndex(readSelectedDataCaseIndex(test.id, existingTestData));
       setSteps(stepsRef.current);
       setRecordingProjectId(test.projectId);
       setCurrentProjectId(test.projectId);
@@ -349,9 +395,10 @@ export default function TestEditorPage() {
     try {
       const payload = {
         ...values,
-        device: form.getFieldValue('device') || undefined,
+        device: values.device || undefined,
         environmentId: selectedRecordingEnvironmentId ?? null,
-        steps: stepsToSave
+        steps: stepsToSave,
+        testData: currentApiTestData
       };
 
       if (isEdit) {
@@ -492,6 +539,16 @@ export default function TestEditorPage() {
       message.warning('Add at least one step before running');
       return;
     }
+    if (hasTestDataErrors) {
+      message.error('Fix test data errors before running');
+      return;
+    }
+    if (shouldBlockDataCaseRun) {
+      message.error(dataCaseOptions.length === 0
+        ? 'Enable at least one test data case before running this test.'
+        : 'Select a test data case before running this test.');
+      return;
+    }
 
     const prepared = await validateAndPrepareSteps(values);
     if (!prepared) return;
@@ -499,7 +556,10 @@ export default function TestEditorPage() {
     setSaving(true);
     try {
       const saved = await persistTest(values, prepared.fixedSteps, false);
-      const run = await runTestWithEnvironment(saved.id, selectedRecordingEnvironmentId);
+      writeSelectedDataCaseIndex(saved.id, selectedDataCaseIndex);
+      const savedTestData = normalizeTestData(saved);
+      const runDataCaseIndex = savedTestData.length > 0 ? selectedDataCaseIndex : undefined;
+      const run = await runTestWithEnvironment(saved.id, selectedRecordingEnvironmentId, runDataCaseIndex);
       navigate(`/runs/${run.testRunId}`);
     } catch (error) {
       const responseError =
@@ -687,16 +747,24 @@ export default function TestEditorPage() {
       ...(await form.validateFields()),
       device: form.getFieldValue('device') || undefined
     };
+    if (hasTestDataErrors) {
+      message.error('Fix test data errors before saving');
+      return;
+    }
     const currentSteps = stepsRef.current;
     if (currentSteps.length === 0) {
-      const saved = await saveTest(values, currentSteps);
+    const saved = await saveTest(values, currentSteps);
+      form.setFieldsValue({ name: saved.name, url: saved.url, device: saved.device ?? undefined });
       const nextProjectId = saved.projectId ?? currentProjectId ?? projectId;
       setCurrentProjectId(nextProjectId);
+      writeSelectedDataCaseIndex(saved.id, selectedDataCaseIndex);
       initialSnapshotRef.current = JSON.stringify({
         name: saved.name,
         url: saved.url,
         device: saved.device ?? null,
         environmentId: saved.environmentId ?? null,
+        testData: normalizeTestData(saved),
+        selectedDataCaseIndex: selectedDataCaseIndex ?? null,
         steps: currentSteps
       });
       setValidationFeedback({
@@ -718,13 +786,17 @@ export default function TestEditorPage() {
     stepsRef.current = prepared.fixedSteps;
     setSteps(prepared.fixedSteps);
     const saved = await saveTest(values, prepared.fixedSteps);
+    form.setFieldsValue({ name: saved.name, url: saved.url, device: saved.device ?? undefined });
     const nextProjectId = saved.projectId ?? currentProjectId ?? projectId;
     setCurrentProjectId(nextProjectId);
+    writeSelectedDataCaseIndex(saved.id, selectedDataCaseIndex);
     initialSnapshotRef.current = JSON.stringify({
       name: saved.name,
       url: saved.url,
       device: saved.device ?? null,
       environmentId: saved.environmentId ?? null,
+      testData: normalizeTestData(saved),
+      selectedDataCaseIndex: selectedDataCaseIndex ?? null,
       steps: prepared.fixedSteps
     });
     setValidationFeedback({
@@ -796,6 +868,10 @@ export default function TestEditorPage() {
       ? `This check uses ${selectedVariables.map((name) => `{{${name}}}`).join(', ')}, but no environment is selected.`
       : null;
 
+  const currentApiTestData = useMemo(
+    () => toApiTestData(editableTestData, useTestData),
+    [editableTestData, useTestData]
+  );
   const currentSnapshot = useMemo(
     () =>
       JSON.stringify({
@@ -803,10 +879,31 @@ export default function TestEditorPage() {
         url: selectedUrl ?? '',
         device: selectedDevice ?? null,
         environmentId: selectedRecordingEnvironmentId ?? null,
+        testData: currentApiTestData,
+        selectedDataCaseIndex: selectedDataCaseIndex ?? null,
         steps
       }),
-    [checkName, selectedUrl, selectedDevice, selectedRecordingEnvironmentId, steps]
+    [checkName, selectedUrl, selectedDevice, selectedRecordingEnvironmentId, currentApiTestData, selectedDataCaseIndex, steps]
   );
+
+  const dataCaseOptions = useMemo(
+    () => getEnabledTestDataCaseOptions(currentApiTestData),
+    [currentApiTestData]
+  );
+  const shouldBlockDataCaseRun = shouldBlockRunForTestData(currentApiTestData, selectedDataCaseIndex);
+  const testDataErrors = useMemo(
+    () => validateEditableTestData(editableTestData, useTestData),
+    [editableTestData, useTestData]
+  );
+  const hasTestDataErrors = hasTestDataValidationErrors(testDataErrors);
+
+  useEffect(() => {
+    if (selectedDataCaseIndex === undefined) return;
+    const stillEnabled = dataCaseOptions.some((option) => option.value === selectedDataCaseIndex);
+    if (!stillEnabled) {
+      setSelectedDataCaseIndex(undefined);
+    }
+  }, [dataCaseOptions, selectedDataCaseIndex]);
 
   useEffect(() => {
     if (!initialSnapshotReady) return;
@@ -862,7 +959,6 @@ export default function TestEditorPage() {
       </Button>
     </Dropdown>
   );
-
   return (
     <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #ffffff 100%)' }}>
       {confirmModalContextHolder}
@@ -899,14 +995,14 @@ export default function TestEditorPage() {
                 </div>
 
                 <Space wrap align="center">
-                  <Button icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly}>
+                  <Button icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly || hasTestDataErrors || shouldBlockDataCaseRun}>
                     Run check
                   </Button>
                   <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
                     Start recording
                   </Button>
                   {exportTrigger}
-                  <Button type="primary" loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating} onClick={handleValidateAndSave}>
+                  <Button type="primary" loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors} onClick={handleValidateAndSave}>
                     Save changes
                   </Button>
                 </Space>
@@ -935,6 +1031,7 @@ export default function TestEditorPage() {
                     >
                       <Select
                         allowClear
+                        disabled={isReadOnly}
                         placeholder="Desktop (default)"
                         options={[
                           {
@@ -983,7 +1080,7 @@ export default function TestEditorPage() {
                       />
                     </Form.Item>
                   </Col>
-                  <Col span={24}>
+                  <Col xs={24} lg={currentApiTestData.length > 0 ? 12 : 24}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
                       <Text type="secondary">Environment</Text>
                       <Select
@@ -1003,6 +1100,30 @@ export default function TestEditorPage() {
                       </Text>
                     </div>
                   </Col>
+                  {currentApiTestData.length > 0 && (
+                    <Col xs={24} lg={12}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                        <Text type="secondary">Test data case</Text>
+                        <Select
+                          placeholder={dataCaseOptions.length > 0 ? 'Select case' : 'No enabled cases'}
+                          value={selectedDataCaseIndex}
+                          options={dataCaseOptions}
+                          onChange={(value) => setSelectedDataCaseIndex(value)}
+                          disabled={isReadOnly || dataCaseOptions.length === 0}
+                          style={{ width: '100%' }}
+                        />
+                        {dataCaseOptions.length === 0 ? (
+                          <Text type="danger" style={{ fontSize: 12 }}>
+                            Enable at least one test data case before running this test.
+                          </Text>
+                        ) : (
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            Selected case variables are used for manual runs.
+                          </Text>
+                        )}
+                      </div>
+                    </Col>
+                  )}
                   {variableWarning && (
                     <Col span={24}>
                       <Alert
@@ -1016,6 +1137,17 @@ export default function TestEditorPage() {
                 </Row>
               </Form>
             </Card>
+          </Col>
+
+          <Col span={24}>
+            <TestDataEditor
+              useTestData={useTestData}
+              cases={editableTestData}
+              errors={testDataErrors}
+              readOnly={isReadOnly}
+              onUseTestDataChange={setUseTestData}
+              onCasesChange={setEditableTestData}
+            />
           </Col>
 
           <Col span={24}>
@@ -1045,7 +1177,7 @@ export default function TestEditorPage() {
                       <Button onClick={() => setSteps((current) => [...current, { action: 'goto', value: '' }])} disabled={isReadOnly}>
                         Add step
                       </Button>
-                      <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly || saving || validating}>
+                      <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly || saving || validating || hasTestDataErrors || shouldBlockDataCaseRun}>
                         Run check
                       </Button>
                 </Space>
@@ -1151,7 +1283,7 @@ export default function TestEditorPage() {
               {exportTrigger}
             </Space>
             <Space wrap>
-              <Button onClick={handleValidateAndSave} loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating}>
+              <Button onClick={handleValidateAndSave} loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors}>
                 Save changes
               </Button>
             </Space>

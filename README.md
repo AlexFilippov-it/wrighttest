@@ -18,6 +18,7 @@
 - **Assertions Builder** - `toBeVisible`, `toHaveText`, `toHaveURL` and more
 - **Mobile Testing** - emulate iPhone 15, Pixel 7, iPad and other devices
 - **Environments** - `{{BASE_URL}}`, `{{PASSWORD}}` replaced at runtime per environment
+- **Data-driven checks** - define named test data cases and run a check with a selected case
 - **Scheduler** - cron-based automatic runs with full history per schedule
 - **Suites** - group tests and run them with one click or on schedule
 - **Trace Viewer** - built-in Playwright trace viewer after every run
@@ -247,6 +248,26 @@ docker compose up --build -d
   <img src="./docs/Screenshot_5.png" alt="Live browser recording" width="100%" />
 </p>
 <p align="center"><em>Live recording captures Playwright-ready selectors directly from the browser session.</em></p>
+
+## 🧪 Data-driven Checks
+
+WrightTest checks can store a small set of named test data cases. Each case has:
+
+- a human-readable name
+- an enabled/disabled state
+- template variables such as `EMAIL`, `PASSWORD`, or `EXPECTED_MESSAGE`
+
+Use these variables in the Start URL or step fields with the same `{{VARIABLE}}` syntax used by environments. For example, a Fill input step can use `{{EMAIL}}` as its value, and an assertion can use `{{EXPECTED_MESSAGE}}`.
+
+For manual runs, select the case in **Check settings** next to the Environment selector, then run the check. WrightTest combines variables from the selected environment with variables from the selected test data case for that run. Test data case variables take precedence when the same variable name exists in both places.
+
+This keeps ordinary checks unchanged: if a check has no test data, it runs exactly as before.
+
+<p align="center">
+  <img src="./docs/Screenshot_7.png" alt="Test data editor" width="49%" />
+  <img src="./docs/Screenshot_8.png" alt="Selecting a test data case for a manual run" width="49%" />
+</p>
+<p align="center"><em>Create named data cases in the check editor, then select the enabled case to use for a manual run.</em></p>
 
 ## 📦 Export Playwright Project
 

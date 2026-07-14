@@ -41,6 +41,12 @@ export interface StepValidationResult {
   error?: string;
 }
 
+export interface TestDataCase {
+  name: string;
+  enabled: boolean;
+  variables: Record<string, string>;
+}
+
 export interface ValidationReport {
   valid: boolean;
   results: StepValidationResult[];
@@ -338,6 +344,7 @@ export interface Test {
   device?: string | null;
   environmentId?: string | null;
   steps: Step[];
+  testData: TestDataCase[];
   projectId: string;
   createdAt: string;
   _count?: { runs: number };
@@ -352,6 +359,9 @@ export interface TestRun {
   error?: string;
   tracePath?: string;
   traceUnavailableReason?: string | null;
+  dataCaseName?: string | null;
+  dataCaseIndex?: number | null;
+  dataCaseVariables?: Record<string, string> | null;
   trace?: {
     available: boolean;
     downloadUrl?: string;

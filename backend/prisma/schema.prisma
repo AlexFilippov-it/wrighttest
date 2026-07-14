@@ -34,6 +34,7 @@ model Test {
   url       String
   device    String?
   steps     Json     @default("[]")
+  testData  Json     @default("[]")
   environmentId String?
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -55,6 +56,9 @@ model TestRun {
   traceUnavailableReason String?
   screenshots Json      @default("[]")
   stepResults Json      @default("[]")
+  dataCaseName String?
+  dataCaseIndex Int?
+  dataCaseVariables Json?
   currentStep Int?
   totalSteps  Int?
   environmentId String?

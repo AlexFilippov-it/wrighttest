@@ -1,0 +1,2 @@
+ALTER TABLE "Test"
+ADD COLUMN "testData" JSONB NOT NULL DEFAULT '[]';

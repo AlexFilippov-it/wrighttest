@@ -10,6 +10,7 @@ import redis from '../src/redis';
 import { runRoutes } from '../src/routes/runs';
 
 const TRACES_DIR = path.resolve(process.env.TRACES_DIR || '../traces');
+const TRACE_TEST_URL = 'data:text/html,%3Ctitle%3EExample%20Domain%3C%2Ftitle%3E%3Ch1%3EExample%20Domain%3C%2Fh1%3E';
 
 async function waitForRunCompletion(runId: string) {
   const startedAt = Date.now();
@@ -27,17 +28,34 @@ async function waitForRunCompletion(runId: string) {
 test('failed runs keep trace metadata and downloadable trace.zip', async () => {
   await startTestWorker();
 
+  const user = await prisma.user.create({
+    data: {
+      email: `trace-regression-${Date.now()}@example.com`,
+      passwordHash: 'not-used'
+    }
+  });
+
   const project = await prisma.project.create({
     data: { name: `Trace Regression ${Date.now()}` }
+  });
+
+  await prisma.projectMember.create({
+    data: {
+      projectId: project.id,
+      userId: user.id,
+      email: user.email,
+      role: 'OWNER',
+      status: 'ACTIVE'
+    }
   });
 
   const testRecord = await prisma.test.create({
     data: {
       name: 'Trace regression check',
-      url: 'https://example.com',
+      url: TRACE_TEST_URL,
       projectId: project.id,
       steps: [
-        { action: 'goto', value: 'https://example.com' },
+        { action: 'goto', value: TRACE_TEST_URL },
         { action: 'assertTitle', expected: 'Definitely not the real title', options: { exact: true } }
       ]
     }
@@ -51,6 +69,9 @@ test('failed runs keep trace metadata and downloadable trace.zip', async () => {
   });
 
   const app = Fastify();
+  app.addHook('preHandler', async (req) => {
+    req.user = { userId: user.id, email: user.email };
+  });
   await app.register(runRoutes);
 
   try {
@@ -102,6 +123,7 @@ test('failed runs keep trace metadata and downloadable trace.zip', async () => {
     await prisma.testRun.delete({ where: { id: run.id } }).catch(() => undefined);
     await prisma.test.delete({ where: { id: testRecord.id } }).catch(() => undefined);
     await prisma.project.delete({ where: { id: project.id } }).catch(() => undefined);
+    await prisma.user.delete({ where: { id: user.id } }).catch(() => undefined);
     await stopTestWorker();
     await testQueue.close().catch(() => undefined);
     redis.disconnect();

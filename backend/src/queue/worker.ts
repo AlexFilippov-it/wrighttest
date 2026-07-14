@@ -11,6 +11,7 @@ import type { Step } from '../types/step';
 import { resolveBrowserUrl } from '../utils/runtime-url';
 import { resolveLocator } from '../utils/locator';
 import { hasUnresolvedVariables, interpolateStep } from '../utils/interpolate';
+import { mergeRuntimeVariables } from '../utils/runtime-variables';
 import { notifyRunResult } from '../services/notifier';
 import { getBrowserName, launchChromium } from '../utils/browser';
 import { validateStepRequirements } from '../utils/step-validation';
@@ -195,17 +196,25 @@ async function runTest(job: Job<TestJobData>) {
     throw new Error(`Test ${testId} not found`);
   }
 
-  let variables: Record<string, string> = {};
+  const runSnapshot = await prisma.testRun.findUnique({ where: { id: testRunId } });
+  if (!runSnapshot) {
+    throw new Error(`TestRun ${testRunId} not found`);
+  }
+
+  let environmentVariables: Record<string, string> = {};
   if (environmentId) {
     const environment = await prisma.environment.findUnique({
       where: { id: environmentId }
     });
     if (environment) {
-      variables = (environment.variables ?? {}) as Record<string, string>;
+      environmentVariables = (environment.variables ?? {}) as Record<string, string>;
     }
   }
 
-  const steps = (test.steps as unknown as Step[]).map((step) => interpolateStep(step, variables));
+  const dataCaseVariables = (runSnapshot.dataCaseVariables ?? {}) as Record<string, string>;
+  const runtimeVariables = mergeRuntimeVariables(environmentVariables, dataCaseVariables);
+
+  const steps = (test.steps as unknown as Step[]).map((step) => interpolateStep(step, runtimeVariables));
   const deviceConfig = test.device && test.device in devices ? devices[test.device as keyof typeof devices] : {};
 
   if (test.device && !(test.device in devices)) {

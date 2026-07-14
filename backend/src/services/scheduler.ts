@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import type { Schedule } from '@prisma/client';
 import prisma from '../prisma';
 import { testQueue } from '../queue/queue';
+import { DATA_DRIVEN_CASE_REQUIRED_ERROR, hasTestDataCases } from '../utils/test-data';
 
 class SchedulerService {
   private tasks = new Map<string, ReturnType<typeof cron.schedule>>();
@@ -30,6 +31,25 @@ class SchedulerService {
         }
 
         for (const testId of testIds) {
+          const test = await prisma.test.findUnique({ where: { id: testId } });
+          if (!test) continue;
+
+          if (hasTestDataCases(test.testData)) {
+            await prisma.testRun.create({
+              data: {
+                testId,
+                status: 'FAILED',
+                environmentId: schedule.environmentId ?? undefined,
+                scheduleId: schedule.id,
+                finishedAt: new Date(),
+                durationMs: 0,
+                error: DATA_DRIVEN_CASE_REQUIRED_ERROR
+              }
+            });
+            console.log(`[Scheduler] Skipped data-driven test "${test.name}" without explicit case`);
+            continue;
+          }
+
           const run = await prisma.testRun.create({
             data: {
               testId,
