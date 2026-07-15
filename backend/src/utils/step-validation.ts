@@ -14,6 +14,10 @@ function buildIssue(fields: StepRequirementIssue['fields']): StepRequirementIssu
   return message ? { message, fields } : null;
 }
 
+function hasValue(value: string | undefined | null) {
+  return value !== undefined && value !== null;
+}
+
 export function validateStepRequirements(step: Step): StepRequirementIssue | null {
   switch (step.action) {
     case 'goto':
@@ -33,7 +37,7 @@ export function validateStepRequirements(step: Step): StepRequirementIssue | nul
     case 'fill':
       return buildIssue({
         ...(step.selector?.trim() ? {} : { selector: required('Target') }),
-        ...(step.value?.trim() ? {} : { value: required('Value') })
+        ...(hasValue(step.value) ? {} : { value: required('Value') })
       });
     case 'press':
       return buildIssue({

@@ -14,6 +14,7 @@ import ScheduleHistoryPage from './pages/ScheduleHistoryPage';
 import SuitesPage from './pages/SuitesPage';
 import TestEditorPage from './pages/TestEditorPage';
 import RunResultPage from './pages/RunResultPage';
+import RunBatchResultPage from './pages/RunBatchResultPage';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { token, ready } = useAuth();
@@ -58,6 +59,7 @@ export default function App() {
                     <Route path="/projects/:projectId/tests/new" element={<TestEditorPage />} />
                     <Route path="/tests/:testId/edit" element={<TestEditorPage />} />
                     <Route path="/runs/:runId" element={<RunResultPage />} />
+                    <Route path="/run-batches/:batchId" element={<RunBatchResultPage />} />
                   </Routes>
                 </ProtectedRoute>
               }

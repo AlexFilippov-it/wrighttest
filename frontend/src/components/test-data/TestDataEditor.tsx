@@ -1,20 +1,31 @@
-import { Alert, Button, Card, Checkbox, Collapse, Empty, Input, Space, Switch, Typography } from 'antd';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Button, Card, Checkbox, Collapse, Empty, Input, Modal, Popconfirm, Segmented, Space, Switch, Table, Typography } from 'antd';
 import { CopyOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import {
+  addEditableVariableToAllCases,
   createEmptyCase,
   createVariableRow,
   duplicateCase,
+  getEditableVariable,
+  getEditableVariableColumns,
+  removeEditableVariableFromAllCases,
+  updateEditableVariableValue,
   type EditableTestDataCase,
   type TestDataValidationErrors
 } from '../../utils/testData';
+import type { TemplateVariablesDiagnostics } from '../../utils/templateVariables';
 
 const { Text } = Typography;
+const TABLE_MODE_STORAGE_KEY = 'wrighttest:test-data-editor-mode';
+const VARIABLE_KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
 type TestDataEditorProps = {
   useTestData: boolean;
   cases: EditableTestDataCase[];
   errors: TestDataValidationErrors;
   readOnly?: boolean;
+  diagnostics?: TemplateVariablesDiagnostics;
+  enabledCasesCount?: number;
   onUseTestDataChange: (enabled: boolean) => void;
   onCasesChange: (cases: EditableTestDataCase[]) => void;
 };
@@ -32,9 +43,31 @@ export default function TestDataEditor({
   cases,
   errors,
   readOnly = false,
+  diagnostics,
+  enabledCasesCount = 0,
   onUseTestDataChange,
   onCasesChange
 }: TestDataEditorProps) {
+  const [mode, setMode] = useState<'table' | 'cards'>(() => {
+    const stored = window.localStorage.getItem(TABLE_MODE_STORAGE_KEY);
+    if (stored === 'table' || stored === 'cards') return stored;
+    return cases.length > 3 ? 'table' : 'cards';
+  });
+  const [activeCardKeys, setActiveCardKeys] = useState<string[]>([]);
+  const [addVariableOpen, setAddVariableOpen] = useState(false);
+  const [newVariableKey, setNewVariableKey] = useState('');
+  const modeInitializedRef = useRef(cases.length > 0);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(TABLE_MODE_STORAGE_KEY);
+    if (!stored && !modeInitializedRef.current && cases.length > 0) {
+      setMode(cases.length > 3 ? 'table' : 'cards');
+      modeInitializedRef.current = true;
+    }
+  }, [cases.length]);
+
+  const variableColumns = useMemo(() => getEditableVariableColumns(cases), [cases]);
+
   const setUseTestData = (enabled: boolean) => {
     if (readOnly) return;
 
@@ -48,6 +81,35 @@ export default function TestDataEditor({
   const addCase = () => {
     onCasesChange([...cases, createEmptyCase(cases)]);
     onUseTestDataChange(true);
+  };
+
+  const openAddVariable = () => {
+    setNewVariableKey('');
+    setAddVariableOpen(true);
+  };
+
+  const confirmAddVariable = () => {
+    const key = newVariableKey.trim();
+    if (!VARIABLE_KEY_PATTERN.test(key)) return;
+    onCasesChange(addEditableVariableToAllCases(cases, key));
+    setAddVariableOpen(false);
+    setNewVariableKey('');
+    onUseTestDataChange(true);
+  };
+
+  const deleteVariableColumn = (key: string) => {
+    onCasesChange(removeEditableVariableFromAllCases(cases, key));
+  };
+
+  const openDetails = (caseId: string) => {
+    setMode('cards');
+    window.localStorage.setItem(TABLE_MODE_STORAGE_KEY, 'cards');
+    setActiveCardKeys([caseId]);
+  };
+
+  const setEditorMode = (nextMode: 'table' | 'cards') => {
+    setMode(nextMode);
+    window.localStorage.setItem(TABLE_MODE_STORAGE_KEY, nextMode);
   };
 
   const removeCase = (caseId: string) => {
@@ -91,13 +153,133 @@ export default function TestDataEditor({
     )));
   };
 
+  const tableColumns = useMemo(() => [
+    {
+      title: 'Enabled',
+      width: 96,
+      fixed: 'left' as const,
+      render: (_: unknown, testCase: EditableTestDataCase) => (
+        <Checkbox
+          checked={testCase.enabled}
+          disabled={readOnly}
+          onChange={(event) => onCasesChange(updateCase(cases, testCase.id, { enabled: event.target.checked }))}
+        />
+      )
+    },
+    {
+      title: 'Case name',
+      width: 240,
+      fixed: 'left' as const,
+      render: (_: unknown, testCase: EditableTestDataCase) => {
+        const caseErrors = errors.cases[testCase.id];
+        return (
+          <Space direction="vertical" size={2} style={{ width: '100%' }}>
+            <Input
+              value={testCase.name}
+              onChange={(event) => onCasesChange(updateCase(cases, testCase.id, { name: event.target.value }))}
+              status={caseErrors?.name ? 'error' : undefined}
+              disabled={readOnly}
+            />
+            {caseErrors?.name && <Text type="danger" style={{ fontSize: 12 }}>{caseErrors.name}</Text>}
+          </Space>
+        );
+      }
+    },
+    ...variableColumns.map((key) => ({
+      title: (
+        <Space size={6}>
+          <span>{key}</span>
+          <Popconfirm
+            title={`Delete variable ${key}?`}
+            description="This removes the variable from all cases."
+            okText="Delete"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => deleteVariableColumn(key)}
+            disabled={readOnly}
+          >
+            <Button size="small" type="text" danger icon={<DeleteOutlined />} disabled={readOnly} />
+          </Popconfirm>
+        </Space>
+      ),
+      width: 220,
+      render: (_: unknown, testCase: EditableTestDataCase) => {
+        const variable = getEditableVariable(cases, testCase.id, key);
+        const variableErrors = variable ? errors.cases[testCase.id]?.variables?.[variable.id] : undefined;
+        return (
+          <Space direction="vertical" size={2} style={{ width: '100%' }}>
+            <Input.TextArea
+              value={variable?.value ?? ''}
+              placeholder={variable ? 'Empty string' : 'Missing'}
+              autoSize={{ minRows: 1, maxRows: 3 }}
+              status={variableErrors?.value ? 'error' : undefined}
+              disabled={readOnly}
+              onChange={(event) => onCasesChange(updateEditableVariableValue(cases, testCase.id, key, event.target.value))}
+            />
+            {!variable && (
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                Missing until edited
+              </Text>
+            )}
+            {variableErrors?.value && <Text type="danger" style={{ fontSize: 12 }}>{variableErrors.value}</Text>}
+          </Space>
+        );
+      }
+    })),
+    {
+      title: 'Actions',
+      width: 230,
+      fixed: 'right' as const,
+      render: (_: unknown, testCase: EditableTestDataCase) => (
+        <Space wrap>
+          <Button size="small" onClick={() => openDetails(testCase.id)}>
+            Open details
+          </Button>
+          <Button
+            size="small"
+            icon={<CopyOutlined />}
+            onClick={() => onCasesChange(duplicateCase(cases, testCase.id))}
+            disabled={readOnly}
+          >
+            Duplicate
+          </Button>
+          <Button
+            size="small"
+            icon={<DeleteOutlined />}
+            danger
+            onClick={() => removeCase(testCase.id)}
+            disabled={readOnly}
+          />
+        </Space>
+      )
+    }
+  ], [cases, errors.cases, onCasesChange, readOnly, variableColumns]);
+
+  const renderEditorActions = () => (
+    <Space wrap>
+      <Segmented
+        value={mode}
+        onChange={(value) => setEditorMode(value as 'table' | 'cards')}
+        options={[
+          { label: 'Table', value: 'table' },
+          { label: 'Cards', value: 'cards' }
+        ]}
+      />
+      <Button icon={<PlusOutlined />} onClick={addCase} disabled={readOnly || cases.length >= 100}>
+        Add case
+      </Button>
+      <Button icon={<PlusOutlined />} onClick={openAddVariable} disabled={readOnly || cases.length === 0}>
+        Add variable
+      </Button>
+    </Space>
+  );
+
   return (
     <Card
       title={
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span>Test data</span>
           <Text type="secondary" style={{ fontSize: 13 }}>
-            Define named cases with template variables for future data-driven runs.
+            Define scenario variables used anywhere in your browser flow, including inputs and expected results.
           </Text>
         </div>
       }
@@ -123,8 +305,59 @@ export default function TestDataEditor({
             <Alert
               type="info"
               showIcon
-              message="Use uppercase letters, numbers and underscores. Example: EMAIL, EXPECTED_MESSAGE."
+              message="Use uppercase letters, numbers and underscores. Examples: EMAIL, PASS, EXPECTED_MESSAGE, EXPECTED_URL."
+              description="Use them in steps as Fill {{EMAIL}} or Assert text {{EXPECTED_MESSAGE}}."
             />
+
+            {diagnostics && (
+              <Card size="small" title="Variables check" style={{ borderRadius: 14, background: '#fcfcfd' }}>
+                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                  {diagnostics.errors.length === 0 ? (
+                    <Alert
+                      type="success"
+                      showIcon
+                      message={`All variables are available for ${enabledCasesCount} enabled case${enabledCasesCount === 1 ? '' : 's'}.`}
+                    />
+                  ) : (
+                    <Alert
+                      type="error"
+                      showIcon
+                      message={`${diagnostics.errors.length} issue${diagnostics.errors.length === 1 ? '' : 's'} found`}
+                      description={
+                        <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+                          {diagnostics.errors.slice(0, 6).map((issue) => (
+                            <li key={issue}>{issue}</li>
+                          ))}
+                          {diagnostics.errors.length > 6 && <li>{diagnostics.errors.length - 6} more issues</li>}
+                        </ul>
+                      }
+                    />
+                  )}
+
+                  {diagnostics.warnings.length > 0 && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message={`${diagnostics.warnings.length} warning${diagnostics.warnings.length === 1 ? '' : 's'}`}
+                      description={
+                        <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+                          {diagnostics.warnings.slice(0, 6).map((warning) => (
+                            <li key={warning}>{warning}</li>
+                          ))}
+                          {diagnostics.warnings.length > 6 && <li>{diagnostics.warnings.length - 6} more warnings</li>}
+                        </ul>
+                      }
+                    />
+                  )}
+
+                  {diagnostics.usedVariables.length > 0 && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Used variables: {diagnostics.usedVariables.map((name) => `{{${name}}}`).join(', ')}
+                    </Text>
+                  )}
+                </Space>
+              </Card>
+            )}
 
             {cases.length === 0 ? (
               <Empty
@@ -136,7 +369,22 @@ export default function TestDataEditor({
                 </Button>
               </Empty>
             ) : (
+              <>
+                {renderEditorActions()}
+                {mode === 'table' ? (
+                  <Table
+                    size="small"
+                    rowKey="id"
+                    columns={tableColumns}
+                    dataSource={cases}
+                    pagination={cases.length > 20 ? { pageSize: 20, showSizeChanger: false } : false}
+                    scroll={{ x: Math.max(760, 560 + variableColumns.length * 220) }}
+                    rowClassName={(testCase) => errors.cases[testCase.id] ? 'test-data-row-has-error' : ''}
+                  />
+                ) : (
               <Collapse
+                activeKey={activeCardKeys}
+                onChange={(keys) => setActiveCardKeys(Array.isArray(keys) ? keys.map(String) : [String(keys)])}
                 items={cases.map((testCase, caseIndex) => {
                   const caseErrors = errors.cases[testCase.id];
 
@@ -279,14 +527,37 @@ export default function TestDataEditor({
                   };
                 })}
               />
+                )}
+              </>
             )}
-
-            <Button icon={<PlusOutlined />} onClick={addCase} disabled={readOnly || cases.length >= 100}>
-              Add case
-            </Button>
           </>
         )}
       </div>
+      <Modal
+        title="Add variable"
+        open={addVariableOpen}
+        onOk={confirmAddVariable}
+        onCancel={() => setAddVariableOpen(false)}
+        okButtonProps={{ disabled: !VARIABLE_KEY_PATTERN.test(newVariableKey.trim()) }}
+      >
+        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Text type="secondary">
+            Add this key to all cases. Values start as an explicit empty string.
+          </Text>
+          <Input
+            value={newVariableKey}
+            onChange={(event) => setNewVariableKey(event.target.value.toUpperCase())}
+            placeholder="EXPECTED_MESSAGE"
+            status={newVariableKey && !VARIABLE_KEY_PATTERN.test(newVariableKey.trim()) ? 'error' : undefined}
+            autoFocus
+          />
+          {newVariableKey && !VARIABLE_KEY_PATTERN.test(newVariableKey.trim()) && (
+            <Text type="danger" style={{ fontSize: 12 }}>
+              Use uppercase letters, numbers and underscores. Start with a letter.
+            </Text>
+          )}
+        </Space>
+      </Modal>
     </Card>
   );
 }

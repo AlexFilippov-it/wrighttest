@@ -125,6 +125,74 @@ export function duplicateCase(
   return nextCases;
 }
 
+export function getEditableVariableColumns(cases: EditableTestDataCase[]) {
+  const seen = new Set<string>();
+  const columns: string[] = [];
+
+  for (const testCase of cases) {
+    for (const variable of testCase.variables) {
+      if (!variable.key || seen.has(variable.key)) continue;
+      seen.add(variable.key);
+      columns.push(variable.key);
+    }
+  }
+
+  return columns;
+}
+
+export function getEditableVariable(cases: EditableTestDataCase[], caseId: string, key: string) {
+  return cases.find((testCase) => testCase.id === caseId)?.variables.find((variable) => variable.key === key);
+}
+
+export function updateEditableVariableValue(
+  cases: EditableTestDataCase[],
+  caseId: string,
+  key: string,
+  value: string,
+  makeId = createId
+) {
+  return cases.map((testCase) => {
+    if (testCase.id !== caseId) return testCase;
+
+    const existing = testCase.variables.find((variable) => variable.key === key);
+    if (existing) {
+      return {
+        ...testCase,
+        variables: testCase.variables.map((variable) =>
+          variable.id === existing.id ? { ...variable, value } : variable
+        )
+      };
+    }
+
+    return {
+      ...testCase,
+      variables: [...testCase.variables, { id: makeId(), key, value }]
+    };
+  });
+}
+
+export function addEditableVariableToAllCases(
+  cases: EditableTestDataCase[],
+  key: string,
+  makeId = createId
+) {
+  return cases.map((testCase) => (
+    testCase.variables.some((variable) => variable.key === key)
+      ? testCase
+      : {
+          ...testCase,
+          variables: [...testCase.variables, { id: makeId(), key, value: '' }]
+        }
+  ));
+}
+
+export function removeEditableVariableFromAllCases(cases: EditableTestDataCase[], key: string) {
+  return cases.map((testCase) => ({
+    ...testCase,
+    variables: testCase.variables.filter((variable) => variable.key !== key)
+  }));
+}
+
 export function validateEditableTestData(cases: EditableTestDataCase[], useTestData: boolean): TestDataValidationErrors {
   const errors: TestDataValidationErrors = { cases: {} };
   if (!useTestData) return errors;

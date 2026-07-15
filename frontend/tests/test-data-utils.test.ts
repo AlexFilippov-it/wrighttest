@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  addEditableVariableToAllCases,
   createEmptyCase,
   createVariableRow,
   duplicateCase,
   getEnabledTestDataCaseOptions,
+  getEditableVariable,
+  getEditableVariableColumns,
   hasTestDataValidationErrors,
+  removeEditableVariableFromAllCases,
   shouldBlockRunForTestData,
   toApiTestData,
   toEditableTestData,
+  updateEditableVariableValue,
   validateEditableTestData,
   type EditableTestDataCase
 } from '../src/utils/testData';
@@ -186,4 +191,89 @@ test('use test data off does not block run because hidden invalid cases are omit
   assert.deepEqual(payload, []);
   assert.equal(hasTestDataValidationErrors(errors), false);
   assert.equal(shouldBlockRunForTestData(payload, undefined), false);
+});
+
+test('table variable columns merge keys and preserve case order', () => {
+  const cases = [
+    editableCase({ id: 'case-1', name: 'First', variables: [{ id: 'var-1', key: 'EMAIL', value: 'a' }] }),
+    editableCase({ id: 'case-2', name: 'Second', variables: [{ id: 'var-2', key: 'PASSWORD', value: 'b' }, { id: 'var-3', key: 'EMAIL', value: 'c' }] })
+  ];
+
+  assert.deepEqual(getEditableVariableColumns(cases), ['EMAIL', 'PASSWORD']);
+  assert.deepEqual(cases.map((testCase) => testCase.name), ['First', 'Second']);
+});
+
+test('table editing keeps empty string distinct from missing key', () => {
+  const cases = [
+    editableCase({ id: 'case-1', variables: [{ id: 'var-1', key: 'EMAIL', value: '' }] }),
+    editableCase({ id: 'case-2', variables: [] })
+  ];
+
+  assert.equal(getEditableVariable(cases, 'case-1', 'EMAIL')?.value, '');
+  assert.equal(getEditableVariable(cases, 'case-2', 'EMAIL'), undefined);
+
+  const nextCases = updateEditableVariableValue(cases, 'case-2', 'EMAIL', '', () => 'var-2');
+  assert.equal(getEditableVariable(nextCases, 'case-2', 'EMAIL')?.value, '');
+  assert.deepEqual(toApiTestData(nextCases, true).map((testCase) => testCase.variables), [
+    { EMAIL: '' },
+    { EMAIL: '' }
+  ]);
+});
+
+test('adding variable to all editable cases creates explicit empty values', () => {
+  const cases = [
+    editableCase({ id: 'case-1', variables: [] }),
+    editableCase({ id: 'case-2', variables: [{ id: 'var-existing', key: 'EMAIL', value: 'user@example.com' }] })
+  ];
+  const makeId = idFactory();
+  const nextCases = addEditableVariableToAllCases(cases, 'PASSWORD', makeId);
+
+  assert.deepEqual(nextCases.map((testCase) => getEditableVariable(testCase.id === 'case-1' ? nextCases : nextCases, testCase.id, 'PASSWORD')?.value), ['', '']);
+  assert.deepEqual(toApiTestData(nextCases, true).map((testCase) => testCase.variables.PASSWORD), ['', '']);
+});
+
+test('removing variable from all editable cases keeps other variables', () => {
+  const cases = [
+    editableCase({ id: 'case-1', variables: [{ id: 'var-1', key: 'EMAIL', value: 'a' }, { id: 'var-2', key: 'PASSWORD', value: 'b' }] }),
+    editableCase({ id: 'case-2', variables: [{ id: 'var-3', key: 'PASSWORD', value: '' }] })
+  ];
+  const nextCases = removeEditableVariableFromAllCases(cases, 'PASSWORD');
+
+  assert.deepEqual(nextCases[0].variables, [{ id: 'var-1', key: 'EMAIL', value: 'a' }]);
+  assert.deepEqual(nextCases[1].variables, []);
+});
+
+test('duplicated table case preserves variables and table payload matches card payload', () => {
+  const makeId = idFactory();
+  const cases = [
+    editableCase({
+      id: 'case-1',
+      variables: [
+        { id: 'var-1', key: 'EMAIL', value: 'user@example.com' },
+        { id: 'var-2', key: 'PASSWORD', value: '' }
+      ]
+    })
+  ];
+
+  const duplicated = duplicateCase(cases, 'case-1', makeId);
+  assert.deepEqual(duplicated[1].variables.map((variable) => [variable.key, variable.value]), [
+    ['EMAIL', 'user@example.com'],
+    ['PASSWORD', '']
+  ]);
+  assert.deepEqual(toApiTestData(duplicated, true), duplicated.map((testCase) => ({
+    name: testCase.name.trim(),
+    enabled: testCase.enabled,
+    variables: Object.fromEntries(testCase.variables.map((variable) => [variable.key, variable.value]))
+  })));
+});
+
+test('validation errors can be mapped to table row and variable key', () => {
+  const cases = [
+    editableCase({ id: 'case-1', name: '', variables: [{ id: 'var-1', key: 'bad', value: 'x' }] })
+  ];
+  const errors = validateEditableTestData(cases, true);
+  const variable = getEditableVariable(cases, 'case-1', 'bad');
+
+  assert.equal(errors.cases['case-1'].name, 'Case name is required.');
+  assert.equal(variable ? errors.cases['case-1'].variables?.[variable.id].key : undefined, 'Use uppercase letters, numbers and underscores.');
 });

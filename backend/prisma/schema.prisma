@@ -42,6 +42,7 @@ model Test {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   runs      TestRun[]
+  runBatches TestRunBatch[]
   schedules Schedule[]
 }
 
@@ -59,6 +60,9 @@ model TestRun {
   dataCaseName String?
   dataCaseIndex Int?
   dataCaseVariables Json?
+  batchId String?
+  batch   TestRunBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batchOrder Int?
   currentStep Int?
   totalSteps  Int?
   environmentId String?
@@ -67,6 +71,26 @@ model TestRun {
   test        Test      @relation(fields: [testId], references: [id], onDelete: Cascade)
   environment Environment? @relation(fields: [environmentId], references: [id])
   schedule    Schedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+}
+
+model TestRunBatch {
+  id             String      @id @default(cuid())
+  testId         String
+  environmentId String?
+  status         BatchStatus @default(PENDING)
+  totalCases     Int
+  completedCases Int         @default(0)
+  passedCases    Int         @default(0)
+  failedCases    Int         @default(0)
+  startedAt      DateTime    @default(now())
+  finishedAt     DateTime?
+  createdAt      DateTime    @default(now())
+
+  test           Test        @relation(fields: [testId], references: [id], onDelete: Cascade)
+  runs           TestRun[]
+
+  @@index([testId])
+  @@index([status])
 }
 
 model Suite {
@@ -146,6 +170,13 @@ model ProjectMember {
 }
 
 enum RunStatus {
+  PENDING
+  RUNNING
+  PASSED
+  FAILED
+}
+
+enum BatchStatus {
   PENDING
   RUNNING
   PASSED

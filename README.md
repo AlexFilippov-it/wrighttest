@@ -5,7 +5,7 @@
 
 ![License](https://img.shields.io/badge/license-source--available-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)
-![Playwright](https://img.shields.io/badge/Playwright-1.59-green)
+![Playwright](https://img.shields.io/badge/Playwright-1.61-green)
 ![Docker](https://img.shields.io/badge/Docker-Compose-blue)
 [![Stars](https://img.shields.io/github/stars/AlexFilippov-it/wrighttest?style=social)](https://github.com/AlexFilippov-it/wrighttest/stargazers)
 [![Last Commit](https://img.shields.io/github/last-commit/AlexFilippov-it/wrighttest)](https://github.com/AlexFilippov-it/wrighttest/commits/main)
@@ -16,9 +16,9 @@
 - **Visual Recorder** - click through your app via noVNC, steps captured automatically
 - **Smart Locators** - uses `getByRole`, `getByLabel`, `href` instead of fragile CSS paths
 - **Assertions Builder** - `toBeVisible`, `toHaveText`, `toHaveURL` and more
-- **Mobile Testing** - emulate iPhone 15, Pixel 7, iPad and other devices
+- **Device Presets** - run desktop 1280px by default or emulate iPhone 15, Pixel 7, iPad and other devices
 - **Environments** - `{{BASE_URL}}`, `{{PASSWORD}}` replaced at runtime per environment
-- **Data-driven checks** - define named test data cases and run a check with a selected case
+- **Data-driven checks** - define named scenario cases, run one selected case, or queue all enabled cases as a batch
 - **Scheduler** - cron-based automatic runs with full history per schedule
 - **Suites** - group tests and run them with one click or on schedule
 - **Trace Viewer** - built-in Playwright trace viewer after every run
@@ -251,17 +251,61 @@ docker compose up --build -d
 
 ## 🧪 Data-driven Checks
 
-WrightTest checks can store a small set of named test data cases. Each case has:
+WrightTest separates checks from test cases:
+
+- **Check** - one browser scenario: URL, device, and steps.
+- **Test case** - one named set of scenario variables for that check.
+- **Run** - one execution of one check with one selected test case.
+- **Run batch** - a grouped set of runs created by running all enabled test cases for one check.
+
+This means a project can show `Checks: 1` while that check contains multiple test cases. The check is counted once because the browser flow and steps are shared; each enabled case creates its own run when executed in a batch.
+
+Each test case has:
 
 - a human-readable name
 - an enabled/disabled state
-- template variables such as `EMAIL`, `PASSWORD`, or `EXPECTED_MESSAGE`
+- scenario variables such as `EMAIL`, `PASS`, `EXPECTED_MESSAGE`, or `EXPECTED_URL`
 
-Use these variables in the Start URL or step fields with the same `{{VARIABLE}}` syntax used by environments. For example, a Fill input step can use `{{EMAIL}}` as its value, and an assertion can use `{{EXPECTED_MESSAGE}}`.
+All variables are equal: they can describe form input, expected results, URLs, titles, search text, order numbers, or any other scenario value. Use them in the Start URL or step fields with the same `{{VARIABLE}}` syntax used by environments.
 
-For manual runs, select the case in **Check settings** next to the Environment selector, then run the check. WrightTest combines variables from the selected environment with variables from the selected test data case for that run. Test data case variables take precedence when the same variable name exists in both places.
+Example case:
+
+```text
+Wrong password
+EMAIL=admin@test.com
+PASS=123456
+EXPECTED_MESSAGE=Invalid email or password
+EXPECTED_URL=https://demo.wrighttest.com/login
+```
+
+Example steps:
+
+```text
+Fill {{EMAIL}}
+Fill {{PASS}}
+Assert text {{EXPECTED_MESSAGE}}
+Assert URL {{EXPECTED_URL}}
+```
+
+For manual runs in the editor, select the case in **Check settings** next to the Environment selector, then run the check. If more than one case is enabled, use **Run all enabled cases** to queue a batch. Each case in that batch creates a separate `TestRun`, keeps its own variable snapshot, screenshots, trace, error, and step results, and runs through the existing worker.
+
+On the project checks page, **Run** is data-aware: checks with one enabled case start a normal run; checks with multiple enabled cases queue a batch and open the batch result page.
+
+WrightTest combines variables from the selected environment with variables from the selected test data case for that run. Test data case variables take precedence when the same variable name exists in both places. Empty strings are valid values, so a case can intentionally define `EMAIL=`.
+
+Disabled cases are ignored by run actions and do not block variable diagnostics.
 
 This keeps ordinary checks unchanged: if a check has no test data, it runs exactly as before.
+
+## 🖥 Devices
+
+If no device is selected, WrightTest uses the default desktop browser context (`1280x720`). The device selector only stores explicit overrides such as:
+
+- `Desktop 1280px`
+- `Desktop 1920px (HiDPI)`
+- mobile and tablet presets from Playwright
+
+There is no separate saved value for "Desktop default"; leaving the selector empty is the default desktop mode.
 
 <p align="center">
   <img src="./docs/Screenshot_7.png" alt="Test data editor" width="49%" />

@@ -7,6 +7,7 @@ import fs from 'node:fs/promises';
 import prisma from '../prisma';
 import redis from '../redis';
 import type { TestJobData } from './queue';
+import { getTestWorkerConcurrency, markBatchRunning, updateBatchAfterRun } from './batch-sequencer';
 import type { Step } from '../types/step';
 import { resolveBrowserUrl } from '../utils/runtime-url';
 import { resolveLocator } from '../utils/locator';
@@ -190,6 +191,7 @@ async function runTest(job: Job<TestJobData>) {
     where: { id: testRunId },
     data: { status: 'RUNNING' }
   });
+  await markBatchRunning(testRunId);
 
   const test = await prisma.test.findUnique({ where: { id: testId } });
   if (!test) {
@@ -468,6 +470,10 @@ async function runTest(job: Job<TestJobData>) {
     });
   }
 
+  await updateBatchAfterRun(testRunId).catch((batchError) => {
+    console.error(`[Worker] Failed to update batch for test run ${testRunId}:`, batchError);
+  });
+
   if (runError) {
     throw runError;
   }
@@ -481,7 +487,7 @@ export async function startTestWorker() {
 
   testWorker = new Worker<TestJobData>('test-runs', runTest, {
     connection: redis,
-    concurrency: 3
+    concurrency: getTestWorkerConcurrency()
   });
 
   testWorker.on('completed', (job) => {

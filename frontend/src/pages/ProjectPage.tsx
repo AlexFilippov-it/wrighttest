@@ -60,6 +60,7 @@ import {
   checkUserExists,
   importTestSpec,
   runSuite,
+  runAllEnabledTestCases,
   runTestWithEnvironment,
   testChannel,
   testChannelDraft,
@@ -393,6 +394,17 @@ function testUsesVariables(test?: ProjectCheck | null) {
   if (!test) return false;
   if (usesVariables(test.url)) return true;
   return test.steps.some((step) => usesVariables(step.selector) || usesVariables(step.value) || usesVariables(step.expected));
+}
+
+function getFirstEnabledDataCaseIndex(test?: ProjectCheck | null) {
+  if (!test || test.testData.length === 0) return undefined;
+
+  const index = test.testData.findIndex((dataCase) => dataCase.enabled);
+  return index >= 0 ? index : null;
+}
+
+function getEnabledDataCaseCount(test?: ProjectCheck | null) {
+  return test?.testData.filter((dataCase) => dataCase.enabled).length ?? 0;
 }
 
 function collectEffectiveSchedules(check: ProjectCheck, schedules: Schedule[] = []) {
@@ -1187,8 +1199,22 @@ export default function ProjectPage() {
   const handleRunCheck = async (testId: string, event?: MouseEvent) => {
     event?.stopPropagation();
     try {
+      const check = project?.tests.find((test) => test.id === testId);
+      const dataCaseIndex = getFirstEnabledDataCaseIndex(check);
+      if (dataCaseIndex === null) {
+        message.error('No enabled test data cases');
+        return;
+      }
+      const enabledDataCaseCount = getEnabledDataCaseCount(check);
+      if (enabledDataCaseCount > 1 && environments.length === 0) {
+        const result = await runAllEnabledTestCases(testId);
+        message.success(`${result.queued} test cases queued.`);
+        navigate(`/run-batches/${result.batchId}`);
+        return;
+      }
+
       if (environments.length === 0) {
-        const { testRunId } = await runTestWithEnvironment(testId);
+        const { testRunId } = await runTestWithEnvironment(testId, undefined, dataCaseIndex);
         message.success('Check started');
         navigate(`/runs/${testRunId}`);
         return;
@@ -1207,7 +1233,22 @@ export default function ProjectPage() {
 
     setCheckRunLoading(true);
     try {
-      const { testRunId } = await runTestWithEnvironment(runCheckId, selectedEnvironmentId);
+      const check = project?.tests.find((test) => test.id === runCheckId);
+      const dataCaseIndex = getFirstEnabledDataCaseIndex(check);
+      if (dataCaseIndex === null) {
+        message.error('No enabled test data cases');
+        return;
+      }
+      const enabledDataCaseCount = getEnabledDataCaseCount(check);
+      if (enabledDataCaseCount > 1) {
+        const result = await runAllEnabledTestCases(runCheckId, selectedEnvironmentId);
+        setRunCheckModalOpen(false);
+        message.success(`${result.queued} test cases queued.`);
+        navigate(`/run-batches/${result.batchId}`);
+        return;
+      }
+
+      const { testRunId } = await runTestWithEnvironment(runCheckId, selectedEnvironmentId, dataCaseIndex);
       setRunCheckModalOpen(false);
       message.success('Check started');
       navigate(`/runs/${testRunId}`);

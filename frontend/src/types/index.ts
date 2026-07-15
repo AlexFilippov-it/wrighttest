@@ -388,3 +388,36 @@ export interface TestRun {
   environment?: Environment | null;
   schedule?: Schedule | null;
 }
+
+export interface TestRunBatch {
+  id: string;
+  status: RunStatus;
+  totalCases: number;
+  completedCases: number;
+  passedCases: number;
+  failedCases: number;
+  startedAt: string;
+  finishedAt?: string | null;
+  test: {
+    id: string;
+    name: string;
+    projectId: string;
+  };
+  environment?: {
+    id: string;
+    name: string;
+  } | null;
+  runs: Array<{
+    id: string;
+    status: RunStatus;
+    dataCaseName?: string | null;
+    dataCaseIndex?: number | null;
+    batchOrder?: number | null;
+    durationMs?: number | null;
+    error?: string | null;
+    startedAt: string;
+    finishedAt?: string | null;
+    currentStep?: number | null;
+    totalSteps?: number | null;
+  }>;
+}

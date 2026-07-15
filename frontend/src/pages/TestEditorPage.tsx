@@ -3,7 +3,7 @@ import { Alert, Breadcrumb, Button, Card, Col, Dropdown, Form, Input, Layout, Mo
 import type { MenuProps } from 'antd';
 import { DownOutlined, DownloadOutlined, PlayCircleOutlined, StopOutlined, VideoCameraOutlined, WarningOutlined } from '@ant-design/icons';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { api, createTest, getDevices, getEnvironments, getProject, getTest, startRecording, stopRecording, updateTest, validateTestSteps, runTestWithEnvironment } from '../api/client';
+import { api, createTest, getDevices, getEnvironments, getProject, getTest, startRecording, stopRecording, updateTest, validateTestSteps, runTestWithEnvironment, runAllEnabledTestCases } from '../api/client';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import StepEditor from '../components/StepEditor';
@@ -20,6 +20,11 @@ import {
   validateEditableTestData,
   type EditableTestDataCase
 } from '../utils/testData';
+import {
+  buildTemplateVariablesDiagnostics,
+  getBlockingTemplateVariableErrorsForCase
+} from '../utils/templateVariables';
+import { normalizeDeviceForPayload } from '../utils/testPayload';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -41,17 +46,6 @@ function collectVariableNames(environments: Environment[]) {
   return Array.from(
     new Set(environments.flatMap((environment) => Object.keys(environment.variables ?? {})))
   ).sort((a, b) => a.localeCompare(b));
-}
-
-function extractVariableNames(value: string | null | undefined) {
-  if (!value) return [] as string[];
-  const names: string[] = [];
-  const re = /\{\{(\w+)\}\}/g;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(value)) !== null) {
-    names.push(match[1]);
-  }
-  return names;
 }
 
 function normalizeTestData(test?: Partial<Test> | null) {
@@ -111,7 +105,7 @@ function validateRequiredStepFields(step: Step): StepIssue | null {
     case 'fill':
       return buildStepIssue({
         ...(step.selector?.trim() ? {} : { selector: 'Target is required.' }),
-        ...(step.value?.trim() ? {} : { value: 'Value is required.' })
+        ...(step.value !== undefined && step.value !== null ? {} : { value: 'Value is required.' })
       });
     case 'press':
       return buildStepIssue({
@@ -395,7 +389,7 @@ export default function TestEditorPage() {
     try {
       const payload = {
         ...values,
-        device: values.device || undefined,
+        device: normalizeDeviceForPayload(values.device),
         environmentId: selectedRecordingEnvironmentId ?? null,
         steps: stepsToSave,
         testData: currentApiTestData
@@ -549,6 +543,14 @@ export default function TestEditorPage() {
         : 'Select a test data case before running this test.');
       return;
     }
+    const effectiveDataCaseIndex = dataCaseOptions.length === 1
+      ? dataCaseOptions[0].value
+      : selectedDataCaseIndex;
+    const selectedCaseDiagnosticsErrors = getBlockingTemplateVariableErrorsForCase(templateDiagnostics, effectiveDataCaseIndex);
+    if (selectedCaseDiagnosticsErrors.length > 0) {
+      message.error(selectedCaseDiagnosticsErrors[0]);
+      return;
+    }
 
     const prepared = await validateAndPrepareSteps(values);
     if (!prepared) return;
@@ -556,9 +558,9 @@ export default function TestEditorPage() {
     setSaving(true);
     try {
       const saved = await persistTest(values, prepared.fixedSteps, false);
-      writeSelectedDataCaseIndex(saved.id, selectedDataCaseIndex);
+      writeSelectedDataCaseIndex(saved.id, effectiveDataCaseIndex);
       const savedTestData = normalizeTestData(saved);
-      const runDataCaseIndex = savedTestData.length > 0 ? selectedDataCaseIndex : undefined;
+      const runDataCaseIndex = savedTestData.length > 0 ? effectiveDataCaseIndex : undefined;
       const run = await runTestWithEnvironment(saved.id, selectedRecordingEnvironmentId, runDataCaseIndex);
       navigate(`/runs/${run.testRunId}`);
     } catch (error) {
@@ -570,6 +572,63 @@ export default function TestEditorPage() {
         responseError?.error ??
         responseError?.message ??
         'Validation failed';
+
+      setValidationFeedback({
+        type: 'error',
+        text: validationMessage
+      });
+      message.error(validationMessage);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRunAllEnabledCases = async () => {
+    if (isReadOnly) {
+      message.warning('Read-only access');
+      return;
+    }
+
+    const values = {
+      ...(await form.validateFields()),
+      device: form.getFieldValue('device') || undefined
+    };
+    if (steps.length === 0) {
+      message.warning('Add at least one step before running');
+      return;
+    }
+    if (hasTestDataErrors) {
+      message.error('Fix test data errors before running');
+      return;
+    }
+    if (templateDiagnostics.errors.length > 0) {
+      message.error(templateDiagnostics.errors[0]);
+      return;
+    }
+    if (dataCaseOptions.length <= 1) {
+      message.warning('Add at least two enabled test data cases first');
+      return;
+    }
+
+    const prepared = await validateAndPrepareSteps(values);
+    if (!prepared) return;
+
+    setSaving(true);
+    try {
+      const saved = await persistTest(values, prepared.fixedSteps, false);
+      writeSelectedDataCaseIndex(saved.id, selectedDataCaseIndex);
+      const result = await runAllEnabledTestCases(saved.id, selectedRecordingEnvironmentId);
+      message.success(`${result.queued} test cases queued.`);
+      navigate(`/run-batches/${result.batchId}`);
+    } catch (error) {
+      const responseError =
+        error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { data?: { error?: string; message?: string } } }).response?.data
+          : undefined;
+      const validationMessage =
+        responseError?.error ??
+        responseError?.message ??
+        'Failed to queue test data cases';
 
       setValidationFeedback({
         type: 'error',
@@ -751,6 +810,10 @@ export default function TestEditorPage() {
       message.error('Fix test data errors before saving');
       return;
     }
+    if (templateDiagnostics.errors.length > 0) {
+      message.error(templateDiagnostics.errors[0]);
+      return;
+    }
     const currentSteps = stepsRef.current;
     if (currentSteps.length === 0) {
     const saved = await saveTest(values, currentSteps);
@@ -813,7 +876,7 @@ export default function TestEditorPage() {
 
   const getDeviceLabel = () => {
     const value = selectedDevice;
-    if (!value) return 'Desktop';
+    if (!value) return 'Desktop 1280px';
     return deviceOptions.find((device) => device.value === value)?.label ?? value;
   };
 
@@ -853,31 +916,30 @@ export default function TestEditorPage() {
     </Tag>
   ];
 
-  const selectedVariables = Array.from(
-    new Set([
-      ...extractVariableNames(selectedUrl),
-      ...steps.flatMap((step) => [
-        ...extractVariableNames(step.selector),
-        ...extractVariableNames(step.value),
-        ...extractVariableNames(step.expected)
-      ])
-    ])
-  );
-  const variableWarning =
-    !selectedRecordingEnvironmentId && selectedVariables.length > 0
-      ? `This check uses ${selectedVariables.map((name) => `{{${name}}}`).join(', ')}, but no environment is selected.`
-      : null;
-
   const currentApiTestData = useMemo(
     () => toApiTestData(editableTestData, useTestData),
     [editableTestData, useTestData]
+  );
+  const selectedEnvironment = useMemo(
+    () => recordEnvironments.find((environment) => environment.id === selectedRecordingEnvironmentId) ?? null,
+    [recordEnvironments, selectedRecordingEnvironmentId]
+  );
+  const templateDiagnostics = useMemo(
+    () => buildTemplateVariablesDiagnostics({
+      useTestData,
+      url: selectedUrl,
+      steps,
+      testData: currentApiTestData,
+      selectedEnvironment
+    }),
+    [useTestData, selectedUrl, steps, currentApiTestData, selectedEnvironment]
   );
   const currentSnapshot = useMemo(
     () =>
       JSON.stringify({
         name: checkName ?? '',
         url: selectedUrl ?? '',
-        device: selectedDevice ?? null,
+        device: normalizeDeviceForPayload(selectedDevice),
         environmentId: selectedRecordingEnvironmentId ?? null,
         testData: currentApiTestData,
         selectedDataCaseIndex: selectedDataCaseIndex ?? null,
@@ -890,7 +952,17 @@ export default function TestEditorPage() {
     () => getEnabledTestDataCaseOptions(currentApiTestData),
     [currentApiTestData]
   );
-  const shouldBlockDataCaseRun = shouldBlockRunForTestData(currentApiTestData, selectedDataCaseIndex);
+  const effectiveSelectedDataCaseIndex = dataCaseOptions.length === 1
+    ? dataCaseOptions[0].value
+    : selectedDataCaseIndex;
+  const shouldBlockDataCaseRun = shouldBlockRunForTestData(currentApiTestData, effectiveSelectedDataCaseIndex);
+  const selectedCaseTemplateErrors = useMemo(
+    () => getBlockingTemplateVariableErrorsForCase(templateDiagnostics, effectiveSelectedDataCaseIndex),
+    [templateDiagnostics, effectiveSelectedDataCaseIndex]
+  );
+  const shouldBlockSelectedCaseRun = shouldBlockDataCaseRun || selectedCaseTemplateErrors.length > 0;
+  const shouldBlockRunAllCases = templateDiagnostics.errors.length > 0;
+  const enabledCasesCount = dataCaseOptions.length;
   const testDataErrors = useMemo(
     () => validateEditableTestData(editableTestData, useTestData),
     [editableTestData, useTestData]
@@ -995,14 +1067,19 @@ export default function TestEditorPage() {
                 </div>
 
                 <Space wrap align="center">
-                  <Button icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly || hasTestDataErrors || shouldBlockDataCaseRun}>
+                  <Button icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly || hasTestDataErrors || shouldBlockSelectedCaseRun}>
                     Run check
                   </Button>
+                  {dataCaseOptions.length > 1 && (
+                    <Button icon={<PlayCircleOutlined />} onClick={() => void handleRunAllEnabledCases()} disabled={isReadOnly || hasTestDataErrors || shouldBlockRunAllCases || saving || validating}>
+                      Run all enabled cases
+                    </Button>
+                  )}
                   <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
                     Start recording
                   </Button>
                   {exportTrigger}
-                  <Button type="primary" loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors} onClick={handleValidateAndSave}>
+                  <Button type="primary" loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors || shouldBlockRunAllCases} onClick={handleValidateAndSave}>
                     Save changes
                   </Button>
                 </Space>
@@ -1032,11 +1109,11 @@ export default function TestEditorPage() {
                       <Select
                         allowClear
                         disabled={isReadOnly}
-                        placeholder="Desktop (default)"
+                        placeholder="Desktop 1280px by default"
                         options={[
                           {
                             label: 'Desktop',
-                            options: deviceOptions.filter((device) => !device.value || device.label.startsWith('Desktop'))
+                            options: deviceOptions.filter((device) => device.value && device.label.startsWith('Desktop'))
                           },
                           {
                             label: 'iPhone / iPad',
@@ -1106,7 +1183,7 @@ export default function TestEditorPage() {
                         <Text type="secondary">Test data case</Text>
                         <Select
                           placeholder={dataCaseOptions.length > 0 ? 'Select case' : 'No enabled cases'}
-                          value={selectedDataCaseIndex}
+                          value={effectiveSelectedDataCaseIndex}
                           options={dataCaseOptions}
                           onChange={(value) => setSelectedDataCaseIndex(value)}
                           disabled={isReadOnly || dataCaseOptions.length === 0}
@@ -1124,16 +1201,6 @@ export default function TestEditorPage() {
                       </div>
                     </Col>
                   )}
-                  {variableWarning && (
-                    <Col span={24}>
-                      <Alert
-                        type="warning"
-                        showIcon
-                        message={variableWarning}
-                        style={{ borderRadius: 12 }}
-                      />
-                    </Col>
-                  )}
                 </Row>
               </Form>
             </Card>
@@ -1144,6 +1211,8 @@ export default function TestEditorPage() {
               useTestData={useTestData}
               cases={editableTestData}
               errors={testDataErrors}
+              diagnostics={useTestData ? templateDiagnostics : undefined}
+              enabledCasesCount={enabledCasesCount}
               readOnly={isReadOnly}
               onUseTestDataChange={setUseTestData}
               onCasesChange={setEditableTestData}
@@ -1177,7 +1246,7 @@ export default function TestEditorPage() {
                       <Button onClick={() => setSteps((current) => [...current, { action: 'goto', value: '' }])} disabled={isReadOnly}>
                         Add step
                       </Button>
-                      <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly || saving || validating || hasTestDataErrors || shouldBlockDataCaseRun}>
+                      <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly || saving || validating || hasTestDataErrors || shouldBlockSelectedCaseRun}>
                         Run check
                       </Button>
                 </Space>
@@ -1283,7 +1352,7 @@ export default function TestEditorPage() {
               {exportTrigger}
             </Space>
             <Space wrap>
-              <Button onClick={handleValidateAndSave} loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors}>
+              <Button onClick={handleValidateAndSave} loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors || shouldBlockRunAllCases}>
                 Save changes
               </Button>
             </Space>

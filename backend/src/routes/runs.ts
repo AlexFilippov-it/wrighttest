@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import prisma from '../prisma';
-import { testQueue } from '../queue/queue';
+import { enqueueTestRun } from '../queue/batch-sequencer';
 import { getAccessibleProjectIds, getAuthUser, getProjectAccessStatusCode, requireProjectRole } from '../utils/project-access';
 import { buildDataCaseSnapshot, getTestDataCases } from '../utils/test-data';
 
@@ -101,16 +101,110 @@ export async function runRoutes(fastify: FastifyInstance) {
       }
     });
 
-    const job = await testQueue.add('run', {
-      testRunId: run.id,
-      testId: test.id,
-      environmentId: body.data.environmentId
-    });
+    const job = await enqueueTestRun(run);
 
     return reply.status(202).send({
       testRunId: run.id,
       jobId: job.id,
       status: 'PENDING'
+    });
+  });
+
+  fastify.post<{ Params: { id: string } }>('/tests/:id/runs/all-cases', async (req, reply) => {
+    const body = RunSchema.pick({ environmentId: true }).safeParse(req.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({ error: body.error.flatten() });
+    }
+
+    const test = await prisma.test.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!test) return reply.status(404).send({ error: 'Test not found' });
+
+    const { userId } = getAuthUser(req);
+    try {
+      await requireProjectRole(test.projectId, userId, ['OWNER', 'EDITOR']);
+    } catch (error) {
+      return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
+    }
+
+    if (body.data.environmentId) {
+      const environment = await prisma.environment.findUnique({
+        where: { id: body.data.environmentId }
+      });
+
+      if (!environment || environment.projectId !== test.projectId) {
+        return reply.status(404).send({ error: 'Environment not found' });
+      }
+    }
+
+    const testDataCases = getTestDataCases(test.testData);
+    if (testDataCases.length === 0) {
+      return reply.status(400).send({ error: 'This test does not have test data cases.' });
+    }
+
+    const enabledCases = testDataCases
+      .map((testCase, dataCaseIndex) => ({ testCase, dataCaseIndex }))
+      .filter(({ testCase }) => testCase.enabled);
+
+    if (enabledCases.length === 0) {
+      return reply.status(400).send({ error: 'This test does not have enabled test data cases.' });
+    }
+
+    const { batch, runs } = await prisma.$transaction(async (tx) => {
+      const batch = await tx.testRunBatch.create({
+        data: {
+          testId: test.id,
+          environmentId: body.data.environmentId,
+          totalCases: enabledCases.length
+        }
+      });
+
+      const runs = [];
+      for (const [batchOrder, { dataCaseIndex }] of enabledCases.entries()) {
+        const dataCaseSnapshot = buildDataCaseSnapshot(test.testData, dataCaseIndex);
+        const run = await tx.testRun.create({
+          data: {
+            testId: test.id,
+            status: 'PENDING',
+            environmentId: body.data.environmentId,
+            batchId: batch.id,
+            batchOrder,
+            ...dataCaseSnapshot
+          }
+        });
+
+        runs.push({
+          id: run.id,
+          testId: run.testId,
+          environmentId: run.environmentId,
+          batchOrder: run.batchOrder,
+          dataCaseName: dataCaseSnapshot.dataCaseName,
+          dataCaseIndex: dataCaseSnapshot.dataCaseIndex
+        });
+      }
+
+      return { batch, runs };
+    });
+
+    const firstRun = runs[0];
+    const firstJob = firstRun ? await enqueueTestRun(firstRun) : null;
+    const queuedRuns = runs.map((run) => ({
+      id: run.id,
+      testRunId: run.id,
+      jobId: run.batchOrder === 0 ? firstJob?.id : undefined,
+      dataCaseName: run.dataCaseName,
+      dataCaseIndex: run.dataCaseIndex,
+      batchOrder: run.batchOrder
+    }));
+
+    return reply.status(202).send({
+      batchId: batch.id,
+      testId: test.id,
+      totalCases: queuedRuns.length,
+      queued: queuedRuns.length,
+      runs: queuedRuns
     });
   });
 
@@ -138,6 +232,78 @@ export async function runRoutes(fastify: FastifyInstance) {
     return {
       ...run,
       trace: await buildTraceMetadata(run)
+    };
+  });
+
+  fastify.get<{ Params: { id: string } }>('/run-batches/:id', async (req, reply) => {
+    const batch = await prisma.testRunBatch.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        status: true,
+        totalCases: true,
+        completedCases: true,
+        passedCases: true,
+        failedCases: true,
+        startedAt: true,
+        finishedAt: true,
+        environmentId: true,
+        test: {
+          select: {
+            id: true,
+            name: true,
+            projectId: true
+          }
+        },
+        runs: {
+          select: {
+            id: true,
+            status: true,
+            dataCaseName: true,
+            dataCaseIndex: true,
+            batchOrder: true,
+            durationMs: true,
+            error: true,
+            startedAt: true,
+            finishedAt: true,
+            currentStep: true,
+            totalSteps: true
+          },
+          orderBy: { batchOrder: 'asc' }
+        }
+      }
+    });
+
+    if (!batch) {
+      return reply.status(404).send({ error: 'Run batch not found' });
+    }
+
+    const { userId } = getAuthUser(req);
+    try {
+      await requireProjectRole(batch.test.projectId, userId, ['OWNER', 'EDITOR', 'VIEWER']);
+    } catch (error) {
+      return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
+    }
+
+    const environment = batch.environmentId
+      ? await prisma.environment.findUnique({
+          where: { id: batch.environmentId },
+          select: { id: true, name: true }
+        })
+      : null;
+
+    return {
+      id: batch.id,
+      status: batch.status,
+      totalCases: batch.totalCases,
+      completedCases: batch.completedCases,
+      passedCases: batch.passedCases,
+      failedCases: batch.failedCases,
+      startedAt: batch.startedAt,
+      finishedAt: batch.finishedAt,
+      test: batch.test,
+      environment,
+      runs: batch.runs
     };
   });
 

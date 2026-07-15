@@ -14,6 +14,7 @@ import type {
   Step,
   Test,
   TestRun,
+  TestRunBatch,
   RunsResponse,
   ValidationReport
 } from '../types';
@@ -253,6 +254,26 @@ export const runTestWithEnvironment = (testId: string, environmentId?: string, d
     })
     .then((r) => r.data);
 
+export const runAllEnabledTestCases = (testId: string, environmentId?: string) =>
+  api
+    .post<{
+      batchId: string;
+      testId: string;
+      totalCases: number;
+      queued: number;
+      runs: Array<{
+        id: string;
+        testRunId: string;
+        jobId?: string;
+        dataCaseName: string;
+        dataCaseIndex: number;
+        batchOrder: number;
+      }>;
+    }>(`/tests/${testId}/runs/all-cases`, {
+      ...(environmentId ? { environmentId } : {})
+    })
+    .then((r) => r.data);
+
 export const triggerWebhook = (payload: {
   testId?: string;
   projectId?: string;
@@ -264,6 +285,9 @@ export const triggerWebhook = (payload: {
 
 export const getRun = (runId: string) =>
   api.get<TestRun>(`/runs/${runId}`).then((r) => r.data);
+
+export const getRunBatch = (batchId: string) =>
+  api.get<TestRunBatch>(`/run-batches/${batchId}`).then((r) => r.data);
 
 export const getTestRuns = (testId: string) =>
   api.get<TestRun[]>(`/tests/${testId}/runs`).then((r) => r.data);
