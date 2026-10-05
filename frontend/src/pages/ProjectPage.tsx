@@ -96,7 +96,7 @@ const { Content } = Layout;
 const { Title, Text } = Typography;
 const APP_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
-type ProjectTabKey = 'overview' | 'checks' | 'runs' | 'schedules' | 'environments' | 'alerts' | 'settings' | 'members';
+type ProjectTabKey = 'overview' | 'checks' | 'suites' | 'runs' | 'schedules' | 'environments' | 'alerts' | 'settings' | 'members';
 type EntityMode = 'create' | 'edit';
 type ScheduleTargetType = 'suite' | 'test';
 
@@ -511,6 +511,7 @@ function humanizeCron(cron: string) {
 
 function resolveTabFromPathname(pathname: string): ProjectTabKey {
   if (pathname.endsWith('/overview')) return 'overview';
+  if (pathname.endsWith('/suites')) return 'suites';
   if (pathname.endsWith('/runs')) return 'runs';
   if (pathname.endsWith('/schedules')) return 'schedules';
   if (pathname.endsWith('/environments')) return 'environments';
@@ -1576,6 +1577,7 @@ export default function ProjectPage() {
   const tabs = [
     { key: 'overview', label: 'Overview' },
     { key: 'checks', label: 'Checks' },
+    { key: 'suites', label: 'Suites' },
     { key: 'runs', label: 'Runs' },
     { key: 'schedules', label: 'Schedules' },
     { key: 'environments', label: 'Environments' },
@@ -1793,7 +1795,14 @@ export default function ProjectPage() {
                 <Tabs
                   activeKey={activeTab}
                   items={tabs.map((tab) => ({ key: tab.key, label: tab.label }))}
-                  onChange={(key) => setActiveTab(key as ProjectTabKey)}
+                  onChange={(key) => {
+                    const nextTab = key as ProjectTabKey;
+                    if (nextTab === 'suites') {
+                      navigate(`/projects/${projectId}/suites`);
+                      return;
+                    }
+                    setActiveTab(nextTab);
+                  }}
                 />
               </div>
             </Card>

@@ -95,7 +95,7 @@ export const CreateTestSchema = z.object({
   url: urlOrTemplate,
   steps: z.array(StepSchema).default([]),
   testData: TestDataSchema.default([]),
-  device: z.string().optional(),
+  device: z.string().optional().nullable(),
   environmentId: z.string().optional().nullable()
 });
 

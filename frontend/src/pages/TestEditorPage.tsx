@@ -50,6 +50,32 @@ function normalizeTestData(test?: Partial<Test> | null) {
   return Array.isArray(test?.testData) ? test.testData : [];
 }
 
+function getSaveErrorMessage(error: unknown) {
+  if (error && typeof error === 'object' && 'errorFields' in error) {
+    return 'Fix the highlighted fields before saving.';
+  }
+
+  if (error && typeof error === 'object' && 'response' in error) {
+    const responseData = (error as {
+      response?: {
+        data?: {
+          error?: string | { fieldErrors?: Record<string, string[]> };
+          message?: string;
+        };
+      };
+    }).response?.data;
+
+    if (typeof responseData?.error === 'string') return responseData.error;
+    if (responseData?.error && typeof responseData.error === 'object') {
+      const fieldError = Object.values(responseData.error.fieldErrors ?? {}).flat().find(Boolean);
+      if (fieldError) return fieldError;
+    }
+    if (responseData?.message) return responseData.message;
+  }
+
+  return error instanceof Error ? error.message : 'Failed to save check.';
+}
+
 function selectedDataCaseStorageKey(testId: string) {
   return `wrighttest:selected-data-case:${testId}`;
 }
@@ -800,21 +826,54 @@ export default function TestEditorPage() {
       return;
     }
 
-    const values = {
-      ...(await form.validateFields()),
-      device: form.getFieldValue('device') || undefined
-    };
-    if (hasTestDataErrors) {
-      message.error('Fix test data errors before saving');
-      return;
-    }
-    if (templateDiagnostics.errors.length > 0) {
-      message.error(templateDiagnostics.errors[0]);
-      return;
-    }
-    const currentSteps = stepsRef.current;
-    if (currentSteps.length === 0) {
-    const saved = await saveTest(values, currentSteps);
+    try {
+      const values = {
+        ...(await form.validateFields()),
+        device: form.getFieldValue('device') || undefined
+      };
+      if (hasTestDataErrors) {
+        message.error('Fix test data errors before saving');
+        return;
+      }
+      if (templateDiagnostics.errors.length > 0) {
+        message.error(templateDiagnostics.errors[0]);
+        return;
+      }
+      const currentSteps = stepsRef.current;
+      if (currentSteps.length === 0) {
+        const saved = await saveTest(values, currentSteps);
+        form.setFieldsValue({ name: saved.name, url: saved.url, device: saved.device ?? undefined });
+        const nextProjectId = saved.projectId ?? currentProjectId ?? projectId;
+        setCurrentProjectId(nextProjectId);
+        writeSelectedDataCaseIndex(saved.id, selectedDataCaseIndex);
+        initialSnapshotRef.current = JSON.stringify({
+          name: saved.name,
+          url: saved.url,
+          device: saved.device ?? null,
+          environmentId: saved.environmentId ?? null,
+          testData: normalizeTestData(saved),
+          selectedDataCaseIndex: selectedDataCaseIndex ?? null,
+          steps: currentSteps
+        });
+        setValidationFeedback({
+          type: 'success',
+          text: isEdit ? 'Check updated successfully.' : 'Check created successfully.'
+        });
+        message.success(isEdit ? 'Check updated' : 'Check created');
+        if (nextProjectId) {
+          navigate(`/projects/${nextProjectId}`);
+        } else {
+          navigate('/projects');
+        }
+        return;
+      }
+
+      const prepared = await validateAndPrepareSteps(values);
+      if (!prepared) return;
+
+      stepsRef.current = prepared.fixedSteps;
+      setSteps(prepared.fixedSteps);
+      const saved = await saveTest(values, prepared.fixedSteps);
       form.setFieldsValue({ name: saved.name, url: saved.url, device: saved.device ?? undefined });
       const nextProjectId = saved.projectId ?? currentProjectId ?? projectId;
       setCurrentProjectId(nextProjectId);
@@ -826,7 +885,7 @@ export default function TestEditorPage() {
         environmentId: saved.environmentId ?? null,
         testData: normalizeTestData(saved),
         selectedDataCaseIndex: selectedDataCaseIndex ?? null,
-        steps: currentSteps
+        steps: prepared.fixedSteps
       });
       setValidationFeedback({
         type: 'success',
@@ -838,37 +897,10 @@ export default function TestEditorPage() {
       } else {
         navigate('/projects');
       }
-      return;
-    }
-
-    const prepared = await validateAndPrepareSteps(values);
-    if (!prepared) return;
-
-    stepsRef.current = prepared.fixedSteps;
-    setSteps(prepared.fixedSteps);
-    const saved = await saveTest(values, prepared.fixedSteps);
-    form.setFieldsValue({ name: saved.name, url: saved.url, device: saved.device ?? undefined });
-    const nextProjectId = saved.projectId ?? currentProjectId ?? projectId;
-    setCurrentProjectId(nextProjectId);
-    writeSelectedDataCaseIndex(saved.id, selectedDataCaseIndex);
-    initialSnapshotRef.current = JSON.stringify({
-      name: saved.name,
-      url: saved.url,
-      device: saved.device ?? null,
-      environmentId: saved.environmentId ?? null,
-      testData: normalizeTestData(saved),
-      selectedDataCaseIndex: selectedDataCaseIndex ?? null,
-      steps: prepared.fixedSteps
-    });
-    setValidationFeedback({
-      type: 'success',
-      text: isEdit ? 'Check updated successfully.' : 'Check created successfully.'
-    });
-    message.success(isEdit ? 'Check updated' : 'Check created');
-    if (nextProjectId) {
-      navigate(`/projects/${nextProjectId}`);
-    } else {
-      navigate('/projects');
+    } catch (error) {
+      const saveError = getSaveErrorMessage(error);
+      setValidationFeedback({ type: 'error', text: saveError });
+      message.error(saveError);
     }
   };
 
@@ -1048,10 +1080,12 @@ export default function TestEditorPage() {
                     ]}
                   />
                   <Title level={2} style={{ margin: 0 }}>
-                    Edit Check
+                    {isEdit ? 'Edit Check' : 'New Check'}
                   </Title>
                   <Text type="secondary" style={{ maxWidth: 760 }}>
-                    Update the browser flow, target, device, and assertions for this check.
+                    {isEdit
+                      ? 'Update the browser flow, target, device, and assertions for this check.'
+                      : 'Create a browser flow, choose a target and device, and add result assertions.'}
                   </Text>
                   {isReadOnly && (
                     <Alert
@@ -1078,7 +1112,7 @@ export default function TestEditorPage() {
                   </Button>
                   {exportTrigger}
                   <Button type="primary" loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors || shouldBlockRunAllCases} onClick={handleValidateAndSave}>
-                    Save changes
+                    {isEdit ? 'Save changes' : 'Create check'}
                   </Button>
                 </Space>
           </div>
@@ -1351,7 +1385,7 @@ export default function TestEditorPage() {
             </Space>
             <Space wrap>
               <Button onClick={handleValidateAndSave} loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors || shouldBlockRunAllCases}>
-                Save changes
+                {isEdit ? 'Save changes' : 'Create check'}
               </Button>
             </Space>
           </Space>

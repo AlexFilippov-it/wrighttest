@@ -25,8 +25,9 @@ const ValidateStepsSchema = z.object({
   device: z.string().optional()
 });
 
-function normalizeDevice(device?: string) {
+function normalizeDevice(device?: string | null) {
   if (device === undefined) return undefined;
+  if (device === null) return null;
   const trimmed = device.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
