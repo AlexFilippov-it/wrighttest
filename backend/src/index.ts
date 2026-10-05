@@ -22,6 +22,7 @@ import { runRoutes } from './routes/runs';
 import { projectRoutes } from './routes/projects';
 import { webhookRoutes } from './routes/webhooks';
 import { testRoutes } from './routes/tests';
+import { projectAuthRoutes } from './routes/project-auth';
 import { schedulerService } from './services/scheduler';
 
 const envCandidates = [
@@ -79,7 +80,7 @@ async function start() {
 
   await fastify.register(cors, {
     origin: frontendOrigins,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
   });
 
   await fastify.register(fastifyHelmet, {
@@ -197,6 +198,7 @@ async function start() {
   await fastify.register(suiteRoutes);
   await fastify.register(scheduleRoutes);
   await fastify.register(testRoutes);
+  await fastify.register(projectAuthRoutes);
   await fastify.register(runRoutes);
   await fastify.register(webhookRoutes);
   await fastify.register(recordingRoutes);

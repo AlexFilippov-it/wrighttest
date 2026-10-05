@@ -11,6 +11,7 @@ import {
   isProtectedAdminEmail,
   requireProjectRole,
 } from '../utils/project-access';
+import { deleteAuthStateArtifact } from '../services/auth-state';
 
 type ProjectListItem = {
   id: string;
@@ -461,7 +462,21 @@ export async function projectRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      const authStates = await prisma.projectAuthState.findMany({
+        where: { projectId: req.params.id },
+        select: { storageKey: true, status: true }
+      });
+      if (authStates.some((profile) => profile.status === 'REFRESHING')) {
+        return reply.status(409).send({ error: 'This project is currently refreshing authentication' });
+      }
       await prisma.project.delete({ where: { id: req.params.id } });
+      await Promise.all(
+        authStates.map((profile) =>
+          deleteAuthStateArtifact(profile.storageKey).catch((error) => {
+            console.error(`[AuthState] Failed to remove state ${profile.storageKey}:`, error);
+          })
+        )
+      );
       return reply.status(204).send();
     } catch {
       return reply.status(404).send({ error: 'Project not found' });

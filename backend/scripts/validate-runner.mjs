@@ -39,6 +39,9 @@ const PLAYWRIGHT_ERROR_HINTS = [
 ];
 
 const MALFORMED_PAGE_LOCATOR_PREFIX = /^page\d+\./;
+const PRIMARY_SELECTOR_WAIT_MS = 2000;
+const AUTHENTICATED_SELECTOR_WAIT_MS = 5000;
+const SELECTOR_POLL_INTERVAL_MS = 100;
 
 function isSafeLocator(selector) {
   const normalized = selector.trim();
@@ -62,6 +65,24 @@ function resolveLocator(page, selector) {
   }
 
   return page.locator(normalized);
+}
+
+async function waitForUniqueSelector(page, selector, timeoutMs = PRIMARY_SELECTOR_WAIT_MS) {
+  const startedAt = Date.now();
+  let lastCount = 0;
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    try {
+      lastCount = await resolveLocator(page, selector).count();
+      if (lastCount === 1) return 1;
+    } catch {
+      lastCount = 0;
+    }
+
+    await page.waitForTimeout(SELECTOR_POLL_INTERVAL_MS);
+  }
+
+  return lastCount;
 }
 
 function hasUnresolvedVariables(value) {
@@ -246,14 +267,15 @@ async function performValidationAction(page, step, selector) {
   }
 }
 
-async function validateSteps(url, steps, device) {
+async function validateSteps(url, steps, device, storageState) {
   const results = [];
   const canNavigateInitialUrl = !hasUnresolvedVariables(url);
   let pageKnown = canNavigateInitialUrl;
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
-    ...resolveDeviceConfig(device)
+    ...resolveDeviceConfig(device),
+    ...(storageState ? { storageState } : {})
   });
   const page = await context.newPage();
 
@@ -382,7 +404,17 @@ async function validateSteps(url, steps, device) {
       const scopedSuggestions = scopedVariants(step.selector);
       const counts = new Map();
 
+      counts.set(
+        step.selector,
+        await waitForUniqueSelector(
+          page,
+          step.selector,
+          storageState ? AUTHENTICATED_SELECTOR_WAIT_MS : PRIMARY_SELECTOR_WAIT_MS
+        )
+      );
+
       for (const candidate of dedupe([...candidates, ...scopedSuggestions])) {
+        if (candidate === step.selector) continue;
         try {
           counts.set(candidate, await resolveLocator(page, candidate).count());
         } catch {
@@ -510,7 +542,7 @@ async function readStdin() {
 async function main() {
   const rawInput = await readStdin();
   const payload = JSON.parse(rawInput);
-  const report = await validateSteps(payload.url, payload.steps ?? [], payload.device);
+  const report = await validateSteps(payload.url, payload.steps ?? [], payload.device, payload.storageState);
   process.stdout.write(JSON.stringify(report));
 }
 

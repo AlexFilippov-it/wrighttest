@@ -5,6 +5,7 @@ import { CreateTestSchema, StepSchema, UpdateTestSchema } from '../schemas/test.
 import { runValidationInSubprocess } from '../services/validation-runner';
 import { getAvailableDevices } from '../utils/devices';
 import { getAuthUser, getProjectAccessStatusCode, requireProjectRole } from '../utils/project-access';
+import { deleteAuthStateArtifact, resolveAuthStateForExecution } from '../services/auth-state';
 
 const urlOrTemplate = z.string().refine((value) => {
   if (value.includes('{{')) return true;
@@ -22,7 +23,9 @@ const ValidateStepsSchema = z.object({
   projectId: z.string().min(1),
   url: urlOrTemplate,
   steps: z.array(StepSchema).default([]),
-  device: z.string().optional()
+  device: z.string().optional(),
+  environmentId: z.string().optional(),
+  useProjectAuthentication: z.boolean().default(true)
 });
 
 function normalizeDevice(device?: string | null) {
@@ -108,7 +111,15 @@ export async function testRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: result.error.flatten() });
     }
 
+    const existingTest = await prisma.test.findUnique({
+      where: { id: req.params.id },
+      select: { projectId: true }
+    });
+    if (!existingTest) return reply.status(404).send({ error: 'Test not found' });
+
+    const { userId } = getAuthUser(req);
     try {
+      await requireProjectRole(existingTest.projectId, userId, ['OWNER', 'EDITOR']);
       const test = await prisma.test.update({
         where: { id: req.params.id },
         data: {
@@ -127,14 +138,33 @@ export async function testRoutes(fastify: FastifyInstance) {
     try {
       const test = await prisma.test.findUnique({
         where: { id: req.params.id },
-        select: { projectId: true }
+        select: {
+          projectId: true,
+          authProfiles: {
+            select: { id: true, storageKey: true, status: true }
+          }
+        }
       });
       if (!test) return reply.status(404).send({ error: 'Test not found' });
 
       const { userId } = getAuthUser(req);
       await requireProjectRole(test.projectId, userId, ['OWNER', 'EDITOR']);
 
-      await prisma.test.delete({ where: { id: req.params.id } });
+      if (test.authProfiles.some((profile) => profile.status === 'REFRESHING')) {
+        return reply.status(409).send({ error: 'This check is currently refreshing authentication' });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.projectAuthState.deleteMany({ where: { authCheckId: req.params.id } });
+        await tx.test.delete({ where: { id: req.params.id } });
+      });
+      await Promise.all(
+        test.authProfiles.map((profile) =>
+          deleteAuthStateArtifact(profile.storageKey).catch((error) => {
+            console.error(`[AuthState] Failed to remove state ${profile.storageKey}:`, error);
+          })
+        )
+      );
       return reply.status(204).send();
     } catch (error) {
       return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Test not found' });
@@ -155,7 +185,17 @@ export async function testRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const report = runValidationInSubprocess(result.data.url, result.data.steps, result.data.device);
+      const storageState = await resolveAuthStateForExecution({
+        projectId: result.data.projectId,
+        environmentId: result.data.environmentId,
+        useProjectAuthentication: result.data.useProjectAuthentication
+      });
+      const report = await runValidationInSubprocess(
+        result.data.url,
+        result.data.steps,
+        result.data.device,
+        storageState
+      );
       return report;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Validation failed';

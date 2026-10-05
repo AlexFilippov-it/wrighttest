@@ -1,14 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import type { Step } from '../types/step';
 import type { ValidationReport } from './validator';
+import type { AuthStorageState } from './auth-state-storage';
 
 type ValidateRequest = {
   projectId?: string;
   url: string;
   steps: Step[];
   device?: string;
+  storageState?: AuthStorageState;
 };
 
 function resolveValidationRunnerPath() {
@@ -48,36 +50,58 @@ function buildValidationEnv() {
   };
 }
 
-export function runValidationInSubprocess(
+export async function runValidationInSubprocess(
   url: string,
   steps: Step[],
-  device?: string
-): ValidationReport {
+  device?: string,
+  storageState?: AuthStorageState
+): Promise<ValidationReport> {
   const runnerPath = resolveValidationRunnerPath();
-  const result = spawnSync(
-    process.execPath,
-    [runnerPath],
-    {
-      input: JSON.stringify({ projectId: undefined, url, steps, device } satisfies ValidateRequest),
-      encoding: 'utf8',
-      env: buildValidationEnv()
-    }
-  );
+  const input = JSON.stringify({
+    projectId: undefined,
+    url,
+    steps,
+    device,
+    storageState
+  } satisfies ValidateRequest);
 
-  if (result.error) {
-    throw result.error;
-  }
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [runnerPath], {
+      env: buildValidationEnv(),
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    let stdout = '';
+    let stderr = '';
 
-  const stdout = result.stdout?.trim() ?? '';
-  const stderr = result.stderr?.trim() ?? '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+    child.once('error', reject);
+    child.once('close', (code) => {
+      const output = stdout.trim();
+      const errorOutput = stderr.trim();
 
-  if (result.status !== 0) {
-    throw new Error(stderr || stdout || 'Validation runner failed');
-  }
+      if (code !== 0) {
+        reject(new Error(errorOutput || output || 'Validation runner failed'));
+        return;
+      }
+      if (!output) {
+        reject(new Error('Validation runner returned no output'));
+        return;
+      }
 
-  if (!stdout) {
-    throw new Error('Validation runner returned no output');
-  }
+      try {
+        resolve(JSON.parse(output) as ValidationReport);
+      } catch (error) {
+        reject(error);
+      }
+    });
 
-  return JSON.parse(stdout) as ValidationReport;
+    child.stdin.end(input);
+  });
 }

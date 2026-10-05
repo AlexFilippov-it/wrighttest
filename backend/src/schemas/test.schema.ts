@@ -96,7 +96,8 @@ export const CreateTestSchema = z.object({
   steps: z.array(StepSchema).default([]),
   testData: TestDataSchema.default([]),
   device: z.string().optional().nullable(),
-  environmentId: z.string().optional().nullable()
+  environmentId: z.string().optional().nullable(),
+  useProjectAuthentication: z.boolean().default(true)
 });
 
 export const UpdateTestSchema = CreateTestSchema.partial();

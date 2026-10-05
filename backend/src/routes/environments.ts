@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../prisma';
 import { getAuthUser, getProjectAccessStatusCode, redactEnvironmentVariables, requireProjectRole } from '../utils/project-access';
+import { deleteAuthStateArtifact } from '../services/auth-state';
 
 const EnvironmentSchema = z.object({
   name: z.string().min(1).max(50),
@@ -75,11 +76,27 @@ export async function environmentRoutes(fastify: FastifyInstance) {
       const { userId } = getAuthUser(req);
       const environment = await prisma.environment.findUnique({
         where: { id: req.params.id },
-        select: { projectId: true }
+        select: {
+          projectId: true,
+          authStates: {
+            select: { storageKey: true, status: true }
+          }
+        }
       });
       if (!environment) return reply.status(404).send({ error: 'Environment not found' });
       await requireProjectRole(environment.projectId, userId, ['OWNER', 'EDITOR']);
+
+      if (environment.authStates.some((profile) => profile.status === 'REFRESHING')) {
+        return reply.status(409).send({ error: 'This environment is currently refreshing authentication' });
+      }
       await prisma.environment.delete({ where: { id: req.params.id } });
+      await Promise.all(
+        environment.authStates.map((profile) =>
+          deleteAuthStateArtifact(profile.storageKey).catch((error) => {
+            console.error(`[AuthState] Failed to remove state ${profile.storageKey}:`, error);
+          })
+        )
+      );
       return reply.status(204).send();
     } catch (error) {
       return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Environment not found' });

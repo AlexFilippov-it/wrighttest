@@ -15,7 +15,12 @@ import { hasUnresolvedVariables, interpolateStep } from '../utils/interpolate';
 import { mergeRuntimeVariables } from '../utils/runtime-variables';
 import { notifyRunResult } from '../services/notifier';
 import { getBrowserName, launchChromium } from '../utils/browser';
-import { validateStepRequirements } from '../utils/step-validation';
+import { hasAssertionSteps, validateStepRequirements } from '../utils/step-validation';
+import {
+  completeAuthRefresh,
+  failAuthRefresh,
+  resolveAuthStateForExecution
+} from '../services/auth-state';
 import {
   buildActionCandidates,
   dedupe,
@@ -185,7 +190,7 @@ async function ensureDirectories() {
 }
 
 async function runTest(job: Job<TestJobData>) {
-  const { testRunId, testId, environmentId } = job.data;
+  const { testRunId, testId } = job.data;
 
   await prisma.testRun.update({
     where: { id: testRunId },
@@ -204,9 +209,9 @@ async function runTest(job: Job<TestJobData>) {
   }
 
   let environmentVariables: Record<string, string> = {};
-  if (environmentId) {
+  if (runSnapshot.environmentId) {
     const environment = await prisma.environment.findUnique({
-      where: { id: environmentId }
+      where: { id: runSnapshot.environmentId }
     });
     if (environment) {
       environmentVariables = (environment.variables ?? {}) as Record<string, string>;
@@ -215,6 +220,11 @@ async function runTest(job: Job<TestJobData>) {
 
   const dataCaseVariables = (runSnapshot.dataCaseVariables ?? {}) as Record<string, string>;
   const runtimeVariables = mergeRuntimeVariables(environmentVariables, dataCaseVariables);
+  const isAuthRefresh = runSnapshot.runMode === 'AUTH_REFRESH';
+
+  if (isAuthRefresh && !runSnapshot.authStateId) {
+    throw new Error(`Authentication refresh run ${testRunId} is missing its authentication profile.`);
+  }
 
   const steps = (test.steps as unknown as Step[]).map((step) => interpolateStep(step, runtimeVariables));
   const deviceConfig = test.device && test.device in devices ? devices[test.device as keyof typeof devices] : {};
@@ -246,9 +256,22 @@ async function runTest(job: Job<TestJobData>) {
   });
 
   try {
+    if (isAuthRefresh && !hasAssertionSteps(steps)) {
+      throw new Error(
+        'Authentication check must contain at least one assertion that confirms login succeeded, such as Assert URL or Assert visible.'
+      );
+    }
+
+    const storageState = await resolveAuthStateForExecution({
+      projectId: test.projectId,
+      environmentId: runSnapshot.environmentId,
+      useProjectAuthentication: test.useProjectAuthentication,
+      isAuthRefresh
+    });
     browser = await launchChromium();
     context = await browser.newContext({
-      ...deviceConfig
+      ...deviceConfig,
+      ...(storageState ? { storageState } : {})
     });
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     traceStarted = true;
@@ -412,6 +435,19 @@ async function runTest(job: Job<TestJobData>) {
         throw stepError;
       }
     }
+
+    if (isAuthRefresh) {
+      // SPA login handlers can finish after the click action itself resolves.
+      await page.waitForTimeout(500);
+      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
+      const capturedState = await context.storageState({ indexedDB: true });
+      await completeAuthRefresh({
+        profileId: runSnapshot.authStateId!,
+        authCheckId: test.id,
+        runId: testRunId,
+        state: capturedState
+      });
+    }
   } catch (error) {
     runError = error instanceof Error ? error : new Error(String(error));
   } finally {
@@ -447,6 +483,12 @@ async function runTest(job: Job<TestJobData>) {
     }
   }
 
+  if (isAuthRefresh && runError && runSnapshot.authStateId) {
+    await failAuthRefresh(runSnapshot.authStateId, runError).catch((authError) => {
+      console.error(`[Worker] Failed to update authentication profile ${runSnapshot.authStateId}:`, authError);
+    });
+  }
+
   await prisma.testRun.update({
     where: { id: testRunId },
     data: {
@@ -464,7 +506,7 @@ async function runTest(job: Job<TestJobData>) {
   });
 
   const finalRun = await prisma.testRun.findUnique({ where: { id: testRunId } });
-  if (finalRun) {
+  if (finalRun && !isAuthRefresh) {
     await notifyRunResult(finalRun).catch((notifyError) => {
       console.error('[Worker] Notification error:', notifyError);
     });

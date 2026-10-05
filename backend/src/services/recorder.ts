@@ -8,11 +8,13 @@ import { resolveBrowserUrl } from '../utils/runtime-url';
 import { resolveDeviceConfig } from '../utils/devices';
 import { deriveSelectorCandidates } from '../utils/selector-variants';
 import type { Step } from '../types/step';
+import type { AuthStorageState } from './auth-state-storage';
 
 interface RecordingSession {
   id: string;
   process: ChildProcess;
   outputFile: string;
+  storageFile?: string;
   startUrl: string;
   projectId: string;
   userId: string;
@@ -237,7 +239,13 @@ async function terminateProcessGroup(proc: ChildProcess): Promise<void> {
 
 async function stopActiveSessions() {
   const activeSessions = Array.from(sessions.values());
-  await Promise.all(activeSessions.map((session) => terminateProcessGroup(session.process)));
+  await Promise.all(activeSessions.map(async (session) => {
+    await terminateProcessGroup(session.process);
+    await Promise.all([
+      fsPromises.rm(session.outputFile, { force: true }),
+      session.storageFile ? fsPromises.rm(session.storageFile, { force: true }) : Promise.resolve()
+    ]);
+  }));
   sessions.clear();
 }
 
@@ -258,11 +266,19 @@ async function assertRecordingBrowserAvailable(device?: string) {
   }
 }
 
-export async function startRecording(startUrl: string, device?: string, projectId?: string, userId?: string): Promise<string> {
-  await fsPromises.mkdir(TMP_DIR, { recursive: true });
+export async function startRecording(
+  startUrl: string,
+  device?: string,
+  projectId?: string,
+  userId?: string,
+  storageState?: AuthStorageState
+): Promise<string> {
+  await fsPromises.mkdir(TMP_DIR, { recursive: true, mode: 0o700 });
+  await fsPromises.chmod(TMP_DIR, 0o700);
 
   const id = uuidv4();
   const outputFile = path.join(TMP_DIR, `${id}.ts`);
+  const storageFile = storageState ? path.join(TMP_DIR, `${id}.storage.json`) : undefined;
   const resolvedUrl = resolveBrowserUrl(startUrl);
   const env = { ...process.env };
   await stopActiveSessions();
@@ -273,40 +289,44 @@ export async function startRecording(startUrl: string, device?: string, projectI
   const deviceOptions = resolveDeviceConfig(device);
   const viewport = deviceOptions.viewport;
   const viewportArgs = viewport ? ['--viewport-size', `${viewport.width},${viewport.height}`] : [];
+  const storageArgs = storageFile ? ['--load-storage', storageFile] : [];
 
-  const proc = spawn(
-    'npx',
-    [
-      'playwright',
-      'codegen',
-      '--browser',
-      'chromium',
-      ...deviceArgs,
-      ...viewportArgs,
-      '--output',
-      outputFile,
-      resolvedUrl
-    ],
-    {
+  if (storageFile) {
+    await fsPromises.writeFile(storageFile, JSON.stringify(storageState), {
+      encoding: 'utf8',
+      mode: 0o600,
+      flag: 'wx'
+    });
+  }
+
+  const codegenArgs = [
+    'playwright',
+    'codegen',
+    '--browser',
+    'chromium',
+    ...deviceArgs,
+    ...viewportArgs,
+    ...storageArgs,
+    '--output',
+    outputFile,
+    resolvedUrl
+  ];
+
+  let proc: ChildProcess;
+  try {
+    proc = spawn('npx', codegenArgs, {
       cwd: BACKEND_DIR,
       env,
       stdio: 'pipe',
       detached: true
-    }
-  );
+    });
+  } catch (error) {
+    if (storageFile) await fsPromises.rm(storageFile, { force: true });
+    throw error;
+  }
 
   console.log(
-    `[Codegen ${id}] start url=${resolvedUrl} device=${device ?? 'desktop'} browser=chromium args=${JSON.stringify([
-      'playwright',
-      'codegen',
-      '--browser',
-      'chromium',
-      ...deviceArgs,
-      ...viewportArgs,
-      '--output',
-      outputFile,
-      resolvedUrl
-    ])}`
+    `[Codegen ${id}] start url=${resolvedUrl} device=${device ?? 'desktop'} browser=chromium auth=${storageFile ? 'loaded' : 'none'} args=${JSON.stringify(codegenArgs)}`
   );
 
   proc.stdout?.on('data', (chunk) => logProcessOutput(id, 'stdout', chunk));
@@ -314,12 +334,18 @@ export async function startRecording(startUrl: string, device?: string, projectI
 
   proc.once('error', (error) => {
     console.error(`[Codegen ${id}] Failed to start:`, error);
+    if (storageFile) void fsPromises.rm(storageFile, { force: true });
+  });
+
+  proc.once('exit', () => {
+    if (storageFile) void fsPromises.rm(storageFile, { force: true });
   });
 
   sessions.set(id, {
     id,
     process: proc,
     outputFile,
+    storageFile,
     startUrl: resolvedUrl,
     projectId: projectId ?? '',
     userId: userId ?? '',
@@ -345,7 +371,10 @@ export async function stopRecording(id: string): Promise<Step[]> {
   } catch (error) {
     console.warn(`[Codegen ${id}] Output file not found or unreadable:`, error);
   } finally {
-    await fsPromises.rm(session.outputFile, { force: true });
+    await Promise.all([
+      fsPromises.rm(session.outputFile, { force: true }),
+      session.storageFile ? fsPromises.rm(session.storageFile, { force: true }) : Promise.resolve()
+    ]);
     sessions.delete(id);
   }
 

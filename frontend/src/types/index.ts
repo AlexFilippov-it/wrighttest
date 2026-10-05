@@ -1,4 +1,6 @@
 export type RunStatus = 'PENDING' | 'RUNNING' | 'PASSED' | 'FAILED';
+export type RunMode = 'NORMAL' | 'AUTH_REFRESH';
+export type AuthStateStatus = 'UNAVAILABLE' | 'REFRESHING' | 'AVAILABLE' | 'REFRESH_FAILED';
 
 export type StepAction =
   | 'goto'
@@ -267,6 +269,23 @@ export interface Environment {
   updatedAt: string;
 }
 
+export interface ProjectAuthProfile {
+  id: string;
+  projectId: string;
+  environmentId: string;
+  authCheckId: string;
+  enabled: boolean;
+  status: AuthStateStatus;
+  refreshedAt?: string | null;
+  refreshedRunId?: string | null;
+  lastError?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  hasUsableState: boolean;
+  environment: Pick<Environment, 'id' | 'name'>;
+  authCheck: Pick<Test, 'id' | 'name'>;
+}
+
 export type NotificationChannelType = 'telegram' | 'slack';
 
 export interface NotificationChannel {
@@ -343,6 +362,7 @@ export interface Test {
   url: string;
   device?: string | null;
   environmentId?: string | null;
+  useProjectAuthentication: boolean;
   steps: Step[];
   testData: TestDataCase[];
   projectId: string;
@@ -353,6 +373,7 @@ export interface Test {
 export interface TestRun {
   id: string;
   status: RunStatus;
+  runMode?: RunMode;
   startedAt: string;
   finishedAt?: string;
   durationMs?: number;

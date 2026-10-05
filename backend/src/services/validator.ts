@@ -17,6 +17,7 @@ import {
   dedupe,
   summarizePlaywrightError
 } from '../utils/selector-helpers';
+import type { AuthStorageState } from './auth-state-storage';
 
 export type StepValidationResult = {
   index: number;
@@ -34,6 +35,7 @@ export type ValidationReport = {
 };
 
 const TRACES_DIR = path.resolve(process.env.TRACES_DIR || './traces');
+const AUTHENTICATED_SELECTOR_WAIT_MS = 5000;
 
 async function performValidationAction(page: Page, step: Step, selector: string) {
   if (step.action === 'keyboardPress') {
@@ -67,7 +69,12 @@ async function performValidationAction(page: Page, step: Step, selector: string)
   }
 }
 
-export async function validateSteps(url: string, steps: Step[], device?: string): Promise<ValidationReport> {
+export async function validateSteps(
+  url: string,
+  steps: Step[],
+  device?: string,
+  storageState?: AuthStorageState
+): Promise<ValidationReport> {
   const results: StepValidationResult[] = [];
   const canNavigateInitialUrl = !hasUnresolvedVariables(url);
   let pageKnown = canNavigateInitialUrl;
@@ -80,7 +87,8 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
 
   const browser = await launchChromium();
   const context = await browser.newContext({
-    ...resolveDeviceConfig(device)
+    ...resolveDeviceConfig(device),
+    ...(storageState ? { storageState } : {})
   });
   const page = await context.newPage();
 
@@ -205,7 +213,11 @@ export async function validateSteps(url: string, steps: Step[], device?: string)
       const candidates = buildActionCandidates(step, step.action === 'click' ? 'click' : 'waitForSelector');
       const scopedSuggestions = scopedVariants(step.selector);
       const counts = new Map<string, number>();
-      const preferred = await waitForUniqueSelector(page, step.selector);
+      const preferred = await waitForUniqueSelector(
+        page,
+        step.selector,
+        storageState ? AUTHENTICATED_SELECTOR_WAIT_MS : undefined
+      );
 
       counts.set(step.selector, preferred.count);
 

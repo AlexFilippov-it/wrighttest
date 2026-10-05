@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Breadcrumb, Button, Card, Col, Dropdown, Form, Input, Layout, Modal, Radio, Row, Select, Space, Tag, Typography, message, notification } from 'antd';
+import { Alert, Breadcrumb, Button, Card, Checkbox, Col, Dropdown, Form, Input, Layout, Modal, Radio, Row, Select, Space, Tag, Typography, message, notification } from 'antd';
 import type { MenuProps } from 'antd';
 import { DownOutlined, DownloadOutlined, PlayCircleOutlined, StopOutlined, VideoCameraOutlined, WarningOutlined } from '@ant-design/icons';
 import { useNavigate, useParams, Link } from 'react-router-dom';
@@ -229,6 +229,7 @@ export default function TestEditorPage() {
   const [recordEnvironments, setRecordEnvironments] = useState<Environment[]>([]);
   const [environmentVariableNames, setEnvironmentVariableNames] = useState<string[]>([]);
   const [selectedRecordingEnvironmentId, setSelectedRecordingEnvironmentId] = useState<string | undefined>(undefined);
+  const [useProjectAuthentication, setUseProjectAuthentication] = useState(true);
   const [recordingUrlHasTemplate, setRecordingUrlHasTemplate] = useState(false);
   const [recordLoading, setRecordLoading] = useState(false);
   const [validationResults, setValidationResults] = useState<StepValidationResult[] | undefined>();
@@ -285,6 +286,7 @@ export default function TestEditorPage() {
       setRecordingProjectId(projectId);
       setCurrentProjectId(projectId);
       setSelectedRecordingEnvironmentId(undefined);
+      setUseProjectAuthentication(true);
       setValidationTracePath(undefined);
       setValidationFeedback(null);
       setStepIssues([]);
@@ -304,6 +306,7 @@ export default function TestEditorPage() {
       setRecordingProjectId(test.projectId);
       setCurrentProjectId(test.projectId);
       setSelectedRecordingEnvironmentId(test.environmentId ?? undefined);
+      setUseProjectAuthentication(test.useProjectAuthentication ?? true);
       void getProject(test.projectId)
         .then((project) => setCurrentProjectRole(project.currentUserRole ?? null))
         .catch(() => setCurrentProjectRole(null));
@@ -415,6 +418,7 @@ export default function TestEditorPage() {
         ...values,
         device: normalizeDeviceForPayload(values.device),
         environmentId: selectedRecordingEnvironmentId ?? null,
+        useProjectAuthentication,
         steps: stepsToSave,
         testData: currentApiTestData
       };
@@ -468,7 +472,14 @@ export default function TestEditorPage() {
 
     setValidating(true);
     try {
-      const report = await validateTestSteps(currentProjectId ?? projectId ?? '', values.url, currentSteps, values.device);
+      const report = await validateTestSteps(
+        currentProjectId ?? projectId ?? '',
+        values.url,
+        currentSteps,
+        values.device,
+        selectedRecordingEnvironmentId,
+        useProjectAuthentication
+      );
       setValidationResults(report.results);
       setValidationTracePath(report.tracePath);
       if (report.tracePath) {
@@ -707,7 +718,13 @@ export default function TestEditorPage() {
         }
       }
 
-      const data = await startRecording(url, recordingProjectId || currentProjectId || projectId || '', undefined, device);
+      const data = await startRecording(
+        url,
+        recordingProjectId || currentProjectId || projectId || '',
+        undefined,
+        device,
+        useProjectAuthentication
+      );
       setSessionId(data.sessionId);
       setRecording(true);
       setRecordModalOpen(false);
@@ -729,7 +746,13 @@ export default function TestEditorPage() {
 
     setRecordLoading(true);
     try {
-      const data = await startRecording(url, recordingProjectId || currentProjectId || projectId || '', selectedRecordingEnvironmentId || undefined, device);
+      const data = await startRecording(
+        url,
+        recordingProjectId || currentProjectId || projectId || '',
+        selectedRecordingEnvironmentId || undefined,
+        device,
+        useProjectAuthentication
+      );
       setSessionId(data.sessionId);
       setRecording(true);
       setRecordModalOpen(false);
@@ -851,6 +874,7 @@ export default function TestEditorPage() {
           url: saved.url,
           device: saved.device ?? null,
           environmentId: saved.environmentId ?? null,
+          useProjectAuthentication: saved.useProjectAuthentication,
           testData: normalizeTestData(saved),
           selectedDataCaseIndex: selectedDataCaseIndex ?? null,
           steps: currentSteps
@@ -883,6 +907,7 @@ export default function TestEditorPage() {
         url: saved.url,
         device: saved.device ?? null,
         environmentId: saved.environmentId ?? null,
+        useProjectAuthentication: saved.useProjectAuthentication,
         testData: normalizeTestData(saved),
         selectedDataCaseIndex: selectedDataCaseIndex ?? null,
         steps: prepared.fixedSteps
@@ -971,11 +996,12 @@ export default function TestEditorPage() {
         url: selectedUrl ?? '',
         device: normalizeDeviceForPayload(selectedDevice),
         environmentId: selectedRecordingEnvironmentId ?? null,
+        useProjectAuthentication,
         testData: currentApiTestData,
         selectedDataCaseIndex: selectedDataCaseIndex ?? null,
         steps
       }),
-    [checkName, selectedUrl, selectedDevice, selectedRecordingEnvironmentId, currentApiTestData, selectedDataCaseIndex, steps]
+    [checkName, selectedUrl, selectedDevice, selectedRecordingEnvironmentId, useProjectAuthentication, currentApiTestData, selectedDataCaseIndex, steps]
   );
 
   const dataCaseOptions = useMemo(
@@ -1208,6 +1234,20 @@ export default function TestEditorPage() {
                         Variables from the selected environment can be used in Start URL and steps as {'{{BASE_URL}}'}, {'{{USERNAME}}'}, or {'{{PASSWORD}}'}.
                       </Text>
                     </div>
+                  </Col>
+                  <Col span={24}>
+                    <Space direction="vertical" size={4}>
+                      <Checkbox
+                        checked={useProjectAuthentication}
+                        disabled={isReadOnly}
+                        onChange={(event) => setUseProjectAuthentication(event.target.checked)}
+                      >
+                        Use reusable project authentication for this environment
+                      </Checkbox>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        Disable this for login, logout, registration, password reset, and guest checks that must start unauthenticated.
+                      </Text>
+                    </Space>
                   </Col>
                   {currentApiTestData.length > 0 && (
                     <Col xs={24} lg={12}>

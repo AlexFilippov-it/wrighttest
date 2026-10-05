@@ -6,6 +6,7 @@ import type {
   NotificationChannelType,
   Project,
   ProjectMember,
+  ProjectAuthProfile,
   ProjectWorkspace,
   ProjectSummary,
   Schedule,
@@ -27,6 +28,7 @@ export type TestPayload = {
   testData?: Test['testData'];
   device?: string | null;
   environmentId?: string | null;
+  useProjectAuthentication?: boolean;
 };
 
 export const api = axios.create({
@@ -179,6 +181,23 @@ export const updateEnvironment = (
 export const deleteEnvironment = (id: string) =>
   api.delete(`/environments/${id}`);
 
+export const getProjectAuthProfiles = (projectId: string) =>
+  api.get<ProjectAuthProfile[]>(`/projects/${projectId}/authentication`).then((r) => r.data);
+
+export const configureProjectAuthProfile = (
+  projectId: string,
+  environmentId: string,
+  data: { authCheckId: string; enabled: boolean }
+) => api.put<ProjectAuthProfile>(`/projects/${projectId}/authentication/${environmentId}`, data).then((r) => r.data);
+
+export const refreshProjectAuthentication = (projectId: string, environmentId: string) =>
+  api.post<{ authStateId: string; testRunId: string; jobId?: string; status: 'REFRESHING' }>(
+    `/projects/${projectId}/authentication/${environmentId}/refresh`
+  ).then((r) => r.data);
+
+export const deleteProjectAuthProfile = (projectId: string, environmentId: string) =>
+  api.delete(`/projects/${projectId}/authentication/${environmentId}`);
+
 export const getChannels = (projectId: string) =>
   api.get<NotificationChannel[]>(`/projects/${projectId}/channels`).then((r) => r.data);
 
@@ -293,20 +312,36 @@ export const getRunBatch = (batchId: string) =>
 export const getTestRuns = (testId: string) =>
   api.get<TestRun[]>(`/tests/${testId}/runs`).then((r) => r.data);
 
-export const validateTestSteps = (projectId: string, url: string, steps: Step[], device?: string | null) =>
+export const validateTestSteps = (
+  projectId: string,
+  url: string,
+  steps: Step[],
+  device?: string | null,
+  environmentId?: string,
+  useProjectAuthentication = true
+) =>
   api.post<ValidationReport>('/tests/validate', {
     projectId,
     url,
     steps,
-    device: device || undefined
+    device: device || undefined,
+    environmentId,
+    useProjectAuthentication
   }).then((r) => r.data);
 
-export const startRecording = (url: string, projectId: string, environmentId?: string, device?: string) =>
+export const startRecording = (
+  url: string,
+  projectId: string,
+  environmentId?: string,
+  device?: string,
+  useProjectAuthentication = false
+) =>
   api.post<{ sessionId: string; status: string }>('/recordings/start', {
     url,
     projectId,
     environmentId,
-    device
+    device,
+    useProjectAuthentication
   }).then((r) => r.data);
 
 export const stopRecording = (sessionId: string) =>

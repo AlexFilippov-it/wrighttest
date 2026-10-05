@@ -351,6 +351,12 @@ Disabled cases are ignored by run actions and do not block variable diagnostics.
 
 This keeps ordinary checks unchanged: if a check has no test data, it runs exactly as before.
 
+## 🔐 Reusable Authentication
+
+WrightTest can reuse encrypted Playwright authentication state separately for each project environment. Login refreshes run in a clean browser context, failed refreshes preserve the last working state, and regular runs, validation, and recording start in fresh isolated contexts loaded with that state.
+
+See [Project-level reusable authentication with Playwright storageState](https://github.com/AlexFilippov-it/wrighttest/discussions/4#discussioncomment-18757806) for the setup steps, security model, refresh behavior, and current MVP scope.
+
 ## 🖥 Devices
 
 If no device is selected, WrightTest uses the default desktop browser context (`1280x720`). The device selector only stores explicit overrides such as:

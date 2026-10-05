@@ -59,6 +59,8 @@ services:
       FRONTEND_INTERNAL_URL: ${FRONTEND_INTERNAL_URL:-http://frontend:80}
       SCREENSHOTS_DIR: /app/backend/screenshots
       TRACES_DIR: /app/backend/traces
+      AUTH_STATES_DIR: /app/backend/auth-states
+      AUTH_STATE_ENCRYPTION_KEY: ${AUTH_STATE_ENCRYPTION_KEY:-}
       DISPLAY: ":99"
       NOVNC_HOST: novnc
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
@@ -69,6 +71,7 @@ services:
     volumes:
       - screenshots:/app/backend/screenshots
       - traces:/app/backend/traces
+      - auth_states:/app/backend/auth-states
       - x11_socket:/tmp/.X11-unix
     depends_on:
       postgres:
@@ -101,4 +104,5 @@ volumes:
   postgres_data:
   screenshots:
   traces:
+  auth_states:
   x11_socket:

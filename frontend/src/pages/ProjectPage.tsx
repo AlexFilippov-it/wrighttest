@@ -44,6 +44,7 @@ import {
   createChannel,
   createEnvironment,
   createSchedule,
+  configureProjectAuthProfile,
   deleteTest,
   deleteProject,
   deleteChannel,
@@ -51,10 +52,12 @@ import {
   deleteSchedule,
   addProjectMember,
   deleteProjectMember,
+  deleteProjectAuthProfile,
   getChannels,
   getEnvironments,
   getProject,
   getProjectMembers,
+  getProjectAuthProfiles,
   getSchedules,
   getSuites,
   checkUserExists,
@@ -68,7 +71,8 @@ import {
   updateEnvironment,
   updateSchedule,
   updateProject,
-  updateProjectMember
+  updateProjectMember,
+  refreshProjectAuthentication
 } from '../api/client';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
@@ -84,6 +88,7 @@ import type {
   Environment,
   NotificationChannel,
   ProjectMember,
+  ProjectAuthProfile,
   ProjectCheck,
   ProjectWorkspace,
   ProjectRole,
@@ -591,6 +596,12 @@ export default function ProjectPage() {
   const [deleteProjectConfirmText, setDeleteProjectConfirmText] = useState('');
   const [deletingProject, setDeletingProject] = useState(false);
   const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
+  const [authProfiles, setAuthProfiles] = useState<ProjectAuthProfile[]>([]);
+  const [authEnvironmentId, setAuthEnvironmentId] = useState<string | undefined>(undefined);
+  const [authCheckId, setAuthCheckId] = useState<string | undefined>(undefined);
+  const [authEnabled, setAuthEnabled] = useState(false);
+  const [authSaving, setAuthSaving] = useState(false);
+  const [authRefreshing, setAuthRefreshing] = useState(false);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [memberSaving, setMemberSaving] = useState(false);
   const [memberLookupLoading, setMemberLookupLoading] = useState(false);
@@ -622,12 +633,13 @@ export default function ProjectPage() {
     setLoading(true);
     try {
       const projectData = await getProject(projectId!);
-      const [suiteDataResult, environmentDataResult, scheduleDataResult, channelDataResult, memberDataResult] = await Promise.allSettled([
+      const [suiteDataResult, environmentDataResult, scheduleDataResult, channelDataResult, memberDataResult, authProfilesResult] = await Promise.allSettled([
         getSuites(projectId!),
         getEnvironments(projectId!),
         getSchedules(projectId!),
         getChannels(projectId!),
-        projectData.currentUserRole === 'OWNER' ? getProjectMembers(projectId!) : Promise.resolve([])
+        projectData.currentUserRole === 'OWNER' ? getProjectMembers(projectId!) : Promise.resolve([]),
+        getProjectAuthProfiles(projectId!)
       ]);
       setProject(projectData);
       setProjectName(projectData.name);
@@ -636,6 +648,7 @@ export default function ProjectPage() {
       setSchedules(settledValue(scheduleDataResult, []));
       setChannels(settledValue(channelDataResult, []));
       setProjectMembers(settledValue(memberDataResult, []));
+      setAuthProfiles(settledValue(authProfilesResult, []));
     } finally {
       setLoading(false);
     }
@@ -656,6 +669,10 @@ export default function ProjectPage() {
     setDeleteProjectConfirmText('');
     setDeleteProjectModalOpen(false);
     setProjectMembers([]);
+    setAuthProfiles([]);
+    setAuthEnvironmentId(undefined);
+    setAuthCheckId(undefined);
+    setAuthEnabled(false);
     setMemberModalOpen(false);
     setMemberLookupLoading(false);
     setMemberUserExists(null);
@@ -685,6 +702,22 @@ export default function ProjectPage() {
   const projectHeaderDescription = savedProjectDescription || 'Monitor browser checks, schedules, and alerts for this project.';
 
   const projectChecks = useMemo(() => project?.tests ?? [], [project]);
+  const selectedAuthProfile = useMemo(
+    () => authProfiles.find((profile) => profile.environmentId === authEnvironmentId) ?? null,
+    [authEnvironmentId, authProfiles]
+  );
+  const selectedAuthCheck = useMemo(
+    () => projectChecks.find((check) => check.id === authCheckId) ?? null,
+    [authCheckId, projectChecks]
+  );
+  const selectedAuthCheckHasAssertions = Boolean(
+    selectedAuthCheck?.steps.some((step) => step.action.startsWith('assert'))
+  );
+  const authDraftIsSaved = Boolean(
+    selectedAuthProfile &&
+    selectedAuthProfile.authCheckId === authCheckId &&
+    selectedAuthProfile.enabled === authEnabled
+  );
   const latestChecks = useMemo(() => {
     return [...projectChecks].sort((left, right) => {
       const leftDate = left.lastRunAt ? new Date(left.lastRunAt).getTime() : 0;
@@ -692,6 +725,41 @@ export default function ProjectPage() {
       return rightDate - leftDate;
     });
   }, [projectChecks]);
+
+  useEffect(() => {
+    if (environments.length === 0) {
+      setAuthEnvironmentId(undefined);
+      return;
+    }
+    if (authEnvironmentId && environments.some((environment) => environment.id === authEnvironmentId)) {
+      return;
+    }
+    setAuthEnvironmentId(projectDefaultEnvironmentId ?? environments[0].id);
+  }, [authEnvironmentId, environments, projectDefaultEnvironmentId]);
+
+  useEffect(() => {
+    setAuthCheckId(selectedAuthProfile?.authCheckId);
+    setAuthEnabled(selectedAuthProfile?.enabled ?? false);
+  }, [authEnvironmentId, selectedAuthProfile]);
+
+  useEffect(() => {
+    if (!authProfiles.some((profile) => profile.status === 'REFRESHING')) return;
+
+    let cancelled = false;
+    const refreshProfiles = async () => {
+      try {
+        const nextProfiles = await getProjectAuthProfiles(projectId!);
+        if (!cancelled) setAuthProfiles(nextProfiles);
+      } catch {
+        // Keep the current status visible; the next poll can recover.
+      }
+    };
+    const timer = window.setInterval(() => void refreshProfiles(), 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [authProfiles, projectId]);
 
   const environmentUsage = useMemo(
     () =>
@@ -1350,6 +1418,82 @@ export default function ProjectPage() {
     }
   };
 
+  const replaceAuthProfile = (profile: ProjectAuthProfile) => {
+    setAuthProfiles((current) => {
+      const withoutCurrent = current.filter((item) => item.id !== profile.id);
+      return [...withoutCurrent, profile];
+    });
+  };
+
+  const handleSaveAuthentication = async () => {
+    if (!project || !authEnvironmentId || !authCheckId) {
+      message.error('Select an environment and authentication check');
+      return;
+    }
+    if (!canWriteProject) {
+      message.warning('Read-only access');
+      return;
+    }
+
+    setAuthSaving(true);
+    try {
+      const profile = await configureProjectAuthProfile(project.id, authEnvironmentId, {
+        authCheckId,
+        enabled: authEnabled
+      });
+      replaceAuthProfile(profile);
+      message.success('Authentication settings saved');
+    } catch {
+      message.error('Failed to save authentication settings');
+    } finally {
+      setAuthSaving(false);
+    }
+  };
+
+  const handleRefreshAuthentication = async () => {
+    if (!project || !authEnvironmentId || !selectedAuthProfile || !authDraftIsSaved) {
+      message.warning('Save the authentication settings before refreshing');
+      return;
+    }
+    if (!selectedAuthCheckHasAssertions) {
+      message.warning('Add an assertion to the authentication check before refreshing');
+      return;
+    }
+
+    setAuthRefreshing(true);
+    try {
+      const result = await refreshProjectAuthentication(project.id, authEnvironmentId);
+      replaceAuthProfile({
+        ...selectedAuthProfile,
+        status: 'REFRESHING',
+        lastError: null,
+        updatedAt: new Date().toISOString()
+      });
+      message.success(`Authentication refresh started (run ${result.testRunId})`);
+    } catch (error) {
+      const responseError = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      message.error(
+        typeof responseError === 'string' ? responseError : 'Failed to start authentication refresh'
+      );
+    } finally {
+      setAuthRefreshing(false);
+    }
+  };
+
+  const handleDeleteAuthentication = async () => {
+    if (!project || !authEnvironmentId || !selectedAuthProfile) return;
+
+    try {
+      await deleteProjectAuthProfile(project.id, authEnvironmentId);
+      setAuthProfiles((current) => current.filter((profile) => profile.id !== selectedAuthProfile.id));
+      setAuthCheckId(undefined);
+      setAuthEnabled(false);
+      message.success('Authentication configuration removed');
+    } catch {
+      message.error('Failed to remove authentication configuration');
+    }
+  };
+
   const handleSaveProject = async () => {
     if (!project) return;
 
@@ -1568,6 +1712,15 @@ export default function ProjectPage() {
   const deleteProjectReady = Boolean(
     project && deleteProjectConfirmText.trim() === project.name.trim()
   );
+  const authStatus = selectedAuthProfile?.status ?? 'UNAVAILABLE';
+  const authStatusPresentation = selectedAuthProfile
+    ? {
+        UNAVAILABLE: { label: 'Unavailable', color: 'default' },
+        REFRESHING: { label: 'Refreshing', color: 'processing' },
+        AVAILABLE: { label: 'Available', color: 'success' },
+        REFRESH_FAILED: { label: 'Refresh failed', color: 'error' }
+      }[authStatus]
+    : { label: 'Not configured', color: 'default' };
 
   const runSuiteItems = suites.map((suite) => ({
     value: suite.id,
@@ -2841,6 +2994,163 @@ export default function ProjectPage() {
                     </Card>
                   </Col>
                 </Row>
+                <Card
+                  style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
+                  title="Authentication"
+                >
+                  <Space direction="vertical" size={18} style={{ width: '100%' }}>
+                    <Text type="secondary">
+                      Reuse an authenticated browser session for checks in each environment. Authentication state is stored privately and is never returned to the browser.
+                    </Text>
+
+                    {environments.length === 0 ? (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        message="Create an environment before configuring reusable authentication."
+                      />
+                    ) : (
+                      <>
+                        <Row gutter={[16, 16]}>
+                          <Col xs={24} md={12}>
+                            <Text type="secondary">Environment</Text>
+                            <Select
+                              value={authEnvironmentId}
+                              onChange={setAuthEnvironmentId}
+                              style={{ width: '100%', marginTop: 8 }}
+                              options={environments.map((environment) => ({
+                                value: environment.id,
+                                label: environment.name
+                              }))}
+                            />
+                          </Col>
+                          <Col xs={24} md={12}>
+                            <Text type="secondary">Authentication check</Text>
+                            <Select
+                              value={authCheckId}
+                              disabled={isViewer}
+                              onChange={setAuthCheckId}
+                              placeholder="Select the login check"
+                              style={{ width: '100%', marginTop: 8 }}
+                              options={projectChecks.map((check) => ({
+                                value: check.id,
+                                label: check.name
+                              }))}
+                            />
+                          </Col>
+                        </Row>
+
+                        <Checkbox
+                          checked={authEnabled}
+                          disabled={isViewer}
+                          onChange={(event) => setAuthEnabled(event.target.checked)}
+                        >
+                          Use authentication state for checks in this environment
+                        </Checkbox>
+
+                        {selectedAuthCheck && !selectedAuthCheckHasAssertions ? (
+                          <Alert
+                            type="warning"
+                            showIcon
+                            message="Authentication check needs an assertion"
+                            description="Add Assert URL or Assert visible after the login action so WrightTest can confirm authentication completed before saving the reusable session."
+                            action={<Link to={`/tests/${selectedAuthCheck.id}/edit`}>Edit check</Link>}
+                          />
+                        ) : null}
+
+                        <div
+                          style={{
+                            padding: '14px 16px',
+                            borderRadius: 14,
+                            border: '1px solid #e2e8f0',
+                            background: '#f8fafc'
+                          }}
+                        >
+                          <Space direction="vertical" size={6}>
+                            <Space>
+                              <Text strong>Status</Text>
+                              <Tag color={authStatusPresentation.color}>{authStatusPresentation.label}</Tag>
+                              {selectedAuthProfile && !selectedAuthProfile.enabled ? (
+                                <Tag>Disabled</Tag>
+                              ) : null}
+                              {selectedAuthProfile?.hasUsableState && authStatus === 'REFRESH_FAILED' ? (
+                                <Tag color="blue">Previous state active</Tag>
+                              ) : null}
+                            </Space>
+                            <Text type="secondary">
+                              Last refreshed:{' '}
+                              {selectedAuthProfile?.refreshedAt
+                                ? formatDateTime(selectedAuthProfile.refreshedAt)
+                                : 'Never'}
+                            </Text>
+                            {selectedAuthProfile?.refreshedRunId ? (
+                              <Link to={`/runs/${selectedAuthProfile.refreshedRunId}`}>Open successful refresh run</Link>
+                            ) : null}
+                          </Space>
+                        </div>
+
+                        {authStatus === 'REFRESH_FAILED' && selectedAuthProfile?.lastError ? (
+                          <Alert
+                            type="error"
+                            showIcon
+                            message="Authentication refresh failed"
+                            description={`${selectedAuthProfile.lastError}${
+                              selectedAuthProfile.hasUsableState
+                                ? ' Previous authentication remains active.'
+                                : ' No reusable authentication state is available.'
+                            }`}
+                          />
+                        ) : null}
+
+                        <Space wrap>
+                          <Button
+                            type="primary"
+                            loading={authSaving}
+                            disabled={isViewer || !authEnvironmentId || !authCheckId}
+                            onClick={() => void handleSaveAuthentication()}
+                          >
+                            Save authentication settings
+                          </Button>
+                          <Button
+                            icon={<PlayCircleOutlined />}
+                            loading={authRefreshing || authStatus === 'REFRESHING'}
+                            disabled={
+                              isViewer ||
+                              !selectedAuthProfile ||
+                              !authDraftIsSaved ||
+                              !selectedAuthCheckHasAssertions ||
+                              authStatus === 'REFRESHING'
+                            }
+                            onClick={() => void handleRefreshAuthentication()}
+                          >
+                            Refresh authentication
+                          </Button>
+                          {selectedAuthProfile ? (
+                            <Button
+                              danger
+                              disabled={isViewer || authStatus === 'REFRESHING'}
+                              onClick={() => {
+                                confirmModal.confirm({
+                                  title: 'Remove authentication configuration?',
+                                  content: 'The saved browser authentication state for this environment will be deleted.',
+                                  okText: 'Remove',
+                                  okButtonProps: { danger: true },
+                                  onOk: handleDeleteAuthentication
+                                });
+                              }}
+                            >
+                              Remove configuration
+                            </Button>
+                          ) : null}
+                        </Space>
+
+                        {!authDraftIsSaved && selectedAuthProfile ? (
+                          <Text type="warning">Save the changed configuration before refreshing authentication.</Text>
+                        ) : null}
+                      </>
+                    )}
+                  </Space>
+                </Card>
                 <Card
                   style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)', borderColor: '#fecaca' }}
                   title="Danger zone"
