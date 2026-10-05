@@ -1,22 +1,26 @@
 name: Publish Docker Images
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
         description: Docker image tag for manual publish
         required: true
         default: edge
+      publish_latest:
+        description: Also publish the same image as latest
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 env:
   DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
-  IMAGE_VERSION: ${{ inputs.tag || github.ref_name }}
+  IMAGE_VERSION: ${{ github.event.release.tag_name || inputs.tag }}
 
 jobs:
   publish:
@@ -40,7 +44,7 @@ jobs:
             dockerfile: ./novnc/Dockerfile
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Verify Docker Hub credentials
         env:
@@ -57,19 +61,19 @@ jobs:
             exit 1
           fi
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - uses: docker/metadata-action@v5
+      - uses: docker/metadata-action@v6
         id: meta
         with:
           images: ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.image }}
           tags: |
-            type=ref,event=tag
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=semver,pattern={{version}},value=${{ env.IMAGE_VERSION }},enable=${{ github.event_name == 'release' }}
             type=raw,value=${{ inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' || inputs.publish_latest }}
           labels: |
             org.opencontainers.image.title=WrightTest ${{ matrix.name }}
             org.opencontainers.image.description=Low-code Playwright UI testing platform component.
@@ -78,7 +82,7 @@ jobs:
             org.opencontainers.image.documentation=https://github.com/AlexFilippov-it/wrighttest#readme
             org.opencontainers.image.licenses=WrightTest Source-Available License v1.0
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -86,6 +90,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
           build-args: |
             VERSION=${{ env.IMAGE_VERSION }}
             VCS_REF=${{ github.sha }}

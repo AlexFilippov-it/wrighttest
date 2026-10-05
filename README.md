@@ -73,11 +73,13 @@ This path is the recommended first launch on any machine. The backend image is b
 
 WrightTest is a multi-container stack. Docker Hub publishes the WrightTest-owned application images, while PostgreSQL and Redis continue to use official upstream images:
 
-- `wrighttest/wrighttest-backend`
-- `wrighttest/wrighttest-frontend`
-- `wrighttest/wrighttest-novnc`
+- `sacha1bu/wrighttest-backend`
+- `sacha1bu/wrighttest-frontend`
+- `sacha1bu/wrighttest-novnc`
 - `postgres:16-alpine`
 - `redis:7-alpine`
+
+WrightTest application images currently target `linux/amd64`. They run through Docker emulation on Apple Silicon, while amd64 VPS hosts run them natively.
 
 Run the published images without rebuilding locally:
 
@@ -95,11 +97,18 @@ docker compose -f docker-compose.hub.yml up -d
 Use `WRIGHTTEST_IMAGE_NAMESPACE` and `WRIGHTTEST_IMAGE_TAG` to select another Docker Hub namespace or version:
 
 ```env
-WRIGHTTEST_IMAGE_NAMESPACE=your-dockerhub-org
+WRIGHTTEST_IMAGE_NAMESPACE=sacha1bu
 WRIGHTTEST_IMAGE_TAG=0.2.0
 ```
 
 The regular `docker-compose.yml` remains the source-of-truth development compose file and builds the same image names from the current Git checkout. `docker-compose.hub.yml` is the pull-only runtime variant for Docker Hub users.
+
+Publishing is automated by `.github/workflows/docker-publish.yml`:
+
+- publishing a GitHub Release such as `v0.2.0` publishes both `0.2.0` and `latest` for all three images;
+- a manual workflow run publishes the requested tag and can optionally update `latest` to the same image digest;
+- Docker Hub credentials are stored only in the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` GitHub Actions secrets;
+- `DOCKERHUB_NAMESPACE` is configured as a GitHub Actions repository variable.
 
 Frontend URLs are runtime-configured in the container through:
 

@@ -9,11 +9,13 @@ WrightTest is a low-code UI test automation platform powered by Playwright.
 
 WrightTest is published as a multi-container stack:
 
-- `wrighttest/wrighttest-backend` - API, scheduler, BullMQ worker, and Playwright runner.
-- `wrighttest/wrighttest-frontend` - React web UI served by nginx.
-- `wrighttest/wrighttest-novnc` - noVNC desktop bridge for headed browser recording.
+- `sacha1bu/wrighttest-backend` - API, scheduler, BullMQ worker, and Playwright runner.
+- `sacha1bu/wrighttest-frontend` - React web UI served by nginx.
+- `sacha1bu/wrighttest-novnc` - noVNC desktop bridge for headed browser recording.
 - `postgres:16-alpine` - official PostgreSQL image.
 - `redis:7-alpine` - official Redis image.
+
+WrightTest application images currently target `linux/amd64`. Apple Silicon hosts require Docker emulation.
 
 ## Run From Docker Hub
 

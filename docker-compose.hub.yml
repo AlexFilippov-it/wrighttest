@@ -28,7 +28,7 @@ services:
       retries: 10
 
   novnc:
-    image: ${WRIGHTTEST_IMAGE_NAMESPACE:-wrighttest}/wrighttest-novnc:${WRIGHTTEST_IMAGE_TAG:-latest}
+    image: ${WRIGHTTEST_IMAGE_NAMESPACE:-sacha1bu}/wrighttest-novnc:${WRIGHTTEST_IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
       - "${VNC_HOST_PORT:-5900}:5900"
@@ -46,7 +46,7 @@ services:
       retries: 10
 
   backend:
-    image: ${WRIGHTTEST_IMAGE_NAMESPACE:-wrighttest}/wrighttest-backend:${WRIGHTTEST_IMAGE_TAG:-latest}
+    image: ${WRIGHTTEST_IMAGE_NAMESPACE:-sacha1bu}/wrighttest-backend:${WRIGHTTEST_IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
       - "${BACKEND_HOST_PORT:-3000}:3000"
@@ -85,7 +85,7 @@ services:
       retries: 15
 
   frontend:
-    image: ${WRIGHTTEST_IMAGE_NAMESPACE:-wrighttest}/wrighttest-frontend:${WRIGHTTEST_IMAGE_TAG:-latest}
+    image: ${WRIGHTTEST_IMAGE_NAMESPACE:-sacha1bu}/wrighttest-frontend:${WRIGHTTEST_IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
       - "${FRONTEND_HOST_PORT:-5173}:80"
