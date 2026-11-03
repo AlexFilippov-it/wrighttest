@@ -11,6 +11,7 @@ import {
   workspaceStatePath,
   type AuthSession,
   type E2EWorkspaceState,
+  waitForE2eApiRequestSlot,
   withRateLimitRetry,
   withRateLimitRetries
 } from '../../support/workspace-state';
@@ -91,6 +92,7 @@ export const test = base.extend<TestFixtures>({
     testInfo.setTimeout(120_000);
     const apiOrigin = new URL(apiBaseUrl).origin;
     await page.route((url) => url.origin === apiOrigin, async (route) => {
+      await waitForE2eApiRequestSlot();
       let response = await route.fetch();
       if (response.status() === 429) {
         const body = await response.text();
@@ -101,6 +103,7 @@ export const test = base.extend<TestFixtures>({
         if (Number.isFinite(waitSeconds) && waitSeconds > 0 && waitSeconds <= 90) {
           testInfo.setTimeout(120_000);
           await new Promise((resolve) => setTimeout(resolve, Math.ceil(waitSeconds * 1000)));
+          await waitForE2eApiRequestSlot();
           response = await route.fetch();
         }
       }

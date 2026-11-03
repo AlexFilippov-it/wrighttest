@@ -28,6 +28,20 @@ export const apiBaseUrl = (
 export const workspaceStatePath = path.resolve(process.cwd(), 'test-results/e2e-workspace.json');
 const authCachePath = path.resolve(process.cwd(), 'test-results/e2e-auth-sessions.json');
 
+const e2eApiRequestIntervalMs = 850;
+let nextE2eApiRequestAt = 0;
+let e2eApiRequestQueue: Promise<void> = Promise.resolve();
+
+export function waitForE2eApiRequestSlot() {
+  const scheduled = e2eApiRequestQueue.then(async () => {
+    const delay = Math.max(0, nextE2eApiRequestAt - Date.now());
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    nextE2eApiRequestAt = Date.now() + e2eApiRequestIntervalMs;
+  });
+  e2eApiRequestQueue = scheduled.catch(() => undefined);
+  return scheduled;
+}
+
 type CachedAuthSession = { email: string; token: string };
 
 async function readAuthCache(): Promise<CachedAuthSession[]> {
@@ -69,6 +83,7 @@ export async function withRateLimitRetry(
   onRateLimited?: () => void
 ) {
   for (let attempt = 0; ; attempt += 1) {
+    await waitForE2eApiRequestSlot();
     const response = await operation();
     if (response.status() !== 429) return response;
 
