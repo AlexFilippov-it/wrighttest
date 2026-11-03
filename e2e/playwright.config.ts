@@ -31,7 +31,7 @@ export default defineConfig({
   // globalSetup verifies the API; /health is subject to the global rate limit and can trigger duplicate backend starts.
   webServer: [
     {
-      command: 'npm run dev:frontend -- --host 127.0.0.1',
+      command: 'npm run dev -w frontend -- --host 127.0.0.1',
       url: frontendUrl,
       reuseExistingServer: true,
       timeout: 120_000
