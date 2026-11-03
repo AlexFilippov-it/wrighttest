@@ -3,9 +3,9 @@ import { Alert, Button, Card, Form, Input, Typography } from 'antd';
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { Navigate, useNavigate } from 'react-router-dom';
 import appLogo from '../assets/wrighttest_logo.png';
-import AppFooter from '../components/AppFooter';
 import { useAuth } from '../context/AuthContext';
-import { APP_DESCRIPTION, APP_NAME } from '../utils/appMeta';
+import { APP_BUILD_DATE, APP_GIT_COMMIT, APP_VERSION, formatBuildDate } from '../utils/appMeta';
+import './LoginPage.css';
 
 export default function LoginPage() {
   const { login, token, ready } = useAuth();
@@ -21,6 +21,8 @@ export default function LoginPage() {
     return <Navigate to="/dashboard" replace />;
   }
 
+  const buildDateLabel = formatBuildDate(APP_BUILD_DATE);
+
   const handleSubmit = async (values: { email: string; password: string }) => {
     setLoading(true);
     setError('');
@@ -35,38 +37,27 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      background: 'linear-gradient(135deg, #0f172a 0%, #1d4ed8 48%, #e2e8f0 100%)',
-      padding: 24
-    }}>
-      <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Card style={{ width: 400, borderRadius: 24, boxShadow: '0 30px 80px rgba(15, 23, 42, 0.35)' }}>
-          <div style={{ textAlign: 'center', marginBottom: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <img src={appLogo} alt={`${APP_NAME} logo`} style={{ width: 56, height: 56, objectFit: 'contain' }} />
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              {APP_NAME}
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              Sign in to manage checks, schedules, and alerts
-            </Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {APP_DESCRIPTION}
-            </Typography.Text>
+    <main className="wt-login-page">
+      <div className="wt-login-page__main">
+        <Card className="wt-login-card" bordered>
+          <div className="wt-login-card__brand">
+            <img src={appLogo} alt="WrightTest" />
+          </div>
+          <div className="wt-login-card__heading">
+            <Typography.Title level={1}>Welcome back</Typography.Title>
+            <Typography.Text type="secondary">Sign in to continue to your workspace.</Typography.Text>
           </div>
 
           {error && (
-            <Alert message={error} type="error" style={{ marginBottom: 16 }} showIcon />
+            <Alert className="wt-login-card__alert" message={error} type="error" showIcon />
           )}
 
-          <Form layout="vertical" onFinish={handleSubmit}>
+          <Form className="wt-login-form" layout="vertical" onFinish={handleSubmit}>
             <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
-              <Input prefix={<UserOutlined />} placeholder="Email" size="large" />
+              <Input autoComplete="username" prefix={<UserOutlined />} placeholder="Email" size="large" />
             </Form.Item>
             <Form.Item name="password" label="Password" rules={[{ required: true }]}>
-              <Input.Password prefix={<LockOutlined />} placeholder="Password" size="large" />
+              <Input.Password autoComplete="current-password" prefix={<LockOutlined />} placeholder="Password" size="large" />
             </Form.Item>
             <Button type="primary" htmlType="submit" size="large" block loading={loading}>
               Sign In
@@ -74,9 +65,12 @@ export default function LoginPage() {
           </Form>
         </Card>
       </div>
-      <div style={{ width: '100%' }}>
-        <AppFooter bottomPadding={0} />
-      </div>
-    </div>
+      <footer className="wt-login-page__footer">
+        <span>WrightTest</span>
+        <span>{APP_VERSION}</span>
+        {APP_GIT_COMMIT ? <span>{APP_GIT_COMMIT}</span> : null}
+        {buildDateLabel ? <span>{buildDateLabel}</span> : null}
+      </footer>
+    </main>
   );
 }

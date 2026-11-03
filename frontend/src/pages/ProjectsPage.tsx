@@ -12,9 +12,9 @@ import {
   Skeleton,
   Row,
   Space,
-  Statistic,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message
 } from 'antd';
@@ -34,6 +34,7 @@ import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
 import { useAuth } from '../context/AuthContext';
+import { StatCard } from '../design-system';
 import { createProject, deleteProject, getProjects, updateProject } from '../api/client';
 import { getProjectDescription } from '../utils/projectSettings';
 import type { ProjectHealth, ProjectSummary } from '../types';
@@ -252,40 +253,13 @@ export default function ProjectsPage() {
               </div>
 
               <Row gutter={[16, 16]}>
+                <Col xs={24} sm={12} xl={6}><StatCard title="Projects" value={hasLoaded ? projects.length : '—'} description="Total projects" loading={loading} /></Col>
+                <Col xs={24} sm={12} xl={6}><StatCard title="Browser checks" value={hasLoaded ? totals.checks : '—'} description="Across all projects" loading={loading} /></Col>
                 <Col xs={24} sm={12} xl={6}>
-                  <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)', borderTop: '3px solid #1677ff' }}>
-                    <Statistic title="Projects" value={hasLoaded ? projects.length : '—'} />
-                    <Text type="secondary">Total projects</Text>
-                  </Card>
+                  <StatCard title="Pass rate" value={totals.passRate === null ? '—' : `${totals.passRate}%`} description={totals.totalRuns > 0 ? `${totals.passedRuns} of ${totals.totalRuns} runs · Last 30 days` : 'No runs yet'} loading={loading} />
                 </Col>
                 <Col xs={24} sm={12} xl={6}>
-                  <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)', borderTop: '3px solid #13c2c2' }}>
-                    <Statistic title="Browser checks" value={hasLoaded ? totals.checks : '—'} />
-                    <Text type="secondary">Across all projects</Text>
-                  </Card>
-                </Col>
-                <Col xs={24} sm={12} xl={6}>
-                  <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)', borderTop: '3px solid #52c41a' }}>
-                    <Statistic
-                      title={<span style={{ whiteSpace: 'nowrap' }}>Pass rate</span>}
-                      value={totals.passRate ?? '—'}
-                      suffix={totals.passRate === null ? undefined : '%'}
-                      valueStyle={{ color: totals.passRate === null ? '#8c8c8c' : totals.passRate >= 80 ? '#52c41a' : '#ff4d4f' }}
-                    />
-                    <Text type="secondary">
-                      {totals.totalRuns > 0 ? `${totals.passedRuns}/${totals.totalRuns} runs in last 30 days` : 'No runs yet'}
-                    </Text>
-                  </Card>
-                </Col>
-                <Col xs={24} sm={12} xl={6}>
-                  <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)', borderTop: '3px solid #ff4d4f' }}>
-                    <Statistic
-                      title="Failed checks"
-                      value={hasLoaded ? totals.failedChecks : '—'}
-                      valueStyle={{ color: totals.totalRuns > 0 && totals.failedChecks > 0 ? '#ff4d4f' : '#8c8c8c' }}
-                    />
-                    <Text type="secondary">{totals.totalRuns > 0 ? 'Latest run failed' : 'No runs yet'}</Text>
-                  </Card>
+                  <StatCard title="Failed checks" value={hasLoaded ? totals.failedChecks : '—'} description={totals.totalRuns > 0 ? 'Latest run failed' : 'Not evaluated'} status={totals.failedChecks > 0 ? <Tag color="red">Failed</Tag> : undefined} loading={loading} />
                 </Col>
               </Row>
 
@@ -327,6 +301,7 @@ export default function ProjectsPage() {
                     rowKey="id"
                     loading={loading}
                     pagination={false}
+                    tableLayout="fixed"
                     rowClassName={() => 'clickable-row'}
                     onRow={(row) => ({
                       onClick: () => navigate(`/projects/${row.id}`)
@@ -334,20 +309,29 @@ export default function ProjectsPage() {
                     columns={[
                       {
                         title: 'Project',
-                        width: 260,
+                        width: 240,
                         key: 'project',
                         render: (_, row) => {
                           const description = getProjectDescription(row.id);
 
                           return (
                             <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              <Link
-                                to={`/projects/${row.id}`}
-                                onClick={(event) => event.stopPropagation()}
-                                style={{ fontWeight: 600, minWidth: 0 }}
-                              >
-                                {row.name}
-                              </Link>
+                              <Tooltip title={row.name} placement="topLeft">
+                                <Link
+                                  to={`/projects/${row.id}`}
+                                  onClick={(event) => event.stopPropagation()}
+                                  style={{
+                                    display: 'block',
+                                    fontWeight: 600,
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {row.name}
+                                </Link>
+                              </Tooltip>
                               {description ? (
                                 <Text
                                   type="secondary"
@@ -373,12 +357,14 @@ export default function ProjectsPage() {
                         title: 'Checks',
                         dataIndex: 'checksCount',
                         key: 'checksCount',
+                        width: 84,
                         render: (value: number) => <Tag color="blue">{value}</Tag>
                       },
                       {
                         title: 'Health',
                         dataIndex: 'health',
                         key: 'health',
+                        width: 122,
                         render: (value: ProjectHealth) => {
                           const meta = healthMeta(value);
                           return <Tag color={meta.color} icon={meta.icon}>{meta.text}</Tag>;
@@ -386,8 +372,9 @@ export default function ProjectsPage() {
                       },
                       {
                         title: 'Pass rate',
-                        width: 120,
+                        width: 100,
                         key: 'passRate',
+                        responsive: ['xl'],
                         render: (_, row) =>
                           row.passRate30d === null ? (
                             <Text type="secondary">—</Text>
@@ -397,8 +384,9 @@ export default function ProjectsPage() {
                       },
                       {
                         title: 'Last run',
-                        width: 150,
+                        width: 140,
                         key: 'lastRunAt',
+                        responsive: ['xl'],
                         render: (_, row) =>
                           row.lastRunAt ? (
                             <Space direction="vertical" size={0}>
@@ -419,6 +407,8 @@ export default function ProjectsPage() {
                       {
                         title: 'Schedules',
                         key: 'schedules',
+                        width: 120,
+                        responsive: ['xxl'],
                         render: (_, row) => (
                           <Tag color="default">{row.activeSchedulesCount} active</Tag>
                         )
@@ -426,6 +416,8 @@ export default function ProjectsPage() {
                       {
                         title: 'Alerts',
                         key: 'alerts',
+                        width: 160,
+                        responsive: ['xxl'],
                         render: (_, row) => {
                           if (row.alertChannelsCount === 0) {
                             return <Tag color="default">Not configured</Tag>;
@@ -450,6 +442,7 @@ export default function ProjectsPage() {
                         title: 'Actions',
                         key: 'actions',
                         width: 136,
+                        align: 'right',
                         render: (_, row) => (
                           <Space size={8}>
                             <Button

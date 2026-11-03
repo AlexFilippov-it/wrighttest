@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import appLogo from '../assets/wrighttest_logo.png';
 import { APP_DESCRIPTION, APP_NAME } from '../utils/appMeta';
+import { useAppShellOptional } from '../shell/ShellContext';
 
 const { Header } = Layout;
 const { Title, Text } = Typography;
@@ -13,6 +14,9 @@ type AppHeaderProps = {
 
 export default function AppHeader({ actions }: AppHeaderProps) {
   const location = useLocation();
+  const appShell = useAppShellOptional();
+
+  if (appShell) return null;
 
   const navItems = [
     {

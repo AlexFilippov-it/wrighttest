@@ -16,7 +16,10 @@
     "setup": "node scripts/setup-playwright.mjs",
     "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "dev:backend": "npm run dev -w backend",
-    "dev:frontend": "npm run dev -w frontend"
+    "dev:frontend": "npm run dev -w frontend",
+    "test:e2e:typecheck": "tsc --noEmit -p e2e/tsconfig.json",
+    "test:e2e": "dotenv -e .env -- playwright test --config=e2e/playwright.config.ts",
+    "test:e2e:integration": "E2E_INTEGRATION=1 npm run test:e2e"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
+  Breadcrumb,
   Card,
   Col,
   Collapse,
@@ -24,6 +25,7 @@ import UserMenu from '../components/UserMenu';
 import RunStatusBadge from '../components/RunStatusBadge';
 import type { RunStatus, StepAction, TestRun } from '../types';
 import { BACKEND_URL } from '../utils/runtimeConfig';
+import { useAppShell } from '../shell/ShellContext';
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -171,6 +173,7 @@ function parseFailureSummary(error?: string) {
 export default function RunResultPage() {
   const navigate = useNavigate();
   const { runId } = useParams<{ runId: string }>();
+  const { setProject: setShellProject } = useAppShell();
   const [run, setRun] = useState<TestRun | null>(null);
   const [rerunning, setRerunning] = useState(false);
 
@@ -194,6 +197,15 @@ export default function RunResultPage() {
       if (interval) clearInterval(interval);
     };
   }, [runId]);
+
+  useEffect(() => {
+    const project = run?.test?.project;
+    if (!project) return;
+    setShellProject({ id: project.id, name: project.name });
+    return () => {
+      setShellProject((current) => (current?.id === project.id ? null : current));
+    };
+  }, [run?.test?.project, setShellProject]);
 
   const isActive = run?.status === 'PENDING' || run?.status === 'RUNNING';
   const totalSteps = run?.totalSteps ?? run?.screenshots.length ?? run?.stepResults?.length ?? 0;
@@ -303,9 +315,16 @@ export default function RunResultPage() {
           <Col span={24}>
             <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <Text type="secondary">
-                  <Link to="/projects">Projects</Link> / Run Result
-                </Text>
+                <Breadcrumb
+                  items={[
+                    { title: <Link to="/projects">Projects</Link> },
+                    ...(run?.test?.project ? [
+                      { title: <Link to={`/projects/${run.test.project.id}/checks`}>{run.test.project.name}</Link> },
+                      { title: <Link to={`/projects/${run.test.project.id}/runs`}>Runs</Link> }
+                    ] : []),
+                    { title: 'Run Result' }
+                  ]}
+                />
                 <Space wrap align="center" size={[12, 12]}>
                   <div>
                     <Space wrap align="center" size={10}>

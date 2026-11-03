@@ -5,6 +5,7 @@ import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import RunStatusBadge from '../components/RunStatusBadge';
 import UserMenu from '../components/UserMenu';
+import { StatCard } from '../design-system';
 import { getProjects, getRunHistory } from '../api/client';
 import type { DashboardRecentRun, ProjectSummary, RunsResponse } from '../types';
 
@@ -235,88 +236,18 @@ export default function RunsPage() {
         ) : null}
 
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={24} sm={12} xl={4}>
-            <Card style={{ borderRadius: 20, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <Text type="secondary">Total runs</Text>
-                <Text strong style={{ fontSize: 32, lineHeight: 1, color: summary?.total ? undefined : undefined }}>
-                  {summary?.total ?? 0}
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>{filterSummary}</Text>
-              </div>
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} xl={4}>
-            <Card style={{ borderRadius: 20, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <Text type="secondary">Passed</Text>
-                <Text strong style={{ fontSize: 32, lineHeight: 1, color: (summary?.passed ?? 0) > 0 ? '#16a34a' : undefined }}>
-                  {summary?.passed ?? 0}
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {summary && summary.total ? `${Math.round((summary.passed / summary.total) * 100)}% of selected runs` : 'No data'}
-                </Text>
-              </div>
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} xl={4}>
-            <Card style={{ borderRadius: 20, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <Text type="secondary">Failed</Text>
-                <Text strong style={{ fontSize: 32, lineHeight: 1, color: (summary?.failed ?? 0) > 0 ? '#dc2626' : undefined }}>
-                  {summary?.failed ?? 0}
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {summary && summary.total ? `${Math.round((summary.failed / summary.total) * 100)}% of selected runs` : 'No data'}
-                </Text>
-              </div>
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} xl={4}>
-            <Card style={{ borderRadius: 20, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <Text type="secondary">Avg duration</Text>
-                <Text strong style={{ fontSize: 32, lineHeight: 1 }}>
-                  {summary?.avgDurationMs ? formatDurationCompact(summary.avgDurationMs) : '—'}
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Across selected runs
-                </Text>
-              </div>
-            </Card>
-          </Col>
+          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title="Total runs" value={summary?.total ?? 0} description={filterSummary} loading={loading} /></Col>
+          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title="Passed" value={summary?.passed ?? 0} description={summary?.total ? `${Math.round((summary.passed / summary.total) * 100)}% of selected runs` : 'No data'} loading={loading} /></Col>
+          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title="Failed" value={summary?.failed ?? 0} description={summary?.total ? `${Math.round((summary.failed / summary.total) * 100)}% of selected runs` : 'No data'} status={(summary?.failed ?? 0) > 0 ? <Tag color="red">Failed</Tag> : undefined} loading={loading} /></Col>
+          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title="Avg duration" value={summary?.avgDurationMs ? formatDurationCompact(summary.avgDurationMs) : '—'} description="Across selected runs" loading={loading} /></Col>
           <Col xs={24} sm={12} xl={8}>
-            <Card style={{ borderRadius: 20, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <Text type="secondary">Longest run</Text>
-                {summary?.slowestRun ? (
-                  <>
-                    <Text strong style={{ fontSize: 24, lineHeight: 1.1 }}>
-                      {formatDurationCompact(summary.slowestRun.durationMs)}
-                    </Text>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <Text type="secondary" style={{ display: 'block' }}>
-                        {summary.slowestRun.checkName}
-                      </Text>
-                      {(summary.slowestRun.durationMs ?? 0) > SLOW_RUN_THRESHOLD_MS ? (
-                        <Tag color="orange" style={{ width: 'fit-content', marginTop: 2 }}>
-                          Slow
-                        </Tag>
-                      ) : null}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <Text strong style={{ fontSize: 24, lineHeight: 1.1 }}>
-                      —
-                    </Text>
-                    <Text type="secondary" style={{ display: 'block' }}>
-                      No data
-                    </Text>
-                  </>
-                )}
-              </div>
-            </Card>
+            <StatCard
+              title="Longest run"
+              value={summary?.slowestRun ? formatDurationCompact(summary.slowestRun.durationMs) : '—'}
+              description={summary?.slowestRun?.checkName ?? 'No data'}
+              status={summary?.slowestRun && (summary.slowestRun.durationMs ?? 0) > SLOW_RUN_THRESHOLD_MS ? <Tag color="orange">Slow</Tag> : undefined}
+              loading={loading}
+            />
           </Col>
         </Row>
 
@@ -378,13 +309,14 @@ export default function RunsPage() {
                   loading={loading}
                   pagination={false}
                   size="small"
+                  scroll={{ x: 'max-content' }}
                   rowClassName={(row) => (row.status === 'FAILED' ? 'run-row-failed' : '')}
                   tableLayout="fixed"
                   columns={[
                     {
                       title: 'Check',
                       dataIndex: 'checkName',
-                      width: 340,
+                      width: 260,
                       ellipsis: true,
                       render: (value: string, row: DashboardRecentRun) => (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0, minWidth: 0 }}>
@@ -406,13 +338,13 @@ export default function RunsPage() {
                     {
                       title: 'Status',
                       dataIndex: 'status',
-                      width: 110,
+                      width: 100,
                       render: (value: DashboardRecentRun['status']) => <RunStatusBadge status={value} />
                     },
                     {
                       title: 'Duration',
                       dataIndex: 'durationMs',
-                      width: 130,
+                      width: 100,
                       render: (value: number | null) => {
                         const isSlow = typeof value === 'number' && value > SLOW_RUN_THRESHOLD_MS;
                         return (
@@ -432,7 +364,8 @@ export default function RunsPage() {
                     {
                       title: 'Started',
                       dataIndex: 'startedAt',
-                      width: 170,
+                      width: 160,
+                      responsive: ['xl'],
                       render: (value: string) => (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                           <Text>{formatRelativeTime(value)}</Text>
@@ -445,7 +378,8 @@ export default function RunsPage() {
                     {
                       title: 'Trigger',
                       dataIndex: 'trigger',
-                      width: 120,
+                      width: 110,
+                      responsive: ['xl'],
                       render: (value: string) => <Tag color={value === 'Schedule' ? 'blue' : 'default'}>{value}</Tag>
                     },
                     {

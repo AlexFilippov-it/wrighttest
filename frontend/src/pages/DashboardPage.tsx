@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { Button, Card, Col, Layout, Row, Select, Space, Statistic, Table, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, Col, Layout, Row, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
 import RunStatusBadge from '../components/RunStatusBadge';
+import { StatCard } from '../design-system';
 import { getDashboard, getProjects, runTest, runTestWithEnvironment } from '../api/client';
 import type {
   DashboardChartPoint,
@@ -80,31 +80,6 @@ function EmptyState({
       <Text type="secondary">{description}</Text>
       {actions ? <div style={{ marginTop: 16 }}>{actions}</div> : null}
     </div>
-  );
-}
-
-function StatCard({
-  title,
-  value,
-  prefix,
-  valueStyle,
-  extra
-}: {
-  title: string;
-  value: string | number;
-  prefix?: ReactNode;
-  valueStyle?: React.CSSProperties;
-  extra?: string;
-}) {
-  return (
-    <Card style={{ borderRadius: 20, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)' }}>
-      <Statistic title={title} value={value} prefix={prefix} valueStyle={valueStyle} />
-      {extra && (
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          {extra}
-        </Text>
-      )}
-    </Card>
   );
 }
 
@@ -198,51 +173,45 @@ export default function DashboardPage() {
                 <StatCard
                   title="Total runs"
                   value={data.summary.total}
-                  prefix={<ThunderboltOutlined />}
-                  extra={`Selected period`}
+                  description="Selected period"
                 />
               </Col>
               <Col xs={24} sm={12} lg={8}>
                 <StatCard
                   title="Pass rate"
                   value={data.summary.total ? `${data.summary.passRate}%` : '—'}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: data.summary.passRate >= 80 ? '#52c41a' : '#faad14' }}
-                  extra={data.summary.total ? `${data.summary.passed} passed / ${data.summary.total} total` : 'No runs yet'}
+                  description={data.summary.total ? `${data.summary.passed} of ${data.summary.total} runs · Last ${days} days` : 'No runs yet'}
                 />
               </Col>
               <Col xs={24} sm={12} lg={8}>
                 <StatCard
                   title="Active failures"
                   value={data.summary.activeFailures}
-                  prefix={<CloseCircleOutlined />}
-                  valueStyle={{ color: data.summary.activeFailures > 0 ? '#ff4d4f' : '#8c8c8c' }}
-                  extra={data.summary.activeFailures > 0 ? 'Checks whose latest run failed' : 'Latest runs are passing'}
+                  description={data.summary.activeFailures > 0 ? 'Checks whose latest run failed' : hasRuns ? 'No active failures' : 'Not evaluated'}
+                  status={data.summary.activeFailures > 0 ? <Tag color="red">Action needed</Tag> : undefined}
                 />
               </Col>
               <Col xs={24} sm={12} lg={8}>
                 <StatCard
                   title="Failed runs"
                   value={data.summary.failed}
-                  prefix={<CloseCircleOutlined />}
-                  valueStyle={{ color: data.summary.failed > 0 ? '#ff4d4f' : '#8c8c8c' }}
-                  extra="Failed in selected period"
+                  description="Failed in selected period"
+                  status={data.summary.failed > 0 ? <Tag color="red">Failed</Tag> : undefined}
                 />
               </Col>
               <Col xs={24} sm={12} lg={8}>
                 <StatCard
                   title="Flaky checks"
                   value={data.summary.flakyChecks}
-                  prefix={<ExclamationCircleOutlined />}
-                  valueStyle={{ color: data.summary.flakyChecks > 0 ? '#faad14' : '#8c8c8c' }}
-                  extra={data.summary.flakyChecks > 0 ? 'Passed and failed in the selected period' : 'No flaky checks detected'}
+                  description={data.summary.flakyChecks > 0 ? 'Passed and failed in this period' : 'No flaky checks detected'}
+                  status={data.summary.flakyChecks > 0 ? <Tag color="gold">Flaky</Tag> : undefined}
                 />
               </Col>
               <Col xs={24} sm={12} lg={8}>
                 <StatCard
                   title="Avg duration"
                   value={data.summary.avgDurationMs ? formatDuration(data.summary.avgDurationMs) : '—'}
-                  extra={data.summary.avgDurationMs ? 'Average run duration' : 'No runs yet'}
+                  description={data.summary.avgDurationMs ? 'Average run duration' : 'Not evaluated'}
                 />
               </Col>
             </Row>

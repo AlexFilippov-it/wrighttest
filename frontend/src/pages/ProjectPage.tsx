@@ -17,7 +17,6 @@ import {
   Statistic,
   Table,
   Tag,
-  Tabs,
   Tooltip,
   Typography,
   Upload,
@@ -77,7 +76,8 @@ import {
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import RunStatusBadge from '../components/RunStatusBadge';
-import UserMenu from '../components/UserMenu';
+import { ErrorState, PageHeader, StatCard } from '../design-system';
+import { useProjectShell } from '../shell/ProjectShellContext';
 import {
   clearProjectSettingsDraft,
   getProjectDefaultDeviceOptions,
@@ -101,7 +101,7 @@ const { Content } = Layout;
 const { Title, Text } = Typography;
 const APP_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
-type ProjectTabKey = 'overview' | 'checks' | 'suites' | 'runs' | 'schedules' | 'environments' | 'alerts' | 'settings' | 'members';
+type ProjectTabKey = 'overview' | 'checks' | 'suites' | 'runs' | 'schedules' | 'environments' | 'authentication' | 'alerts' | 'settings' | 'members';
 type EntityMode = 'create' | 'edit';
 type ScheduleTargetType = 'suite' | 'test';
 
@@ -520,6 +520,7 @@ function resolveTabFromPathname(pathname: string): ProjectTabKey {
   if (pathname.endsWith('/runs')) return 'runs';
   if (pathname.endsWith('/schedules')) return 'schedules';
   if (pathname.endsWith('/environments')) return 'environments';
+  if (pathname.endsWith('/authentication')) return 'authentication';
   if (pathname.endsWith('/alerts') || pathname.endsWith('/notifications')) return 'alerts';
   if (pathname.endsWith('/settings')) return 'settings';
   if (pathname.endsWith('/members')) return 'members';
@@ -530,6 +531,7 @@ export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const { project: shellProject } = useProjectShell();
   const [confirmModal, confirmModalContextHolder] = Modal.useModal();
 
   const [project, setProject] = useState<ProjectWorkspace | null>(null);
@@ -538,7 +540,7 @@ export default function ProjectPage() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ProjectTabKey>(() => resolveTabFromPathname(location.pathname));
+  const activeTab = resolveTabFromPathname(location.pathname);
   const [importing, setImporting] = useState(false);
   const [runCheckModalOpen, setRunCheckModalOpen] = useState(false);
   const [runCheckId, setRunCheckId] = useState<string | null>(null);
@@ -614,6 +616,7 @@ export default function ProjectPage() {
   const settingsHydratedRef = useRef(false);
 
   const summary = project?.summary;
+  const hasRunHistory = Boolean(summary?.lastRunAt || summary?.totalRuns30d);
   const hasChecks = (project?.tests.length ?? 0) > 0;
   const currentUserRole = project?.currentUserRole ?? null;
   const isViewer = currentUserRole === 'VIEWER';
@@ -632,7 +635,7 @@ export default function ProjectPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const projectData = await getProject(projectId!);
+      const projectData = shellProject.id === projectId ? shellProject : await getProject(projectId!);
       const [suiteDataResult, environmentDataResult, scheduleDataResult, channelDataResult, memberDataResult, authProfilesResult] = await Promise.allSettled([
         getSuites(projectId!),
         getEnvironments(projectId!),
@@ -679,10 +682,6 @@ export default function ProjectPage() {
   }, [projectId]);
 
   useEffect(() => {
-    setActiveTab(resolveTabFromPathname(location.pathname));
-  }, [location.pathname]);
-
-  useEffect(() => {
     if (!project || settingsHydratedRef.current) return;
     const draft = readProjectSettingsDraft(project.id);
     const nextDefaultEnvironmentId =
@@ -699,7 +698,19 @@ export default function ProjectPage() {
     settingsHydratedRef.current = true;
   }, [environments, project]);
 
-  const projectHeaderDescription = savedProjectDescription || 'Monitor browser checks, schedules, and alerts for this project.';
+  const sectionDescriptions: Record<ProjectTabKey, string> = {
+    overview: 'Monitor browser checks, schedules, and recent results.',
+    checks: 'Create, organize, and run browser checks.',
+    suites: 'Group checks into reusable suites.',
+    runs: 'Review runs for this project.',
+    schedules: 'Automate checks with project schedules.',
+    environments: 'Manage variables used by checks in this project.',
+    authentication: 'Configure reusable sign-in state for project environments.',
+    alerts: 'Configure notifications for check results.',
+    settings: 'Manage project details and defaults.',
+    members: 'Manage who can access this project.'
+  };
+  const projectHeaderDescription = savedProjectDescription || sectionDescriptions[activeTab];
 
   const projectChecks = useMemo(() => project?.tests ?? [], [project]);
   const selectedAuthProfile = useMemo(
@@ -1727,23 +1738,24 @@ export default function ProjectPage() {
     label: `${suite.name}${Array.isArray(suite.testIds) ? ` • ${suite.testIds.length} checks` : ''}`
   }));
 
-  const tabs = [
-    { key: 'overview', label: 'Overview' },
-    { key: 'checks', label: 'Checks' },
-    { key: 'suites', label: 'Suites' },
-    { key: 'runs', label: 'Runs' },
-    { key: 'schedules', label: 'Schedules' },
-    { key: 'environments', label: 'Environments' },
-    { key: 'alerts', label: 'Alerts' },
-    { key: 'settings', label: 'Settings' },
-    ...(canManageMembers ? [{ key: 'members', label: 'Members' }] : [])
-  ];
+  const sectionTitle = {
+    overview: 'Overview',
+    checks: 'Checks',
+    suites: 'Suites',
+    runs: 'Runs',
+    schedules: 'Schedules',
+    environments: 'Environments',
+    authentication: 'Authentication',
+    alerts: 'Alerts',
+    settings: 'Settings',
+    members: 'Members'
+  }[activeTab];
 
   const checkColumns = [
     {
       title: 'Check',
       dataIndex: 'name',
-      width: 340,
+      width: 280,
       render: (_: string, row: ProjectCheck) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, alignItems: 'stretch' }}>
           <Link
@@ -1771,13 +1783,14 @@ export default function ProjectPage() {
     },
     {
       title: 'Status',
-      width: 130,
+      width: 110,
       render: (_: unknown, row: ProjectCheck) =>
         row.lastRunStatus ? <RunStatusBadge status={row.lastRunStatus} /> : <Tag color="default">Never run</Tag>
     },
     {
       title: 'Last run',
-      width: 200,
+      width: 160,
+      responsive: ['lg'] as const,
       render: (_: unknown, row: ProjectCheck) =>
         row.lastRunAt ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -1792,12 +1805,14 @@ export default function ProjectPage() {
     },
     {
       title: 'Schedule',
-      width: 160,
+      width: 130,
+      responsive: ['xl'] as const,
       render: (_: unknown, row: ProjectCheck) => <Tag color="purple">{formatScheduleSummary(row, schedules)}</Tag>
     },
     {
       title: 'Device',
-      width: 150,
+      width: 120,
+      responsive: ['xl'] as const,
       render: (_: unknown, row: ProjectCheck) =>
         row.device ? (
           <Tag icon={<MobileOutlined />} color="blue">
@@ -1809,12 +1824,13 @@ export default function ProjectPage() {
     },
     {
       title: 'Runs',
-      width: 88,
+      width: 70,
+      responsive: ['xl'] as const,
       render: (_: unknown, row: ProjectCheck) => <Tag>{row.runCount}</Tag>
     },
     {
       title: 'Actions',
-      width: 190,
+      width: 170,
       fixed: 'right' as const,
       render: (_: unknown, row: ProjectCheck) => (
         <Space onClick={(event) => event.stopPropagation()} size={8}>
@@ -1876,53 +1892,22 @@ export default function ProjectPage() {
   ];
 
   return (
-    <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eef6ff 48%, #ffffff 100%)' }}>
+    <Layout style={{ minHeight: 'auto', background: 'transparent' }}>
       {confirmModalContextHolder}
-      <AppHeader actions={[<UserMenu key="menu" />]} />
-      <Content style={{ padding: 32, maxWidth: 1560, width: '100%', margin: '0 auto' }}>
+      <AppHeader />
+      <Content style={{ width: '100%', minWidth: 0 }}>
         <Row gutter={[24, 24]}>
           <Col span={24}>
-            <Card style={{ borderRadius: 24, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-                    <Text type="secondary">
-                      <Link to="/projects">Projects</Link>
-                    </Text>
-                    <Title level={2} style={{ margin: 0 }}>
-                      {project?.name ?? 'Loading...'}
-                    </Title>
-                    <Text
-                      type="secondary"
-                      style={{
-                        maxWidth: 760,
-                        overflowWrap: 'anywhere',
-                        wordBreak: 'break-word',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden'
-                      }}
-                    >
-                      {projectHeaderDescription}
-                    </Text>
-                    {isViewer && (
-                      <Alert
-                        type="info"
-                        showIcon
-                        message="Read-only access"
-                        description="You can view this project, but you cannot make changes."
-                        style={{ marginTop: 8, width: 'fit-content' }}
-                      />
-                    )}
-                    {project && (
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {formatCreatedLabel(project.createdAt)}
-                      </Text>
-                    )}
-                  </div>
-
-                  <Space wrap>
+            <PageHeader
+              title={sectionTitle}
+              description={projectHeaderDescription}
+              breadcrumbs={[
+                { key: 'projects', label: 'Projects', href: '/projects' },
+                { key: 'project', label: project?.name ?? shellProject.name, href: `/projects/${projectId}/checks` },
+                { key: 'section', label: sectionTitle }
+              ]}
+              actions={canWriteProject ? (
+                <Space wrap>
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/projects/${projectId}/tests/new`)} disabled={!canWriteProject}>
                       New Check
                     </Button>
@@ -1942,91 +1927,31 @@ export default function ProjectPage() {
                     <Button icon={<PlayCircleOutlined />} onClick={openRunSuiteModal} disabled={!canWriteProject}>
                       Run suite
                     </Button>
-                  </Space>
-                </div>
-
-                <Tabs
-                  activeKey={activeTab}
-                  items={tabs.map((tab) => ({ key: tab.key, label: tab.label }))}
-                  onChange={(key) => {
-                    const nextTab = key as ProjectTabKey;
-                    if (nextTab === 'suites') {
-                      navigate(`/projects/${projectId}/suites`);
-                      return;
-                    }
-                    setActiveTab(nextTab);
-                  }}
-                />
-              </div>
-            </Card>
+                </Space>
+              ) : undefined}
+            />
+            {isViewer ? (
+              <Alert
+                type="info"
+                showIcon
+                message="Read-only access"
+                description="You can view this project, but you cannot make changes."
+                style={{ marginTop: 16 }}
+              />
+            ) : null}
+            {project ? <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>{formatCreatedLabel(project.createdAt)}</Text> : null}
           </Col>
 
-          <Col span={24}>
+          {activeTab === 'overview' && <Col span={24}>
             <Row gutter={[16, 16]}>
-              <Col xs={24} sm={12} xl={4}>
-                <Card style={{ borderRadius: 20, boxShadow: '0 14px 30px rgba(15, 23, 42, 0.08)', height: '100%' }}>
-                  <Statistic title="Checks" value={summary?.checksCount ?? 0} />
-                  <Text type="secondary">Browser checks in this project</Text>
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} xl={4}>
-                <Card style={{ borderRadius: 20, boxShadow: '0 14px 30px rgba(15, 23, 42, 0.08)', height: '100%' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <Text type="secondary">Last result</Text>
-                    {summary?.lastResult ? (
-                      <RunStatusBadge status={summary.lastResult} />
-                    ) : (
-                      <Tag color="default">No runs</Tag>
-                    )}
-                  </div>
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} xl={4}>
-                <Card style={{ borderRadius: 20, boxShadow: '0 14px 30px rgba(15, 23, 42, 0.08)', height: '100%' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <Text type="secondary">Pass rate</Text>
-                    <Text
-                      style={{
-                        fontSize: 28,
-                        lineHeight: 1.1,
-                        fontWeight: 600,
-                        color:
-                          summary?.passRate30d == null ? '#8c8c8c' : summary.passRate30d >= 80 ? '#52c41a' : '#ff4d4f'
-                      }}
-                    >
-                      {summary?.passRate30d == null ? '—' : `${summary.passRate30d}%`}
-                    </Text>
-                    <Text type="secondary">
-                      {summary?.totalRuns30d ? `${summary.passedRuns30d}/${summary.totalRuns30d} runs in last 30 days` : 'No runs yet'}
-                    </Text>
-                  </div>
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} xl={4}>
-                <Card style={{ borderRadius: 20, boxShadow: '0 14px 30px rgba(15, 23, 42, 0.08)', height: '100%' }}>
-                  <Statistic title="Active schedules" value={summary?.activeSchedulesCount ?? 0} />
-                  <Text type="secondary">Project-level schedules</Text>
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} xl={4}>
-                <Card style={{ borderRadius: 20, boxShadow: '0 14px 30px rgba(15, 23, 42, 0.08)', height: '100%' }}>
-                  <Statistic title="Alert channels" value={summary?.alertChannelsCount ?? 0} />
-                  <Text type="secondary">Telegram and Slack</Text>
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} xl={4}>
-                <Card style={{ borderRadius: 20, boxShadow: '0 14px 30px rgba(15, 23, 42, 0.08)', height: '100%' }}>
-                  <Statistic
-                    title="Avg duration"
-                    value={summary?.avgDurationMs != null ? formatDuration(summary.avgDurationMs) : '—'}
-                  />
-                  <Text type="secondary">
-                    {summary?.failedChecks ? `${summary.failedChecks} failing checks` : 'Healthy checks'}
-                  </Text>
-                </Card>
-              </Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title="Checks" value={summary?.checksCount ?? 0} description="Browser checks in this project" /></Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title="Last result" value={summary?.lastResult ? <RunStatusBadge status={summary.lastResult} /> : 'No runs'} description={summary?.lastRunAt ? formatRelativeTime(summary.lastRunAt) : 'Not evaluated'} /></Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title="Pass rate" value={summary?.passRate30d == null ? '—' : `${summary.passRate30d}%`} description={summary?.totalRuns30d ? `${summary.passedRuns30d} of ${summary.totalRuns30d} runs · Last 30 days` : 'No runs yet'} /></Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title="Active schedules" value={summary?.activeSchedulesCount ?? 0} description="Project-level schedules" /></Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title="Alert channels" value={summary?.alertChannelsCount ?? 0} description="Telegram and Slack" /></Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title="Avg duration" value={summary?.avgDurationMs != null ? formatDuration(summary.avgDurationMs) : '—'} description={!hasRunHistory ? 'Not evaluated' : summary?.failedChecks ? `${summary.failedChecks} failing checks` : 'Across recent runs'} /></Col>
             </Row>
-          </Col>
+          </Col>}
 
           {activeTab === 'overview' && (
             <Col span={24}>
@@ -2112,7 +2037,7 @@ export default function ProjectPage() {
                           <Button type="primary" onClick={openRunSuiteModal} disabled={!canWriteProject}>
                             Run suite
                           </Button>
-                          <Button onClick={() => setActiveTab('checks')}>Go to Checks</Button>
+                          <Button onClick={() => navigate(`/projects/${projectId}/checks`)}>Go to Checks</Button>
                         </Space>
                       </Empty>
                     )}
@@ -2122,7 +2047,13 @@ export default function ProjectPage() {
                   <Card
                     style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
                     title="Needs attention"
-                    extra={summary?.flakyChecks ? <Tag color="gold">{summary.flakyChecks} flaky</Tag> : <Tag color="green">All clear</Tag>}
+                    extra={
+                      !hasRunHistory
+                        ? <Tag>Not evaluated</Tag>
+                        : summary?.flakyChecks
+                          ? <Tag color="gold">{summary.flakyChecks} flaky</Tag>
+                          : <Tag color="green">All clear</Tag>
+                    }
                   >
                     {attentionChecks.filter((check) => check.lastRunStatus === 'FAILED').length > 0 ? (
                       <Table<ProjectCheck>
@@ -2172,6 +2103,11 @@ export default function ProjectPage() {
                           }
                         ]}
                       />
+                    ) : !hasRunHistory ? (
+                      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                        <Title level={5} style={{ margin: 0 }}>No runs yet</Title>
+                        <Text type="secondary">Run a check to evaluate project health and surface failures here.</Text>
+                      </Space>
                     ) : (
                       <Space direction="vertical" size={8} style={{ width: '100%' }}>
                         <Title level={5} style={{ margin: 0 }}>No active failures</Title>
@@ -2813,10 +2749,10 @@ export default function ProjectPage() {
             </Col>
           )}
 
-          {activeTab === 'settings' && (
+          {(activeTab === 'settings' || activeTab === 'authentication') && (
             <Col span={24}>
               <Space direction="vertical" size={24} style={{ width: '100%' }}>
-                <Row gutter={[24, 24]}>
+                {activeTab === 'settings' && <Row gutter={[24, 24]}>
                   <Col xs={24} xl={14}>
                     <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }} title="Project settings">
                       <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -2993,8 +2929,8 @@ export default function ProjectPage() {
                       </Row>
                     </Card>
                   </Col>
-                </Row>
-                <Card
+                </Row>}
+                {activeTab === 'authentication' && <Card
                   style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
                   title="Authentication"
                 >
@@ -3150,8 +3086,8 @@ export default function ProjectPage() {
                       </>
                     )}
                   </Space>
-                </Card>
-                <Card
+                </Card>}
+                {activeTab === 'settings' && <Card
                   style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)', borderColor: '#fecaca' }}
                   title="Danger zone"
                 >
@@ -3166,7 +3102,7 @@ export default function ProjectPage() {
                       Delete project
                     </Button>
                   </Space>
-                </Card>
+                </Card>}
               </Space>
             </Col>
           )}
@@ -3244,6 +3180,15 @@ export default function ProjectPage() {
                   ]}
                 />
               </Card>
+            </Col>
+          )}
+
+          {activeTab === 'members' && !canManageMembers && (
+            <Col span={24}>
+              <ErrorState
+                title="Owner access required"
+                description="Only project owners can view and manage project members."
+              />
             </Col>
           )}
         </Row>

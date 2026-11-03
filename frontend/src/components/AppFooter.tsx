@@ -7,6 +7,7 @@ import {
   APP_VERSION,
   formatBuildDate
 } from '../utils/appMeta';
+import { useAppShellOptional } from '../shell/ShellContext';
 
 const { Footer } = Layout;
 const { Text } = Typography;
@@ -16,7 +17,10 @@ type AppFooterProps = {
 };
 
 export default function AppFooter({ bottomPadding = 28 }: AppFooterProps) {
+  const appShell = useAppShellOptional();
   const buildDateLabel = formatBuildDate(APP_BUILD_DATE);
+
+  if (appShell) return null;
 
   return (
     <Footer style={{ background: 'transparent', padding: `20px 32px ${bottomPadding}px` }}>

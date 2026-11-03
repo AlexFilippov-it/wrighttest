@@ -37,6 +37,7 @@ Thumbs.db
 # Local screenshots and validation artifacts
 /*.png
 /test-results/
+/playwright-report/
 /validate-requests.txt
 
 # Docker

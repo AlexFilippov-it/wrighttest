@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Checkbox, Col, Input, Layout, Modal, Popconfirm, Radio, Row, Space, Table, Tag, Typography, message } from 'antd';
+import { Alert, Button, Card, Checkbox, Input, Layout, Modal, Popconfirm, Radio, Space, Table, Tag, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { createSuite, deleteSuite, getEnvironments, getProject, getSuites, runSuite, updateSuite } from '../api/client';
+import { useNavigate, useParams } from 'react-router-dom';
+import { createSuite, deleteSuite, getEnvironments, getSuites, runSuite, updateSuite } from '../api/client';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
-import UserMenu from '../components/UserMenu';
-import type { Environment, Project, Suite, Test } from '../types';
+import { EmptyState, PageHeader } from '../design-system';
+import { useProjectShell } from '../shell/ProjectShellContext';
+import type { Environment, Suite, Test } from '../types';
 
 const { Content } = Layout;
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 function formatTime(value?: string | null) {
   return value ? new Date(value).toLocaleString() : '—';
@@ -23,7 +24,7 @@ function suiteTestNames(suite: Suite, tests: Test[]) {
 export default function SuitesPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const [project, setProject] = useState<(Project & { tests: Test[] }) | null>(null);
+  const { project } = useProjectShell();
   const [suites, setSuites] = useState<Suite[]>([]);
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,12 +41,10 @@ export default function SuitesPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [projectData, suiteData, environmentData] = await Promise.all([
-        getProject(projectId!),
+      const [suiteData, environmentData] = await Promise.all([
         getSuites(projectId!),
         getEnvironments(projectId!)
       ]);
-      setProject(projectData);
       setSuites(suiteData);
       setEnvironments(environmentData);
     } finally {
@@ -57,7 +56,8 @@ export default function SuitesPage() {
     void load();
   }, [projectId]);
 
-  const projectTests = useMemo(() => project?.tests ?? [], [project]);
+  const projectTests = useMemo(() => project.tests ?? [], [project.tests]);
+  const canWriteProject = project.currentUserRole === 'OWNER' || project.currentUserRole === 'EDITOR';
 
   const openCreate = () => {
     setEditingSuite(null);
@@ -137,30 +137,37 @@ export default function SuitesPage() {
   };
 
   return (
-    <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 55%, #ffffff 100%)' }}>
-      <AppHeader actions={[<UserMenu key="menu" />]} />
-      <Content style={{ padding: 32, maxWidth: 1280, width: '100%', margin: '0 auto' }}>
-        <Row gutter={[24, 24]}>
-          <Col span={24}>
-            <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}>
-              <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <Text type="secondary">
-                    <Link to={`/projects/${projectId}`}>Project</Link>
-                    <Link to="/dashboard" style={{ marginLeft: 16 }}>Dashboard</Link>
-                  </Text>
-                  <Title level={2} style={{ margin: 0 }}>{project?.name ?? 'Loading...'}</Title>
-                  <Text type="secondary">Reusable test suites you can run with one button.</Text>
-                </div>
+    <Layout style={{ minHeight: 'auto', background: 'transparent' }}>
+      <AppHeader />
+      <Content style={{ width: '100%', minWidth: 0 }}>
+        <Space direction="vertical" size={24} style={{ width: '100%' }}>
+          <PageHeader
+            title="Suites"
+            description="Reusable groups of checks that can be run together."
+            breadcrumbs={[
+              { key: 'projects', label: 'Projects', href: '/projects' },
+              { key: 'project', label: project.name, href: `/projects/${projectId}/checks` },
+              { key: 'suites', label: 'Suites' }
+            ]}
+            actions={canWriteProject ? (
                 <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
                   New Suite
                 </Button>
-              </Space>
-            </Card>
-          </Col>
+            ) : undefined}
+          />
 
-          <Col span={24}>
-            <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}>
+          {!canWriteProject ? (
+            <Alert type="info" showIcon message="Read-only access" description="You can view suites, but you cannot change or run them." />
+          ) : null}
+
+          <Card style={{ borderRadius: 12, boxShadow: 'var(--wt-shadow-subtle)' }}>
+            {suites.length === 0 && !loading ? (
+              <EmptyState
+                title="No suites yet"
+                description="Create a suite to run a reusable group of checks."
+                action={canWriteProject ? <Button type="primary" onClick={openCreate}>New Suite</Button> : undefined}
+              />
+            ) : (
               <Table
                 dataSource={suites}
                 rowKey="id"
@@ -191,7 +198,7 @@ export default function SuitesPage() {
                   },
                   {
                     title: 'Actions',
-                    render: (_, row) => (
+                    render: (_, row) => canWriteProject ? (
                       <Space onClick={(event) => event.stopPropagation()}>
                         <Button icon={<PlayCircleOutlined />} size="small" type="primary" onClick={() => void handleRun(row.id)}>
                           Run
@@ -205,13 +212,13 @@ export default function SuitesPage() {
                           </Button>
                         </Popconfirm>
                       </Space>
-                    )
+                    ) : <Text type="secondary">Read-only</Text>
                   }
                 ]}
               />
-            </Card>
-          </Col>
-        </Row>
+            )}
+          </Card>
+        </Space>
       </Content>
 
       <Modal

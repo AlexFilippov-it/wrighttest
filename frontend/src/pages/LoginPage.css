@@ -1,0 +1,137 @@
+.wt-login-page {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  flex-direction: column;
+  padding: 24px 20px 16px;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(37, 99, 235, 0.045), transparent 42%),
+    var(--wt-color-background);
+}
+
+.wt-login-page__main {
+  display: flex;
+  width: 100%;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding-block: 24px;
+}
+
+.wt-login-card.ant-card {
+  width: min(100%, 424px);
+  border-color: var(--wt-color-border);
+  border-radius: var(--wt-radius-large);
+  background: var(--wt-color-surface);
+  box-shadow: var(--wt-shadow-subtle);
+}
+
+.wt-login-card .ant-card-body {
+  padding: 32px;
+}
+
+.wt-login-card__brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+
+.wt-login-card__brand img {
+  display: block;
+  width: 156px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.wt-login-card__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.wt-login-card__heading h1.ant-typography {
+  margin: 0;
+  color: var(--wt-color-text);
+  font-size: 24px;
+  font-weight: var(--wt-font-weight-semibold);
+  line-height: var(--wt-line-height-compact);
+}
+
+.wt-login-card__heading .ant-typography-secondary {
+  font-size: var(--wt-font-size-body);
+}
+
+.wt-login-card__alert {
+  margin-bottom: 16px;
+}
+
+.wt-login-form .ant-form-item {
+  margin-bottom: 18px;
+}
+
+.wt-login-form .ant-form-item-label > label {
+  color: var(--wt-color-text);
+  font-size: var(--wt-font-size-small);
+  font-weight: var(--wt-font-weight-medium);
+}
+
+.wt-login-form .ant-input-affix-wrapper-lg {
+  min-height: 44px;
+  border-radius: var(--wt-radius-control);
+}
+
+.wt-login-form .ant-input-affix-wrapper-focused,
+.wt-login-form .ant-input-affix-wrapper:focus,
+.wt-login-form .ant-input-affix-wrapper:focus-within {
+  border-color: var(--wt-color-primary);
+  box-shadow: 0 0 0 3px var(--wt-color-focus-ring);
+}
+
+.wt-login-form > .ant-btn {
+  min-height: 44px;
+  margin-top: 2px;
+  border-radius: var(--wt-radius-control);
+  font-weight: var(--wt-font-weight-medium);
+}
+
+.wt-login-page__footer {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--wt-color-subtle);
+  font-size: var(--wt-font-size-caption);
+  line-height: 1.4;
+}
+
+.wt-login-page__footer > span + span::before {
+  padding-right: 8px;
+  color: var(--wt-color-border-strong);
+  content: '\00b7';
+}
+
+@media (max-width: 480px) {
+  .wt-login-page {
+    padding: 12px 16px 10px;
+  }
+
+  .wt-login-page__main {
+    padding-block: 12px;
+  }
+
+  .wt-login-card .ant-card-body {
+    padding: 24px 20px;
+  }
+
+  .wt-login-card__brand {
+    margin-bottom: 24px;
+  }
+
+  .wt-login-card__heading {
+    margin-bottom: 20px;
+  }
+}

@@ -25,6 +25,7 @@ import {
   getBlockingTemplateVariableErrorsForCase
 } from '../utils/templateVariables';
 import { normalizeDeviceForPayload } from '../utils/testPayload';
+import { useAppShell } from '../shell/ShellContext';
 import { BACKEND_URL, ENABLE_NOVNC, NOVNC_URL } from '../utils/runtimeConfig';
 
 const { Content } = Layout;
@@ -218,6 +219,7 @@ function formatStepIssueSummary(step: Step, index: number, issue: StepIssue) {
 
 export default function TestEditorPage() {
   const { projectId, testId } = useParams<{ projectId?: string; testId?: string }>();
+  const { setProject: setShellProject } = useAppShell();
   const [form] = Form.useForm();
   const [steps, setSteps] = useState<Step[]>([]);
   const [saving, setSaving] = useState(false);
@@ -308,7 +310,10 @@ export default function TestEditorPage() {
       setSelectedRecordingEnvironmentId(test.environmentId ?? undefined);
       setUseProjectAuthentication(test.useProjectAuthentication ?? true);
       void getProject(test.projectId)
-        .then((project) => setCurrentProjectRole(project.currentUserRole ?? null))
+        .then((project) => {
+          setProjectName(project.name);
+          setCurrentProjectRole(project.currentUserRole ?? null);
+        })
         .catch(() => setCurrentProjectRole(null));
       setValidationTracePath(undefined);
       setValidationFeedback(null);
@@ -317,6 +322,14 @@ export default function TestEditorPage() {
       setInitialSnapshotReady(true);
     });
   }, [form, projectId, testId]);
+
+  useEffect(() => {
+    if (!currentProjectId || !projectName) return;
+    setShellProject({ id: currentProjectId, name: projectName, role: currentProjectRole ?? undefined });
+    return () => {
+      setShellProject((current) => (current?.id === currentProjectId ? null : current));
+    };
+  }, [currentProjectId, currentProjectRole, projectName, setShellProject]);
 
   useEffect(() => {
     if (!recordingProjectId) {
@@ -1071,7 +1084,7 @@ export default function TestEditorPage() {
     ? `${BACKEND_URL}/trace-viewer/?trace=${encodeURIComponent(`${BACKEND_URL}/api/traces/${validationTracePath}`)}`
     : undefined;
   const projectRouteId = currentProjectId ?? projectId;
-  const projectLink = projectRouteId ? `/projects/${projectRouteId}` : '/projects';
+  const projectLink = projectRouteId ? `/projects/${projectRouteId}/checks` : '/projects';
   const exportMenu: MenuProps = {
     items: [
       { key: 'spec', label: 'Export single spec (.spec.ts)' },
@@ -1293,10 +1306,11 @@ export default function TestEditorPage() {
 
           <Col span={24}>
             <Card
+              className="wt-editor-section-card wt-editor-steps-card"
               title={
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div className="wt-editor-section-card__heading">
                   <span>Steps</span>
-                  <Text type="secondary" style={{ fontSize: 13 }}>
+                  <Text type="secondary" className="wt-editor-section-card__description">
                     Record, edit, and validate the browser flow.
                   </Text>
                 </div>

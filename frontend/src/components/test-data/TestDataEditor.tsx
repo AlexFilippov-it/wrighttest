@@ -275,10 +275,11 @@ export default function TestDataEditor({
 
   return (
     <Card
+      className="wt-editor-section-card wt-editor-test-data-card"
       title={
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div className="wt-editor-section-card__heading">
           <span>Test data</span>
-          <Text type="secondary" style={{ fontSize: 13 }}>
+          <Text type="secondary" className="wt-editor-section-card__description">
             Define scenario variables used anywhere in your browser flow, including inputs and expected results.
           </Text>
         </div>

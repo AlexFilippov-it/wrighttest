@@ -34,7 +34,12 @@ function getApiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-export default function UserMenu() {
+type UserMenuProps = {
+  tone?: 'dark' | 'light';
+  compact?: boolean;
+};
+
+export default function UserMenu({ tone = 'dark', compact = false }: UserMenuProps) {
   const { email, logout, changePassword } = useAuth();
   const navigate = useNavigate();
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -173,10 +178,14 @@ export default function UserMenu() {
           }
         }}
       >
-        <Button type="text" style={{ color: '#fff', paddingInline: 10 }}>
+        <Button
+          type="text"
+          aria-label={compact ? 'Open account menu' : undefined}
+          style={{ color: tone === 'dark' ? '#fff' : 'var(--wt-color-text)', paddingInline: 10 }}
+        >
           <Space>
             <UserOutlined />
-            <span>{email ?? 'Account'}</span>
+            {compact ? null : <span>{email ?? 'Account'}</span>}
           </Space>
         </Button>
       </Dropdown>
