@@ -49,7 +49,7 @@ jobs:
           VITE_BACKEND_URL=http://localhost:3000
           VITE_NOVNC_URL=http://localhost:56080
           VITE_ENABLE_NOVNC=false
-          NODE_ENV=production
+          NODE_ENV=development
           ADMIN_EMAIL=admin@wrighttest.app
           ADMIN_PASSWORD=wrighttest-ci-only-password
           JWT_SECRET=wrighttest-ci-only-secret-not-for-production-6c93e24b

@@ -58,7 +58,7 @@ test('instance language is system-admin-only and imports merge without data loss
     await expect(page.getByRole('heading', { name: 'Панель управления' })).toBeVisible();
     await expect(page.getByText('Общее состояние проектов, браузерных проверок, расписаний и запусков.')).toBeVisible();
     await expect(page.getByText('Всего запусков').first()).toBeVisible();
-    await expect(page.getByText('Не пройдено').first()).toBeVisible();
+    await expect(page.getByText('Активные сбои').first()).toBeVisible();
 
     await page.locator('.wt-shell-navigation a[href="/projects"]').last().click();
     await expect(page.getByRole('heading', { name: 'Проекты' }).first()).toBeVisible();
