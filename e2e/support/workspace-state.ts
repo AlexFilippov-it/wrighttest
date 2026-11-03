@@ -28,15 +28,27 @@ export const apiBaseUrl = (
 export const workspaceStatePath = path.resolve(process.cwd(), 'test-results/e2e-workspace.json');
 const authCachePath = path.resolve(process.cwd(), 'test-results/e2e-auth-sessions.json');
 
-const e2eApiRequestIntervalMs = 850;
-let nextE2eApiRequestAt = 0;
+const e2eApiRequestWindowMs = 60_000;
+const e2eApiRequestLimit = 80;
+const e2eApiRequestTimestamps: number[] = [];
 let e2eApiRequestQueue: Promise<void> = Promise.resolve();
 
 export function waitForE2eApiRequestSlot() {
   const scheduled = e2eApiRequestQueue.then(async () => {
-    const delay = Math.max(0, nextE2eApiRequestAt - Date.now());
-    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-    nextE2eApiRequestAt = Date.now() + e2eApiRequestIntervalMs;
+    while (true) {
+      const now = Date.now();
+      while (e2eApiRequestTimestamps[0] <= now - e2eApiRequestWindowMs) {
+        e2eApiRequestTimestamps.shift();
+      }
+
+      if (e2eApiRequestTimestamps.length < e2eApiRequestLimit) {
+        e2eApiRequestTimestamps.push(Date.now());
+        return;
+      }
+
+      const delay = Math.max(1, e2eApiRequestTimestamps[0] + e2eApiRequestWindowMs - now);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   });
   e2eApiRequestQueue = scheduled.catch(() => undefined);
   return scheduled;
