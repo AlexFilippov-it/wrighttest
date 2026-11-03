@@ -68,7 +68,7 @@ test('instance language is system-admin-only and imports merge without data loss
     await page.locator('.wt-shell-navigation a[href="/runs"]').last().click();
     await expect(page.getByRole('heading', { name: 'Запуски', exact: true })).toBeVisible();
     await expect(page.getByText('История запусков проектов, браузерных проверок, расписаний и ручных запусков.')).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Результат' })).toBeVisible();
+    await expect(page.getByText('Запусков пока нет')).toBeVisible();
 
     await page.goto(`/projects/${workspace.projectId}/alerts`);
     await expect(page.getByRole('heading', { name: 'Уведомления', exact: true })).toBeVisible();
