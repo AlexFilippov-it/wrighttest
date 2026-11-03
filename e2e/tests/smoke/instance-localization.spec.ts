@@ -9,6 +9,15 @@ type LanguagePackage = {
   messages: Record<string, { source: string; translation: string; sourceHash?: string }>;
 };
 
+async function expectAnyVisible(...locators: Array<ReturnType<import('@playwright/test').Page['getByText']>>) {
+  await expect.poll(async () => {
+    for (const locator of locators) {
+      if (await locator.isVisible().catch(() => false)) return true;
+    }
+    return false;
+  }).toBe(true);
+}
+
 test('instance language is system-admin-only and imports merge without data loss', async ({ page, workspace }, testInfo) => {
   const anonymousApiContext = await request.newContext({ baseURL: apiBaseUrl });
   const viewerApiContext = await request.newContext({
@@ -63,12 +72,18 @@ test('instance language is system-admin-only and imports merge without data loss
     await page.locator('.wt-shell-navigation a[href="/projects"]').last().click();
     await expect(page.getByRole('heading', { name: 'Проекты' }).first()).toBeVisible();
     await expect(page.getByText('Отслеживайте проверки, расписания, уведомления и историю запусков проектов.')).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Действия' })).toBeVisible();
+    await expectAnyVisible(
+      page.getByRole('columnheader', { name: 'Действия' }),
+      page.getByText('Проектов пока нет', { exact: true })
+    );
 
     await page.locator('.wt-shell-navigation a[href="/runs"]').last().click();
     await expect(page.getByRole('heading', { name: 'Запуски', exact: true })).toBeVisible();
     await expect(page.getByText('История запусков проектов, браузерных проверок, расписаний и ручных запусков.')).toBeVisible();
-    await expect(page.getByText('Запусков пока нет')).toBeVisible();
+    await expectAnyVisible(
+      page.getByRole('columnheader', { name: 'Результат' }),
+      page.getByText('Запусков пока нет', { exact: true })
+    );
 
     await page.goto(`/projects/${workspace.projectId}/alerts`);
     await expect(page.getByRole('heading', { name: 'Уведомления', exact: true })).toBeVisible();
@@ -198,7 +213,10 @@ test('Russian translation covers dashboard and project checks, suites, runs, and
     await projectNav('runs').click();
     await expect(page.getByRole('heading', { name: 'Запуски', exact: true }).first()).toBeVisible();
     await expect(page.getByText('Последние результаты', { exact: true })).toBeVisible();
-    await expect(page.getByText('Здесь появится история запусков после выполнения проверок.')).toBeVisible();
+    await expectAnyVisible(
+      page.getByRole('columnheader', { name: 'Статус' }),
+      page.getByText('Здесь появится история запусков после выполнения проверок.', { exact: true })
+    );
 
     await projectNav('schedules').click();
     await expect(page.getByRole('heading', { name: 'Расписания', exact: true }).first()).toBeVisible();

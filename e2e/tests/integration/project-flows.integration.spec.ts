@@ -50,7 +50,7 @@ test('suites can be managed and executed; schedules can be safely managed disabl
     const updateSuite = await workspace.adminApi.patch(`/suites/${suiteId}`, {
       data: { name: `${suiteName} updated` }
     });
-    expect(updateSuite.ok()).toBeTruthy();
+    expect(updateSuite.ok(), `PATCH /suites/${suiteId} failed: ${updateSuite.status()} ${await updateSuite.text()}`).toBeTruthy();
     expect((await updateSuite.json() as { name: string }).name).toBe(`${suiteName} updated`);
 
     const suiteRun = await workspace.adminApi.post(`/suites/${suiteId}/run`, { data: {} });

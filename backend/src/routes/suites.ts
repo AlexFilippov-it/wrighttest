@@ -7,7 +7,7 @@ import { DATA_DRIVEN_CASE_REQUIRED_ERROR, hasTestDataCases } from '../utils/test
 
 const SuiteSchema = z.object({
   name: z.string().min(1).max(100),
-  testIds: z.array(z.string()).default([])
+  testIds: z.array(z.string()).optional()
 });
 
 const RunSuiteSchema = z.object({
@@ -39,6 +39,7 @@ export async function suiteRoutes(fastify: FastifyInstance) {
     if (!result.success) {
       return reply.status(400).send({ error: result.error.flatten() });
     }
+    const testIds = result.data.testIds ?? [];
 
     const { userId } = getAuthUser(req);
     try {
@@ -47,24 +48,24 @@ export async function suiteRoutes(fastify: FastifyInstance) {
       return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
     }
 
-    if (result.data.testIds.length === 0) {
+    if (testIds.length === 0) {
       return reply.status(400).send({ error: 'Select at least one test' });
     }
 
     const availableTests = await prisma.test.findMany({
       where: {
-        id: { in: result.data.testIds },
+        id: { in: testIds },
         projectId: req.params.projectId
       },
       select: { id: true }
     });
 
-    if (availableTests.length !== result.data.testIds.length) {
+    if (availableTests.length !== testIds.length) {
       return reply.status(400).send({ error: 'All tests must belong to the project' });
     }
 
     const suite = await prisma.suite.create({
-      data: { ...result.data, projectId: req.params.projectId }
+      data: { ...result.data, testIds, projectId: req.params.projectId }
     });
 
     return reply.status(201).send(suite);
