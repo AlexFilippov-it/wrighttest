@@ -44,8 +44,8 @@ jobs:
           WRIGHTTEST_IMAGE_TAG=release-validation
           DATABASE_URL=postgresql://postgres:postgres@localhost:55432/playwright_testing
           REDIS_HOST=localhost
-          FRONTEND_URL=http://localhost:5173
-          FRONTEND_DEV_URL=http://localhost:5173
+          FRONTEND_URL=http://127.0.0.1:5173
+          FRONTEND_DEV_URL=http://127.0.0.1:5173
           VITE_BACKEND_URL=http://localhost:3000
           VITE_NOVNC_URL=http://localhost:56080
           VITE_ENABLE_NOVNC=false
