@@ -3,9 +3,6 @@ import { defineConfig, devices } from '@playwright/test';
 const frontendUrl = process.env.E2E_BASE_URL
   ?? process.env.FRONTEND_DEV_URL
   ?? `http://localhost:${process.env.FRONTEND_PORT ?? '5173'}`;
-const backendUrl = process.env.E2E_API_URL
-  ?? process.env.VITE_BACKEND_URL
-  ?? `http://localhost:${process.env.BACKEND_PORT ?? '3000'}`;
 const runIntegrationTests = process.env.E2E_INTEGRATION === '1';
 
 export default defineConfig({
@@ -31,13 +28,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
     video: 'off'
   },
+  // globalSetup verifies the API; /health is subject to the global rate limit and can trigger duplicate backend starts.
   webServer: [
-    {
-      command: 'npm run dev:backend',
-      url: `${backendUrl}/health`,
-      reuseExistingServer: true,
-      timeout: 120_000
-    },
     {
       command: 'npm run dev:frontend -- --host 127.0.0.1',
       url: frontendUrl,

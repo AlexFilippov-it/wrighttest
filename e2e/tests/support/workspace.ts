@@ -10,7 +10,9 @@ import {
   apiBaseUrl,
   workspaceStatePath,
   type AuthSession,
-  type E2EWorkspaceState
+  type E2EWorkspaceState,
+  withRateLimitRetry,
+  withRateLimitRetries
 } from '../../support/workspace-state';
 
 export type E2EWorkspace = {
@@ -24,7 +26,7 @@ export type E2EWorkspace = {
   viewer: AuthSession;
 };
 
-type WorkerFixtures = {
+type TestFixtures = {
   workspace: E2EWorkspace;
 };
 
@@ -76,15 +78,47 @@ export async function openAuthenticatedPage(page: Page, session: AuthSession, pa
   }, { token: session.token, email: session.email });
   await page.goto(path);
   await expect(page).not.toHaveURL(/\/login$/);
+  if (path.startsWith('/projects/')) {
+    const projectId = path.split('/')[2];
+    await expect(
+      page.locator(`.wt-shell-navigation a[href^="/projects/${projectId}/"]`).first()
+    ).toBeVisible({ timeout: 120_000 });
+  }
 }
 
-export const test = base.extend<{}, WorkerFixtures>({
-  workspace: [async ({}, use) => {
+export const test = base.extend<TestFixtures>({
+  page: async ({ page }, use, testInfo) => {
+    testInfo.setTimeout(120_000);
+    const apiOrigin = new URL(apiBaseUrl).origin;
+    await page.route((url) => url.origin === apiOrigin, async (route) => {
+      let response = await route.fetch();
+      if (response.status() === 429) {
+        const body = await response.text();
+        const headerDelay = Number(response.headers()['retry-after']);
+        const bodyDelay = Number(body.match(/retry in\s+(\d+(?:\.\d+)?)\s+seconds/i)?.[1]);
+        const waitSeconds = Number.isFinite(headerDelay) && headerDelay > 0 ? headerDelay : bodyDelay;
+
+        if (Number.isFinite(waitSeconds) && waitSeconds > 0 && waitSeconds <= 90) {
+          testInfo.setTimeout(120_000);
+          await new Promise((resolve) => setTimeout(resolve, Math.ceil(waitSeconds * 1000)));
+          response = await route.fetch();
+        }
+      }
+      await route.fulfill({ response });
+    });
+    try {
+      await use(page);
+    } finally {
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+    }
+  },
+  workspace: async ({}, use, testInfo) => {
     const state = JSON.parse(await fs.readFile(workspaceStatePath, 'utf8')) as E2EWorkspaceState;
-    const adminApi = await request.newContext({
+    const baseAdminApi = await request.newContext({
       baseURL: apiBaseUrl,
       extraHTTPHeaders: { Authorization: `Bearer ${state.owner.token}` }
     });
+    const adminApi = withRateLimitRetries(baseAdminApi, () => testInfo.setTimeout(120_000));
 
     try {
       await use({
@@ -92,9 +126,9 @@ export const test = base.extend<{}, WorkerFixtures>({
         adminApi,
       });
     } finally {
-      await adminApi.dispose();
+      await baseAdminApi.dispose();
     }
-  }, { scope: 'worker' }]
+  }
 });
 
 export { apiBaseUrl };

@@ -132,8 +132,26 @@ test('AppShell and ProjectShell remain usable at foundation viewports', async ({
   const assertAndCaptureRoute = async (route: typeof routes[number], width: number) => {
     await expect(page.getByRole('heading', { name: route.heading }).first()).toBeVisible();
     await expectNoHorizontalOverflow(page);
+    const surface = page.locator('.wt-surface-page .ant-card.ant-card-bordered:not(.ant-card-small)').first();
+    if (await surface.count()) {
+      const surfaceStyle = await surface.evaluate((element) => {
+        const styles = window.getComputedStyle(element);
+        return {
+          borderStyle: styles.borderTopStyle,
+          borderRadius: styles.borderTopLeftRadius,
+          boxShadow: styles.boxShadow,
+          backgroundColor: styles.backgroundColor
+        };
+      });
+      expect(surfaceStyle).toEqual({
+        borderStyle: 'solid',
+        borderRadius: '12px',
+        boxShadow: 'none',
+        backgroundColor: 'rgb(255, 255, 255)'
+      });
+    }
     if (route.name !== 'dashboard') {
-      const visibleProjectNavigation = page.locator('[aria-label="Project navigation"]:visible');
+      const visibleProjectNavigation = page.locator('nav.wt-shell-navigation:visible');
       await expect(visibleProjectNavigation).toHaveCount(width <= 1024 ? 0 : 1);
       await expect(page.getByRole('heading', { name: workspace.projectName })).toHaveCount(0);
     }
@@ -154,9 +172,14 @@ test('AppShell and ProjectShell remain usable at foundation viewports', async ({
         };
       });
       expect(emptyStateAlignment).toEqual({ alignItems: 'center', textAlign: 'center' });
+      const emptySurfaceStyle = await page.locator('.wt-empty-state').evaluate((element) => {
+        const styles = window.getComputedStyle(element);
+        return { borderStyle: styles.borderTopStyle, boxShadow: styles.boxShadow };
+      });
+      expect(emptySurfaceStyle).toEqual({ borderStyle: 'dashed', boxShadow: 'none' });
     }
     await page.screenshot({
-      path: path.join(outputDirectory, `wrighttest-shell-${route.name}-${width}.png`),
+      path: path.join(outputDirectory, `wrighttest-surfaces-${route.name}-${width}.png`),
       fullPage: true,
       animations: 'disabled'
     });
@@ -177,7 +200,7 @@ test('AppShell and ProjectShell remain usable at foundation viewports', async ({
 
   await openAuthenticatedPage(page, workspace.owner, '/dashboard');
 
-  for (const width of [1440, 768]) {
+  for (const width of [1440, 1280, 1024, 768]) {
     await page.setViewportSize({ width, height: 1000 });
     if (!page.url().endsWith('/dashboard')) {
       await navigateWithShell('Dashboard', width);

@@ -30,6 +30,8 @@ import {
   SettingOutlined
 } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
@@ -42,44 +44,46 @@ import type { ProjectHealth, ProjectSummary } from '../types';
 const { Content } = Layout;
 const { Title, Text } = Typography;
 
-function formatCreatedLabel(value: string) {
-  return `Created ${new Date(value).toLocaleDateString(undefined, {
+function formatCreatedLabel(value: string, locale: string, t: TFunction) {
+  return t('projects.projectCreatedDate', { date: new Date(value).toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric'
-  })}`;
+  }) });
 }
 
-function formatRelativeTime(value: string) {
+function formatRelativeTime(value: string, t: TFunction, locale: string) {
   const diffMs = Date.now() - new Date(value).getTime();
   const diffMinutes = Math.round(diffMs / 60000);
 
-  if (diffMinutes < 1) return 'just now';
-  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffMinutes < 1) return t('time.justNow');
+  if (diffMinutes < 60) return t('time.minutesAgo', { count: diffMinutes });
 
   const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  if (diffHours < 24) return t('time.hoursAgo', { count: diffHours });
 
   const diffDays = Math.round(diffHours / 24);
-  if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+  if (diffDays < 30) return t('time.daysAgo', { count: diffDays });
 
-  return new Date(value).toLocaleString();
+  return new Date(value).toLocaleString(locale);
 }
 
-function healthMeta(health: ProjectHealth) {
+function healthMeta(health: ProjectHealth, t: TFunction) {
   switch (health) {
     case 'passing':
-      return { color: 'green', text: 'Passing', icon: <CheckCircleOutlined /> };
+      return { color: 'green', text: t('common.passing'), icon: <CheckCircleOutlined /> };
     case 'failing':
-      return { color: 'red', text: 'Failing', icon: <ExclamationCircleOutlined /> };
+      return { color: 'red', text: t('common.failing'), icon: <ExclamationCircleOutlined /> };
     case 'flaky':
-      return { color: 'gold', text: 'Flaky', icon: <ClockCircleOutlined /> };
+      return { color: 'gold', text: t('common.flaky'), icon: <ClockCircleOutlined /> };
     default:
-      return { color: 'default', text: 'No runs', icon: <ClockCircleOutlined /> };
+      return { color: 'default', text: t('common.noRunsYet'), icon: <ClockCircleOutlined /> };
   }
 }
 
 export default function ProjectsPage() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? 'en';
   const { canCreateProject } = useAuth();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,7 +140,7 @@ export default function ProjectsPage() {
     setCreating(true);
     try {
       await createProject(name);
-      message.success('Project created');
+      message.success(t('projects.created'));
       setCreateOpen(false);
       createForm.resetFields();
       await load();
@@ -158,7 +162,7 @@ export default function ProjectsPage() {
     setRenaming(true);
     try {
       await updateProject(selectedProject.id, { name });
-      message.success('Project renamed');
+      message.success(t('projects.renamed'));
       setRenameOpen(false);
       setSelectedProject(null);
       renameForm.resetFields();
@@ -170,7 +174,7 @@ export default function ProjectsPage() {
 
   const handleDelete = async (id: string) => {
     await deleteProject(id);
-    message.success('Project deleted');
+    message.success(t('projects.deleted'));
     await load();
   };
 
@@ -179,12 +183,12 @@ export default function ProjectsPage() {
       {
         key: 'rename',
         icon: <EditOutlined />,
-        label: 'Rename'
+        label: t('projects.rename')
       },
       {
         key: 'settings',
         icon: <SettingOutlined />,
-        label: 'Settings'
+        label: t('project.settings')
       },
       {
         type: 'divider'
@@ -192,7 +196,7 @@ export default function ProjectsPage() {
       {
         key: 'delete',
         icon: <DeleteOutlined />,
-        label: 'Delete',
+        label: t('language.delete'),
         danger: true
       }
     ],
@@ -209,9 +213,9 @@ export default function ProjectsPage() {
 
       if (key === 'delete') {
         Modal.confirm({
-          title: 'Delete project?',
-          content: `This will remove "${project.name}" and all related tests, schedules, environments, and alerts.`,
-          okText: 'Delete',
+          title: t('projects.deleteTitle'),
+          content: t('projects.deleteDescription', { name: project.name }),
+          okText: t('language.delete'),
           okButtonProps: { danger: true },
           centered: true,
           onOk: async () => {
@@ -237,34 +241,32 @@ export default function ProjectsPage() {
             disabled={!canCreateProject}
             style={createProjectButtonStyle}
           >
-            New Project
+            {t('projects.newProject')}
           </Button>
         ]}
       />
-      <Content style={{ padding: 32, maxWidth: 1560, width: '100%', margin: '0 auto' }}>
+      <Content className="wt-surface-page" style={{ padding: 32, maxWidth: 1560, width: '100%', margin: '0 auto' }}>
         <div style={{ display: 'flex', gap: 24, alignItems: 'stretch', flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 860px', minWidth: 0 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <Title level={2} style={{ margin: 0 }}>Projects</Title>
-                <Text type="secondary">
-                  Track browser checks, schedules, alerts, and run history by project.
-                </Text>
+                <Title level={2} style={{ margin: 0 }}>{t('projects.title')}</Title>
+                <Text type="secondary">{t('projects.description')}</Text>
               </div>
 
               <Row gutter={[16, 16]}>
-                <Col xs={24} sm={12} xl={6}><StatCard title="Projects" value={hasLoaded ? projects.length : '—'} description="Total projects" loading={loading} /></Col>
-                <Col xs={24} sm={12} xl={6}><StatCard title="Browser checks" value={hasLoaded ? totals.checks : '—'} description="Across all projects" loading={loading} /></Col>
+                <Col xs={24} sm={12} xl={6}><StatCard title={t('projects.title')} value={hasLoaded ? projects.length : '—'} description={t('projects.totalProjects')} loading={loading} /></Col>
+                <Col xs={24} sm={12} xl={6}><StatCard title={t('projects.browserChecks')} value={hasLoaded ? totals.checks : '—'} description={t('projects.acrossAllProjects')} loading={loading} /></Col>
                 <Col xs={24} sm={12} xl={6}>
-                  <StatCard title="Pass rate" value={totals.passRate === null ? '—' : `${totals.passRate}%`} description={totals.totalRuns > 0 ? `${totals.passedRuns} of ${totals.totalRuns} runs · Last 30 days` : 'No runs yet'} loading={loading} />
+                  <StatCard title={t('projects.passRate')} value={totals.passRate === null ? '—' : `${totals.passRate}%`} description={totals.totalRuns > 0 ? t('projects.totalRunsPassRate', { passed: totals.passedRuns, total: totals.totalRuns }) : t('projects.noRuns')} loading={loading} />
                 </Col>
                 <Col xs={24} sm={12} xl={6}>
-                  <StatCard title="Failed checks" value={hasLoaded ? totals.failedChecks : '—'} description={totals.totalRuns > 0 ? 'Latest run failed' : 'Not evaluated'} status={totals.failedChecks > 0 ? <Tag color="red">Failed</Tag> : undefined} loading={loading} />
+                  <StatCard title={t('projects.failedChecks')} value={hasLoaded ? totals.failedChecks : '—'} description={totals.totalRuns > 0 ? t('projects.latestRunFailed') : t('projects.notEvaluated')} status={totals.failedChecks > 0 ? <Tag color="red">{t('common.failed')}</Tag> : undefined} loading={loading} />
                 </Col>
               </Row>
 
               <Card
-                title={<span style={{ fontSize: 18 }}>Projects</span>}
+                className={!hasProjects && !loading ? 'wt-content-surface wt-content-surface--empty' : 'wt-content-surface'}
                 style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
                 bodyStyle={{ padding: hasProjects ? 0 : 24 }}
               >
@@ -275,25 +277,16 @@ export default function ProjectsPage() {
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     description={
                       <Space direction="vertical" size={6}>
-                        <Text strong style={{ fontSize: 16 }}>No projects yet</Text>
+                        <Text strong style={{ fontSize: 16 }}>{t('projects.noProjects')}</Text>
                         <Text type="secondary">
-                          Create a project to group browser checks, environments, schedules, and alerts.
+                          {t('projects.emptyDescription')}
                         </Text>
                       </Space>
                     }
                   >
-                    {canCreateProject ? (
-                      <Button
-                        type={canCreateProject ? 'primary' : 'default'}
-                        icon={<PlusOutlined />}
-                        onClick={() => setCreateOpen(true)}
-                        style={createProjectButtonStyle}
-                      >
-                        Create project
-                      </Button>
-                    ) : (
-                      <Text type="secondary">Project creation is not available for read-only access.</Text>
-                    )}
+                    {!canCreateProject ? (
+                      <Text type="secondary">{t('projects.readOnlyCreateUnavailable')}</Text>
+                    ) : null}
                   </Empty>
                 ) : (
                   <Table<ProjectSummary>
@@ -308,7 +301,7 @@ export default function ProjectsPage() {
                     })}
                     columns={[
                       {
-                        title: 'Project',
+                        title: t('common.project'),
                         width: 240,
                         key: 'project',
                         render: (_, row) => {
@@ -347,31 +340,31 @@ export default function ProjectsPage() {
                                   {description}
                                 </Text>
                               ) : (
-                                <Text type="secondary">{formatCreatedLabel(row.createdAt)}</Text>
+                                <Text type="secondary">{formatCreatedLabel(row.createdAt, locale, t)}</Text>
                               )}
                             </div>
                           );
                         }
                       },
                       {
-                        title: 'Checks',
+                        title: t('projects.checks'),
                         dataIndex: 'checksCount',
                         key: 'checksCount',
                         width: 84,
                         render: (value: number) => <Tag color="blue">{value}</Tag>
                       },
                       {
-                        title: 'Health',
+                        title: t('projects.health'),
                         dataIndex: 'health',
                         key: 'health',
                         width: 122,
                         render: (value: ProjectHealth) => {
-                          const meta = healthMeta(value);
+                          const meta = healthMeta(value, t);
                           return <Tag color={meta.color} icon={meta.icon}>{meta.text}</Tag>;
                         }
                       },
                       {
-                        title: 'Pass rate',
+                        title: t('projects.passRate'),
                         width: 100,
                         key: 'passRate',
                         responsive: ['xl'],
@@ -383,16 +376,16 @@ export default function ProjectsPage() {
                           )
                       },
                       {
-                        title: 'Last run',
+                        title: t('projects.lastRun'),
                         width: 140,
                         key: 'lastRunAt',
                         responsive: ['xl'],
                         render: (_, row) =>
                           row.lastRunAt ? (
                             <Space direction="vertical" size={0}>
-                              <Text style={{ lineHeight: 1.2 }}>{formatRelativeTime(row.lastRunAt)}</Text>
+                              <Text style={{ lineHeight: 1.2 }}>{formatRelativeTime(row.lastRunAt, t, locale)}</Text>
                               <Text type="secondary">
-                                {new Date(row.lastRunAt).toLocaleString(undefined, {
+                                {new Date(row.lastRunAt).toLocaleString(locale, {
                                   month: 'short',
                                   day: 'numeric',
                                   hour: 'numeric',
@@ -401,26 +394,26 @@ export default function ProjectsPage() {
                               </Text>
                             </Space>
                           ) : (
-                            <Text type="secondary">Never</Text>
+                            <Text type="secondary">{t('common.never')}</Text>
                           )
                       },
                       {
-                        title: 'Schedules',
+                        title: t('projects.schedules'),
                         key: 'schedules',
                         width: 120,
                         responsive: ['xxl'],
                         render: (_, row) => (
-                          <Tag color="default">{row.activeSchedulesCount} active</Tag>
+                          <Tag color="default">{t('projects.activeSchedules', { count: row.activeSchedulesCount })}</Tag>
                         )
                       },
                       {
-                        title: 'Alerts',
+                        title: t('projects.alerts'),
                         key: 'alerts',
                         width: 160,
                         responsive: ['xxl'],
                         render: (_, row) => {
                           if (row.alertChannelsCount === 0) {
-                            return <Tag color="default">Not configured</Tag>;
+                            return <Tag color="default">{t('common.notConfigured')}</Tag>;
                           }
 
                           if (row.alertChannelsCount <= 2) {
@@ -435,11 +428,11 @@ export default function ProjectsPage() {
                             );
                           }
 
-                          return <Tag color="default">{row.alertChannelsCount} channels</Tag>;
+                          return <Tag color="default">{t('projects.alertChannels', { count: row.alertChannelsCount })}</Tag>;
                         }
                       },
                       {
-                        title: 'Actions',
+                        title: t('projects.actions'),
                         key: 'actions',
                         width: 136,
                         align: 'right',
@@ -453,7 +446,7 @@ export default function ProjectsPage() {
                                 navigate(`/projects/${row.id}`);
                               }}
                             >
-                              Open
+                              {t('projects.open')}
                             </Button>
                             <Dropdown menu={createMenu(row)} trigger={['click']} placement="bottomRight">
                               <Button
@@ -474,6 +467,7 @@ export default function ProjectsPage() {
 
           <div style={{ flex: '0 0 360px', maxWidth: 360, width: '100%' }}>
             <Card
+              className="wt-content-surface"
               style={{
                 borderRadius: 20,
                 height: '100%',
@@ -482,16 +476,16 @@ export default function ProjectsPage() {
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div>
-                  <Title level={4} style={{ margin: 0 }}>Getting started</Title>
-                  <Text type="secondary">Projects group checks, environments, schedules, and alert channels.</Text>
+                  <Title level={4} style={{ margin: 0 }}>{t('projects.gettingStarted')}</Title>
+                  <Text type="secondary">{t('projects.gettingStartedDescription')}</Text>
                 </div>
 
                 <ol style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 10 }}>
-                  <li>Create a project</li>
-                  <li>Add or import a browser check</li>
-                  <li>Run it manually</li>
-                  <li>Schedule regular runs</li>
-                  <li>Add Telegram or Slack alerts</li>
+                  <li>{t('projects.create')}</li>
+                  <li>{t('projects.addOrImportCheck')}</li>
+                  <li>{t('projects.runManually')}</li>
+                  <li>{t('projects.scheduleRuns')}</li>
+                  <li>{t('projects.addAlerts')}</li>
                 </ol>
 
                 <Button
@@ -501,7 +495,7 @@ export default function ProjectsPage() {
                   disabled={!canCreateProject}
                   style={createProjectButtonStyle}
                 >
-                  New Project
+                  {t('projects.newProject')}
                 </Button>
               </div>
             </Card>
@@ -510,22 +504,22 @@ export default function ProjectsPage() {
       </Content>
 
       <Modal
-        title="New Project"
+        title={t('projects.newProject')}
         open={createOpen}
         onOk={() => void handleCreate()}
         confirmLoading={creating}
         onCancel={() => setCreateOpen(false)}
-        okText="Create"
+        okText={t('projects.createTitle')}
       >
         <Form form={createForm} layout="vertical">
-          <Form.Item name="name" label="Project name" rules={[{ required: true, message: 'Project name is required' }]}>
-            <Input placeholder="My browser checks" />
+          <Form.Item name="name" label={t('projects.projectName')} rules={[{ required: true, message: t('projects.nameRequired') }]}>
+            <Input placeholder={t('projects.namePlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="Rename project"
+        title={t('projects.renameTitle')}
         open={renameOpen}
         onOk={() => void handleRename()}
         confirmLoading={renaming}
@@ -534,11 +528,11 @@ export default function ProjectsPage() {
           setSelectedProject(null);
           renameForm.resetFields();
         }}
-        okText="Save"
+        okText={t('projects.save')}
       >
         <Form form={renameForm} layout="vertical">
-          <Form.Item name="name" label="Project name" rules={[{ required: true, message: 'Project name is required' }]}>
-            <Input placeholder="Project name" />
+          <Form.Item name="name" label={t('projects.projectName')} rules={[{ required: true, message: t('projects.nameRequired') }]}>
+            <Input placeholder={t('projects.projectName')} />
           </Form.Item>
         </Form>
       </Modal>

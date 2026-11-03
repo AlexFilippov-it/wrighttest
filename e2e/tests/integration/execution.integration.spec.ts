@@ -16,6 +16,6 @@ test('real worker executes the fixture check and its result opens in the UI', as
 
   expect(status).toBe('PASSED');
   await openAuthenticatedPage(page, workspace.owner, `/runs/${testRunId}`);
-  await expect(page.getByRole('heading', { name: 'Run Result' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Run details' })).toBeVisible();
   await expect(page.getByText('Passed', { exact: true }).first()).toBeVisible();
 });

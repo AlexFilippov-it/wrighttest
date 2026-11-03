@@ -14,23 +14,22 @@ import {
 
 export type ProjectNavigationItem = {
   key: string;
-  label: string;
   icon: ReactNode;
   ownerOnly?: boolean;
 };
 
 export const projectMainNavigation: ProjectNavigationItem[] = [
-  { key: 'overview', label: 'Overview', icon: <DashboardOutlined /> },
-  { key: 'checks', label: 'Checks', icon: <CheckSquareOutlined /> },
-  { key: 'suites', label: 'Suites', icon: <UnorderedListOutlined /> },
-  { key: 'runs', label: 'Runs', icon: <PlayCircleOutlined /> },
-  { key: 'schedules', label: 'Schedules', icon: <CalendarOutlined /> }
+  { key: 'overview', icon: <DashboardOutlined /> },
+  { key: 'checks', icon: <CheckSquareOutlined /> },
+  { key: 'suites', icon: <UnorderedListOutlined /> },
+  { key: 'runs', icon: <PlayCircleOutlined /> },
+  { key: 'schedules', icon: <CalendarOutlined /> }
 ];
 
 export const projectConfigurationNavigation: ProjectNavigationItem[] = [
-  { key: 'environments', label: 'Environments', icon: <WalletOutlined /> },
-  { key: 'authentication', label: 'Authentication', icon: <KeyOutlined /> },
-  { key: 'alerts', label: 'Alerts', icon: <BellOutlined /> },
-  { key: 'settings', label: 'Settings', icon: <SettingOutlined /> },
-  { key: 'members', label: 'Members', icon: <TeamOutlined />, ownerOnly: true }
+  { key: 'environments', icon: <WalletOutlined /> },
+  { key: 'authentication', icon: <KeyOutlined /> },
+  { key: 'alerts', icon: <BellOutlined /> },
+  { key: 'settings', icon: <SettingOutlined /> },
+  { key: 'members', icon: <TeamOutlined />, ownerOnly: true }
 ];

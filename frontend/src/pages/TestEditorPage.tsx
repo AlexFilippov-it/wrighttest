@@ -3,6 +3,7 @@ import { Alert, Breadcrumb, Button, Card, Checkbox, Col, Dropdown, Form, Input, 
 import type { MenuProps } from 'antd';
 import { DownOutlined, DownloadOutlined, PlayCircleOutlined, StopOutlined, VideoCameraOutlined, WarningOutlined } from '@ant-design/icons';
 import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api, createTest, getDevices, getEnvironments, getProject, getTest, startRecording, stopRecording, updateTest, validateTestSteps, runTestWithEnvironment, runAllEnabledTestCases } from '../api/client';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
@@ -111,11 +112,11 @@ function buildStepIssue(fields: Omit<StepIssue, 'message'>): StepIssue | null {
   return message ? { message, ...fields } : null;
 }
 
-function validateRequiredStepFields(step: Step): StepIssue | null {
+function validateRequiredStepFields(step: Step, t: (key: string) => string): StepIssue | null {
   switch (step.action) {
     case 'goto':
       if (!step.value?.trim()) {
-        return { message: 'URL is required.', value: 'URL is required.' };
+        return { message: t('step.validation.urlRequired'), value: t('step.validation.urlRequired') };
       }
       return null;
     case 'click':
@@ -124,60 +125,60 @@ function validateRequiredStepFields(step: Step): StepIssue | null {
     case 'assertHidden':
     case 'assertChecked':
       if (!step.selector?.trim()) {
-        return { message: 'Target is required.', selector: 'Target is required.' };
+        return { message: t('step.validation.targetRequired'), selector: t('step.validation.targetRequired') };
       }
       return null;
     case 'fill':
       return buildStepIssue({
-        ...(step.selector?.trim() ? {} : { selector: 'Target is required.' }),
-        ...(step.value !== undefined && step.value !== null ? {} : { value: 'Value is required.' })
+        ...(step.selector?.trim() ? {} : { selector: t('step.validation.targetRequired') }),
+        ...(step.value !== undefined && step.value !== null ? {} : { value: t('step.validation.valueRequired') })
       });
     case 'press':
       return buildStepIssue({
-        ...(step.selector?.trim() ? {} : { selector: 'Target is required.' }),
-        ...(step.value?.trim() ? {} : { value: 'Key is required.' })
+        ...(step.selector?.trim() ? {} : { selector: t('step.validation.targetRequired') }),
+        ...(step.value?.trim() ? {} : { value: t('step.validation.keyRequired') })
       });
     case 'keyboardPress':
       return buildStepIssue({
-        ...(step.value?.trim() ? {} : { value: 'Key is required.' })
+        ...(step.value?.trim() ? {} : { value: t('step.validation.keyRequired') })
       });
     case 'selectOption':
       return buildStepIssue({
-        ...(step.selector?.trim() ? {} : { selector: 'Target is required.' }),
-        ...(step.value?.trim() ? {} : { value: 'Option value is required.' })
+        ...(step.selector?.trim() ? {} : { selector: t('step.validation.targetRequired') }),
+        ...(step.value?.trim() ? {} : { value: t('step.validation.optionRequired') })
       });
     case 'assertText':
       return buildStepIssue({
-        ...(step.selector?.trim() ? {} : { selector: 'Target is required.' }),
-        ...(step.expected?.trim() ? {} : { expected: 'Expected text is required.' })
+        ...(step.selector?.trim() ? {} : { selector: t('step.validation.targetRequired') }),
+        ...(step.expected?.trim() ? {} : { expected: t('step.validation.expectedTextRequired') })
       });
     case 'assertValue':
       return buildStepIssue({
-        ...(step.selector?.trim() ? {} : { selector: 'Target is required.' }),
-        ...(step.expected?.trim() ? {} : { expected: 'Expected value is required.' })
+        ...(step.selector?.trim() ? {} : { selector: t('step.validation.targetRequired') }),
+        ...(step.expected?.trim() ? {} : { expected: t('step.validation.expectedValueRequired') })
       });
     case 'assertTitle':
       if (!step.expected?.trim()) {
-        return { message: 'Expected title is required.', expected: 'Expected title is required.' };
+        return { message: t('step.validation.expectedTitleRequired'), expected: t('step.validation.expectedTitleRequired') };
       }
       return null;
     case 'assertURL':
       if (!step.expected?.trim()) {
-        return { message: 'Expected URL/pattern is required.', expected: 'Expected URL/pattern is required.' };
+        return { message: t('step.validation.expectedUrlRequired'), expected: t('step.validation.expectedUrlRequired') };
       }
       return null;
     case 'assertCount':
       return buildStepIssue({
-        ...(step.selector?.trim() ? {} : { selector: 'Target is required.' }),
-        ...(step.expected?.trim() ? {} : { expected: 'Expected count is required.' })
+        ...(step.selector?.trim() ? {} : { selector: t('step.validation.targetRequired') }),
+        ...(step.expected?.trim() ? {} : { expected: t('step.validation.expectedCountRequired') })
       });
     default:
       return null;
   }
 }
 
-function validateStepRequirements(steps: Step[]) {
-  const issues = steps.map((step) => validateRequiredStepFields(step) ?? undefined);
+function validateCurrentSteps(steps: Step[], t: (key: string) => string) {
+  const issues = steps.map((step) => validateRequiredStepFields(step, t) ?? undefined);
   const firstInvalidIndex = issues.findIndex(Boolean);
   return {
     issues,
@@ -185,39 +186,17 @@ function validateStepRequirements(steps: Step[]) {
   };
 }
 
-function validateCurrentSteps(steps: Step[]) {
-  const issues = steps.map((step) => validateRequiredStepFields(step) ?? undefined);
-  const firstInvalidIndex = issues.findIndex(Boolean);
-  return {
-    issues,
-    firstInvalidIndex: firstInvalidIndex >= 0 ? firstInvalidIndex : null
-  };
-}
-
-function formatStepIssueSummary(step: Step, index: number, issue: StepIssue) {
-  const actionLabels: Record<Step['action'], string> = {
-    goto: 'Navigate to URL',
-    click: 'Click element',
-    fill: 'Fill input',
-    press: 'Press key',
-    keyboardPress: 'Keyboard press',
-    selectOption: 'Select option',
-    assertVisible: 'Assert visible',
-    assertHidden: 'Assert hidden',
-    assertText: 'Assert text',
-    assertValue: 'Assert value',
-    assertURL: 'Assert URL',
-    assertTitle: 'Assert title',
-    assertChecked: 'Assert checked',
-    assertCount: 'Assert count',
-    waitForSelector: 'Wait for element'
-  };
-  const label = `${index + 1}. ${actionLabels[step.action] ?? step.action}`;
+function formatStepIssueSummary(step: Step, index: number, issue: StepIssue, t: (key: string, options?: Record<string, unknown>) => string) {
   const fieldMessage = issue.selector ?? issue.value ?? issue.expected ?? issue.message;
-  return `${label}: ${fieldMessage}`;
+  return t('step.validation.summary', {
+    number: index + 1,
+    action: t(`step.action.${step.action}`),
+    message: fieldMessage
+  });
 }
 
 export default function TestEditorPage() {
+  const { t } = useTranslation();
   const { projectId, testId } = useParams<{ projectId?: string; testId?: string }>();
   const { setProject: setShellProject } = useAppShell();
   const [form] = Form.useForm();
@@ -466,7 +445,7 @@ export default function TestEditorPage() {
 
   const validateAndPrepareSteps = async (values: { name: string; url: string; device?: string | null }) => {
     const currentSteps = stepsRef.current;
-    const localIssues = validateCurrentSteps(currentSteps);
+    const localIssues = validateCurrentSteps(currentSteps, t);
     setValidationResults(undefined);
     setValidationTracePath(undefined);
     setStepIssues(localIssues.issues);
@@ -474,7 +453,9 @@ export default function TestEditorPage() {
     if (localIssues.firstInvalidIndex !== null) {
       const firstIssue = localIssues.issues[localIssues.firstInvalidIndex];
       const firstStep = currentSteps[localIssues.firstInvalidIndex];
-      const summary = firstIssue && firstStep ? formatStepIssueSummary(firstStep, localIssues.firstInvalidIndex, firstIssue) : 'Some steps are missing required fields.';
+      const summary = firstIssue && firstStep
+        ? formatStepIssueSummary(firstStep, localIssues.firstInvalidIndex, firstIssue, t)
+        : t('step.validation.missingRequiredFields');
       setValidationFeedback({
         type: 'error',
         text: summary
@@ -498,10 +479,10 @@ export default function TestEditorPage() {
       if (report.tracePath) {
         const traceUrl = `${BACKEND_URL}/trace-viewer/?trace=${encodeURIComponent(`${BACKEND_URL}/api/traces/${report.tracePath}`)}`;
         notification.info({
-          message: 'Validation trace ready',
+          message: t('editor.validationTraceReady'),
           description: (
             <a href={traceUrl} target="_blank" rel="noreferrer">
-              Open validation trace
+              {t('editor.openValidationTrace')}
             </a>
           ),
           duration: 0
@@ -569,7 +550,7 @@ export default function TestEditorPage() {
 
   const handleRunCheck = async () => {
     if (isReadOnly) {
-      message.warning('Read-only access');
+      message.warning(t('common.readOnly'));
       return;
     }
 
@@ -578,17 +559,17 @@ export default function TestEditorPage() {
       device: form.getFieldValue('device') || undefined
     };
     if (steps.length === 0) {
-      message.warning('Add at least one step before running');
+      message.warning(t('editor.addStepBeforeRun'));
       return;
     }
     if (hasTestDataErrors) {
-      message.error('Fix test data errors before running');
+      message.error(t('editor.fixTestDataBeforeRun'));
       return;
     }
     if (shouldBlockDataCaseRun) {
       message.error(dataCaseOptions.length === 0
-        ? 'Enable at least one test data case before running this test.'
-        : 'Select a test data case before running this test.');
+        ? t('editor.enableCaseBeforeRun')
+        : t('editor.selectCaseBeforeRun'));
       return;
     }
     const effectiveDataCaseIndex = dataCaseOptions.length === 1
@@ -633,7 +614,7 @@ export default function TestEditorPage() {
 
   const handleRunAllEnabledCases = async () => {
     if (isReadOnly) {
-      message.warning('Read-only access');
+      message.warning(t('common.readOnly'));
       return;
     }
 
@@ -642,11 +623,11 @@ export default function TestEditorPage() {
       device: form.getFieldValue('device') || undefined
     };
     if (steps.length === 0) {
-      message.warning('Add at least one step before running');
+      message.warning(t('editor.addStepBeforeRun'));
       return;
     }
     if (hasTestDataErrors) {
-      message.error('Fix test data errors before running');
+      message.error(t('editor.fixTestDataBeforeRun'));
       return;
     }
     if (templateDiagnostics.errors.length > 0) {
@@ -654,7 +635,7 @@ export default function TestEditorPage() {
       return;
     }
     if (dataCaseOptions.length <= 1) {
-      message.warning('Add at least two enabled test data cases first');
+      message.warning(t('editor.twoEnabledCasesBeforeRun'));
       return;
     }
 
@@ -690,14 +671,14 @@ export default function TestEditorPage() {
 
   const handleStartRecording = async () => {
     if (isReadOnly) {
-      message.warning('Read-only access');
+      message.warning(t('common.readOnly'));
       return;
     }
 
     const url = form.getFieldValue('url');
     const device = form.getFieldValue('device') || undefined;
     if (!url) {
-      message.warning('Enter Start URL before recording');
+      message.warning(t('editor.enterStartUrlBeforeRecording'));
       return;
     }
 
@@ -716,7 +697,7 @@ export default function TestEditorPage() {
         }
 
         if (hasTemplate && environments.length === 0) {
-          message.warning('Create an environment first before using {{VARIABLE}} in Start URL');
+          message.warning(t('editor.environmentRequiredForTemplate'));
           return;
         }
 
@@ -741,15 +722,15 @@ export default function TestEditorPage() {
       setSessionId(data.sessionId);
       setRecording(true);
       setRecordModalOpen(false);
-      message.info('Browser opened. Interact with the page, then click Stop Recording.');
+      message.info(t('editor.recordingStarted'));
     } catch {
-      message.error('Failed to start recording');
+      message.error(t('editor.recordingStartFailed'));
     }
   };
 
   const handleConfirmRecordingStart = async () => {
     if (isReadOnly) {
-      message.warning('Read-only access');
+      message.warning(t('common.readOnly'));
       return;
     }
 
@@ -769,12 +750,12 @@ export default function TestEditorPage() {
       setSessionId(data.sessionId);
       setRecording(true);
       setRecordModalOpen(false);
-      message.info('Browser opened. Interact with the page, then click Stop Recording.');
+      message.info(t('editor.recordingStarted'));
     } catch (error) {
       const responseError = error && typeof error === 'object' && 'response' in error
         ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
         : null;
-      message.error(typeof responseError === 'string' ? responseError : 'Failed to start recording');
+      message.error(typeof responseError === 'string' ? responseError : t('editor.recordingStartFailed'));
     } finally {
       setRecordLoading(false);
     }
@@ -788,15 +769,15 @@ export default function TestEditorPage() {
       replaceOrAppendRecordedSteps(data.steps);
       setRecording(false);
       setSessionId(null);
-      message.success(`Recorded ${data.steps.length} steps`);
+      message.success(t('editor.recordedSteps', { count: data.steps.length }));
     } catch {
-      message.error('Failed to stop recording');
+      message.error(t('editor.recordingStopFailed'));
     }
   };
 
   const handleOpenExport = (kind: 'spec' | 'project') => {
     if (isReadOnly) {
-      message.warning('Read-only access');
+      message.warning(t('common.readOnly'));
       return;
     }
     setExportKind(kind);
@@ -807,13 +788,13 @@ export default function TestEditorPage() {
 
   const handleDownloadExport = () => {
     if (isReadOnly) {
-      message.warning('Read-only access');
+      message.warning(t('common.readOnly'));
       return;
     }
 
     const params = new URLSearchParams();
     if (exportMode === 'inline' && !exportEnvId) {
-      message.warning('Select an environment for inline export');
+      message.warning(t('editor.selectEnvironmentForInlineExport'));
       return;
     }
 
@@ -848,17 +829,17 @@ export default function TestEditorPage() {
         anchor.click();
         anchor.remove();
         setTimeout(() => URL.revokeObjectURL(url), 0);
-        message.success(exportKind === 'project' ? 'Playwright project exported' : 'Check exported');
+        message.success(exportKind === 'project' ? t('editor.projectExported') : t('project.checkExported'));
         setExportModalOpen(false);
       } catch {
-        message.error(exportKind === 'project' ? 'Failed to export Playwright project' : 'Failed to export check');
+        message.error(exportKind === 'project' ? t('editor.projectExportFailed') : t('project.checkExportFailed'));
       }
     })();
   };
 
   const handleValidateAndSave = async () => {
     if (isReadOnly) {
-      message.warning('Read-only access');
+      message.warning(t('common.readOnly'));
       return;
     }
 
@@ -868,7 +849,7 @@ export default function TestEditorPage() {
         device: form.getFieldValue('device') || undefined
       };
       if (hasTestDataErrors) {
-        message.error('Fix test data errors before saving');
+        message.error(t('editor.fixTestDataBeforeSave'));
         return;
       }
       if (templateDiagnostics.errors.length > 0) {
@@ -949,14 +930,14 @@ export default function TestEditorPage() {
   };
 
   const getEnvironmentLabel = () => {
-    if (!selectedRecordingEnvironmentId) return 'No environment selected';
-    return recordEnvironments.find((environment) => environment.id === selectedRecordingEnvironmentId)?.name ?? 'No environment selected';
+    if (!selectedRecordingEnvironmentId) return t('editor.noEnvironment');
+    return recordEnvironments.find((environment) => environment.id === selectedRecordingEnvironmentId)?.name ?? t('editor.noEnvironment');
   };
 
   const stepAssertionsCount = steps.filter((step) => step.action.startsWith('assert')).length;
   const stepSummaryBadges = [
     <Tag key="steps" color="blue">
-      {steps.length} step{steps.length === 1 ? '' : 's'}
+      {t('editor.stepsCount', { count: steps.length })}
     </Tag>,
     stepAssertionsCount === 0 ? (
       <Tag
@@ -969,11 +950,11 @@ export default function TestEditorPage() {
           borderColor: '#ffd591'
         }}
       >
-        No assertions
+        {t('editor.noAssertions')}
       </Tag>
     ) : (
       <Tag key="assertions" color="purple">
-        {stepAssertionsCount} assertion{stepAssertionsCount === 1 ? '' : 's'}
+        {t('editor.assertionsCount', { count: stepAssertionsCount })}
       </Tag>
     ),
     <Tag key="device" color="default">
@@ -1061,10 +1042,10 @@ export default function TestEditorPage() {
     }
 
     confirmModal.confirm({
-      title: 'Discard changes?',
-      content: 'You have unsaved changes. Leave this page and lose your edits?',
-      okText: 'Leave page',
-      cancelText: 'Stay',
+      title: t('editor.discardChangesTitle'),
+      content: t('editor.discardChangesDescription'),
+      okText: t('editor.leavePage'),
+      cancelText: t('editor.stayOnPage'),
       onOk: onLeave
     });
   };
@@ -1087,15 +1068,15 @@ export default function TestEditorPage() {
   const projectLink = projectRouteId ? `/projects/${projectRouteId}/checks` : '/projects';
   const exportMenu: MenuProps = {
     items: [
-      { key: 'spec', label: 'Export single spec (.spec.ts)' },
-      { key: 'project', label: 'Export Playwright project (.zip)' }
+      { key: 'spec', label: t('editor.exportSpec') },
+      { key: 'project', label: t('editor.exportProject') }
     ],
     onClick: ({ key }) => handleOpenExport(key === 'project' ? 'project' : 'spec')
   };
   const exportTrigger = (
     <Dropdown menu={exportMenu} trigger={['click']}>
       <Button icon={<DownloadOutlined />} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={isReadOnly}>
-        <span>Export</span>
+        <span>{t('editor.export')}</span>
         <DownOutlined />
       </Button>
     </Dropdown>
@@ -1112,26 +1093,26 @@ export default function TestEditorPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
                   <Breadcrumb
                     items={[
-                      { title: <Link to="/projects" onClick={(event) => { if (isDirty) { event.preventDefault(); confirmLeave(() => navigate('/projects')); } }}>Projects</Link> },
-                      { title: projectRouteId ? <Link to={projectLink} onClick={(event) => { if (isDirty) { event.preventDefault(); confirmLeave(() => navigate(projectLink)); } }}>{projectName || 'Project'}</Link> : <Text type="secondary">{projectName || 'Project'}</Text> },
-                      { title: projectRouteId ? <Link to={projectLink} onClick={(event) => { if (isDirty) { event.preventDefault(); confirmLeave(() => navigate(projectLink)); } }}>Checks</Link> : <Text type="secondary">Checks</Text> },
-                      { title: checkName || (isEdit ? 'New_Test' : 'New Check') }
+                      { title: <Link to="/projects" onClick={(event) => { if (isDirty) { event.preventDefault(); confirmLeave(() => navigate('/projects')); } }}>{t('nav.projects')}</Link> },
+                      { title: projectRouteId ? <Link to={projectLink} onClick={(event) => { if (isDirty) { event.preventDefault(); confirmLeave(() => navigate(projectLink)); } }}>{projectName || t('common.project')}</Link> : <Text type="secondary">{projectName || t('common.project')}</Text> },
+                      { title: projectRouteId ? <Link to={projectLink} onClick={(event) => { if (isDirty) { event.preventDefault(); confirmLeave(() => navigate(projectLink)); } }}>{t('project.checks')}</Link> : <Text type="secondary">{t('project.checks')}</Text> },
+                      { title: checkName || t('editor.newCheck') }
                     ]}
                   />
                   <Title level={2} style={{ margin: 0 }}>
-                    {isEdit ? 'Edit Check' : 'New Check'}
+                    {isEdit ? t('editor.editCheck') : t('editor.newCheck')}
                   </Title>
                   <Text type="secondary" style={{ maxWidth: 760 }}>
                     {isEdit
-                      ? 'Update the browser flow, target, device, and assertions for this check.'
-                      : 'Create a browser flow, choose a target and device, and add result assertions.'}
+                      ? t('editor.updateDescription')
+                      : t('editor.createDescription')}
                   </Text>
                   {isReadOnly && (
                     <Alert
                       type="info"
                       showIcon
-                      message="Read-only access"
-                      description="You can view this check, but you cannot make changes."
+                      message={t('common.readOnly')}
+                      description={t('editor.readOnlyDescription')}
                       style={{ marginTop: 8, width: 'fit-content' }}
                     />
                   )}
@@ -1139,19 +1120,19 @@ export default function TestEditorPage() {
 
                 <Space wrap align="center">
                   <Button icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly || hasTestDataErrors || shouldBlockSelectedCaseRun}>
-                    Run check
+                    {t('editor.runCheck')}
                   </Button>
                   {dataCaseOptions.length > 1 && (
                     <Button icon={<PlayCircleOutlined />} onClick={() => void handleRunAllEnabledCases()} disabled={isReadOnly || hasTestDataErrors || shouldBlockRunAllCases || saving || validating}>
-                      Run all enabled cases
+                      {t('editor.runAllCases')}
                     </Button>
                   )}
                   <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
-                    Start recording
+                    {t('editor.startRecording')}
                   </Button>
                   {exportTrigger}
                   <Button type="primary" loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors || shouldBlockRunAllCases} onClick={handleValidateAndSave}>
-                    {isEdit ? 'Save changes' : 'Create check'}
+                    {isEdit ? t('common.saveChanges') : t('editor.createCheck')}
                   </Button>
                 </Space>
           </div>
@@ -1159,39 +1140,39 @@ export default function TestEditorPage() {
           </Col>
 
           <Col span={24}>
-            <Card title="Check settings" style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}>
+            <Card title={t('editor.checkSettings')} style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}>
               <Form form={form} layout="vertical">
                 <Row gutter={[20, 12]}>
                   <Col xs={24} lg={12}>
                     <Form.Item
                       name="name"
-                      label="Check name"
-                      rules={[{ required: true, message: 'Check name is required' }]}
+                      label={t('editor.checkName')}
+                      rules={[{ required: true, message: t('editor.checkNameRequired') }]}
                     >
-                      <Input placeholder="Check homepage title" size="large" />
+                      <Input placeholder={t('editor.checkNamePlaceholder')} size="large" />
                     </Form.Item>
                   </Col>
                   <Col xs={24} lg={12}>
                     <Form.Item
                       name="device"
-                      label="Device"
-                      tooltip="Leave empty for desktop. Select a device to emulate mobile viewport, user agent and touch events."
+                      label={t('editor.device')}
+                      tooltip={t('editor.deviceHelp')}
                     >
                       <Select
                         allowClear
                         disabled={isReadOnly}
-                        placeholder="Desktop 1280px by default"
+                        placeholder={t('editor.devicePlaceholder')}
                         options={[
                           {
-                            label: 'Desktop',
+                            label: t('editor.desktop'),
                             options: deviceOptions.filter((device) => device.value && device.label.startsWith('Desktop'))
                           },
                           {
-                            label: 'iPhone / iPad',
+                            label: t('editor.iphoneIpad'),
                             options: deviceOptions.filter((device) => device.label.startsWith('iPhone') || device.label.startsWith('iPad'))
                           },
                           {
-                            label: 'Android',
+                            label: t('editor.android'),
                             options: deviceOptions.filter((device) =>
                               device.label.startsWith('Pixel') || device.label.startsWith('Samsung') || device.label.startsWith('Galaxy')
                             )
@@ -1203,10 +1184,10 @@ export default function TestEditorPage() {
                   <Col span={24}>
                     <Form.Item
                       name="url"
-                      label="Start URL"
-                      help="Supports environment variables."
+                      label={t('editor.startUrl')}
+                      help={t('editor.environmentVariablesSupported')}
                       rules={[
-                        { required: true, message: 'Start URL is required' },
+                        { required: true, message: t('editor.startUrlRequired') },
                         {
                           validator: async (_, value?: string) => {
                             if (!value) return;
@@ -1214,7 +1195,7 @@ export default function TestEditorPage() {
                             try {
                               new URL(value);
                             } catch {
-                              throw new Error('Enter a valid URL or use {{VARIABLE}} placeholders');
+                              throw new Error(t('editor.startUrlInvalid'));
                             }
                           }
                         }
@@ -1230,13 +1211,13 @@ export default function TestEditorPage() {
                   </Col>
                   <Col xs={24} lg={currentApiTestData.length > 0 ? 12 : 24}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
-                      <Text type="secondary">Environment</Text>
+                      <Text type="secondary">{t('project.environments')}</Text>
                       <Select
                         allowClear
                         value={selectedRecordingEnvironmentId}
                         disabled={isReadOnly}
                         onChange={(value) => setSelectedRecordingEnvironmentId(value)}
-                        placeholder="No environment selected"
+                        placeholder={t('editor.noEnvironment')}
                         style={{ width: '100%' }}
                         options={recordEnvironments.map((environment) => ({
                           value: environment.id,
@@ -1244,7 +1225,7 @@ export default function TestEditorPage() {
                         }))}
                       />
                       <Text type="secondary" style={{ fontSize: 12 }}>
-                        Variables from the selected environment can be used in Start URL and steps as {'{{BASE_URL}}'}, {'{{USERNAME}}'}, or {'{{PASSWORD}}'}.
+                        {t('editor.environmentVariablesHelp')}
                       </Text>
                     </div>
                   </Col>
@@ -1255,19 +1236,19 @@ export default function TestEditorPage() {
                         disabled={isReadOnly}
                         onChange={(event) => setUseProjectAuthentication(event.target.checked)}
                       >
-                        Use reusable project authentication for this environment
+                        {t('editor.reusableAuthentication')}
                       </Checkbox>
                       <Text type="secondary" style={{ fontSize: 12 }}>
-                        Disable this for login, logout, registration, password reset, and guest checks that must start unauthenticated.
+                        {t('editor.reusableAuthenticationHelp')}
                       </Text>
                     </Space>
                   </Col>
                   {currentApiTestData.length > 0 && (
                     <Col xs={24} lg={12}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
-                        <Text type="secondary">Test data case</Text>
+                        <Text type="secondary">{t('editor.testDataCase')}</Text>
                         <Select
-                          placeholder={dataCaseOptions.length > 0 ? 'Select case' : 'No enabled cases'}
+                          placeholder={dataCaseOptions.length > 0 ? t('editor.selectCase') : t('editor.noEnabledCases')}
                           value={effectiveSelectedDataCaseIndex}
                           options={dataCaseOptions}
                           onChange={(value) => setSelectedDataCaseIndex(value)}
@@ -1276,11 +1257,11 @@ export default function TestEditorPage() {
                         />
                         {dataCaseOptions.length === 0 ? (
                           <Text type="danger" style={{ fontSize: 12 }}>
-                            Enable at least one test data case before running this test.
+                            {t('editor.enableCaseBeforeRun')}
                           </Text>
                         ) : (
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            Selected case variables are used for manual runs.
+                            {t('editor.selectedCaseVariablesHelp')}
                           </Text>
                         )}
                       </div>
@@ -1309,9 +1290,9 @@ export default function TestEditorPage() {
               className="wt-editor-section-card wt-editor-steps-card"
               title={
                 <div className="wt-editor-section-card__heading">
-                  <span>Steps</span>
+                  <span>{t('editor.steps')}</span>
                   <Text type="secondary" className="wt-editor-section-card__description">
-                    Record, edit, and validate the browser flow.
+                    {t('editor.stepsDescription')}
                   </Text>
                 </div>
               }
@@ -1322,18 +1303,18 @@ export default function TestEditorPage() {
                   </Space>
                       {!recording ? (
                         <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
-                          Start recording
+                          {t('editor.startRecording')}
                         </Button>
                       ) : (
                         <Button icon={<StopOutlined />} onClick={handleStopRecording} danger disabled={isReadOnly}>
-                          Stop recording
+                          {t('editor.stopRecording')}
                         </Button>
                       )}
                       <Button onClick={() => setSteps((current) => [...current, { action: 'goto', value: '' }])} disabled={isReadOnly}>
-                        Add step
+                        {t('editor.addStep')}
                       </Button>
                       <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly || saving || validating || hasTestDataErrors || shouldBlockSelectedCaseRun}>
-                        Run check
+                        {t('editor.runCheck')}
                       </Button>
                 </Space>
               }
@@ -1352,7 +1333,7 @@ export default function TestEditorPage() {
                     message={validationFeedback.text}
                     action={validationTraceUrl ? (
                       <Button type="link" onClick={() => window.open(validationTraceUrl, '_blank', 'noopener,noreferrer')}>
-                        Open validation trace
+                        {t('editor.openValidationTrace')}
                       </Button>
                     ) : undefined}
                   />
@@ -1361,23 +1342,23 @@ export default function TestEditorPage() {
                 {recording && ENABLE_NOVNC && novncAvailable && (
                   <div>
                     <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-                      Live browser session:
+                      {t('editor.liveBrowserSession')}
                     </Text>
                     <iframe
                       src={`${noVncBaseUrl}/vnc.html?autoconnect=true&resize=scale&view_only=false&path=${encodeURIComponent(noVncWebsocketPath)}`}
                       style={{ width: '100%', height: 500, border: '1px solid #d9d9d9', borderRadius: 8 }}
-                      title="Live browser"
+                      title={t('editor.liveBrowser')}
                     />
                   </div>
                 )}
                 {recording && ENABLE_NOVNC && !novncAvailable && (
                   <Text type="secondary">
-                    Live browser preview is unavailable in the current setup. Start the Docker noVNC service to enable it.
+                    {t('editor.liveBrowserUnavailable')}
                   </Text>
                 )}
 
                 <Space>
-                  {recording && <span style={{ color: '#ff4d4f', fontSize: 13 }}>● Recording in progress...</span>}
+                  {recording && <span style={{ color: '#ff4d4f', fontSize: 13 }}>● {t('editor.recordingInProgress')}</span>}
                 </Space>
 
                 {steps.length > 0 ? (
@@ -1392,22 +1373,22 @@ export default function TestEditorPage() {
                 ) : (
                   <Card style={{ borderRadius: 16, background: '#fafafa' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
-                      <Title level={5} style={{ margin: 0 }}>No steps yet</Title>
+                      <Title level={5} style={{ margin: 0 }}>{t('editor.noSteps')}</Title>
                       <Text type="secondary">
-                        Start recording a browser flow or add the first step manually.
+                        {t('editor.noStepsDescription')}
                       </Text>
                       <Space wrap>
                         {!recording ? (
                           <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
-                            Start recording
+                            {t('editor.startRecording')}
                           </Button>
                         ) : (
                           <Button icon={<StopOutlined />} onClick={handleStopRecording} danger disabled={isReadOnly}>
-                            Stop recording
+                            {t('editor.stopRecording')}
                           </Button>
                         )}
                         <Button type="dashed" onClick={() => setSteps([{ action: 'goto', value: '' }])} disabled={isReadOnly}>
-                          Add step
+                          {t('editor.addStep')}
                         </Button>
                       </Space>
                     </div>
@@ -1434,12 +1415,12 @@ export default function TestEditorPage() {
         <div style={{ maxWidth: 1180, margin: '0 auto', padding: '14px 32px' }}>
           <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
             <Space wrap>
-              <Button onClick={() => confirmLeave(() => navigate(-1))}>Cancel</Button>
+              <Button onClick={() => confirmLeave(() => navigate(-1))}>{t('common.cancel')}</Button>
               {exportTrigger}
             </Space>
             <Space wrap>
               <Button onClick={handleValidateAndSave} loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors || shouldBlockRunAllCases}>
-                {isEdit ? 'Save changes' : 'Create check'}
+                {isEdit ? t('common.saveChanges') : t('editor.createCheck')}
               </Button>
             </Space>
           </Space>
@@ -1448,7 +1429,7 @@ export default function TestEditorPage() {
       <div style={{ height: 96 }} />
       <AppFooter bottomPadding={24} />
       <Modal
-        title="Select Environment for Recording"
+        title={t('editor.selectEnvironmentForRecording')}
         open={recordModalOpen}
         onOk={() => void handleConfirmRecordingStart()}
         onCancel={() => setRecordModalOpen(false)}
@@ -1460,26 +1441,26 @@ export default function TestEditorPage() {
           onChange={(event) => setSelectedRecordingEnvironmentId(event.target.value || undefined)}
         >
           <Radio value="" disabled={recordingUrlHasTemplate}>
-            No environment (use values as-is)
+            {t('editor.noEnvironmentUseAsIs')}
           </Radio>
           {recordEnvironments.map((environment) => (
             <Radio key={environment.id} value={environment.id}>
               {environment.name}
               <Text type="secondary" style={{ marginLeft: 8 }}>
-                {Object.keys(environment.variables).length} variables
+                {t('editor.variableCount', { count: Object.keys(environment.variables).length })}
               </Text>
             </Radio>
           ))}
         </Radio.Group>
         {recordEnvironments.length > 0 && (
           <Text type="secondary" style={{ display: 'block', marginTop: 12 }}>
-            When Start URL contains {'{{VARIABLE}}'}, choose the environment that defines it.
+            {t('editor.recordingEnvironmentHelp')}
           </Text>
         )}
       </Modal>
 
       <Modal
-        title={exportKind === 'project' ? 'Export Playwright project' : 'Export as Playwright spec'}
+        title={exportKind === 'project' ? t('editor.exportProjectTitle') : t('editor.exportSpecTitle')}
         open={exportModalOpen}
         onCancel={() => setExportModalOpen(false)}
         footer={null}
@@ -1487,27 +1468,27 @@ export default function TestEditorPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
           <Typography.Text type="secondary">
             {exportKind === 'project'
-              ? 'Choose how to handle environment variables in the generated Playwright project ({\'{{BASE_URL}}\'} etc.)'
-              : 'Choose how to handle environment variables ({\'{{BASE_URL}}\'} etc.)'}
+              ? t('editor.exportProjectEnvironmentHelp')
+              : t('editor.exportEnvironmentHelp')}
           </Typography.Text>
 
           <Radio.Group value={exportMode} onChange={(event) => setExportMode(event.target.value)}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <Radio value="inline">
-                Inline values - replace variables with actual values from environment
+                {t('editor.exportInlineValues')}
               </Radio>
               <Radio value="envvars">
-                process.env - use Node.js environment variables
+                {t('editor.exportProcessEnv')}
               </Radio>
               <Radio value="raw">
-                Keep as-is - leave {'{{VARIABLE}}'} placeholders
+                {t('editor.exportKeepPlaceholders')}
               </Radio>
             </div>
           </Radio.Group>
 
           {exportMode === 'inline' && recordEnvironments.length > 0 && (
             <Select
-              placeholder="Select environment"
+              placeholder={t('editor.selectEnvironment')}
               style={{ width: '100%' }}
               options={recordEnvironments.map((environment) => ({ value: environment.id, label: environment.name }))}
               value={exportEnvId}
@@ -1516,7 +1497,7 @@ export default function TestEditorPage() {
           )}
 
           <Button type="primary" icon={<DownloadOutlined />} block onClick={handleDownloadExport}>
-            Download {exportKind === 'project' ? '.zip' : '.spec.ts'}
+            {t('editor.downloadExport', { extension: exportKind === 'project' ? '.zip' : '.spec.ts' })}
           </Button>
         </div>
       </Modal>

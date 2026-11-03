@@ -13,19 +13,20 @@
 
 ## ✨ Features
 
-- **Visual Recorder** - click through your app via noVNC, steps captured automatically
+- **Browser checks** - create and edit browser flows in the visual check editor
+- **Visual Recorder** - record browser interactions through Playwright Inspector; Docker deployments expose the headed browser through noVNC
 - **Smart Locators** - uses `getByRole`, `getByLabel`, `href` instead of fragile CSS paths
-- **Assertions Builder** - `toBeVisible`, `toHaveText`, `toHaveURL` and more
+- **Assertions Builder** - configure visibility, text, value, URL, title, checked state, and element-count assertions
 - **Device Presets** - run desktop 1280px by default or emulate iPhone 15, Pixel 7, iPad and other devices
-- **Environments** - `{{BASE_URL}}`, `{{PASSWORD}}` replaced at runtime per environment
+- **Environments and authentication** - use project-scoped variables and optionally reuse encrypted Playwright storage state per environment
 - **Data-driven checks** - define named scenario cases, run one selected case, or queue all enabled cases as a batch
-- **Scheduler** - cron-based automatic runs with full history per schedule
-- **Suites** - group tests and run them with one click or on schedule
-- **Trace Viewer** - built-in Playwright trace viewer after every run
-- **Notifications** - Telegram / Slack alerts on FAILED
-- **Export** - download a single `.spec.ts` or a runnable Playwright project `.zip`
-- **Import** - paste existing Playwright script, get a visual test
-- **Dashboard** - pass rate over time and flaky test detection
+- **Suites and schedules** - group checks and run checks or suites manually or on a cron schedule
+- **Run results** - inspect step-level outcomes, screenshots, and Playwright traces in the built-in trace viewer
+- **Notifications** - Telegram and Slack alerts for failed runs
+- **Import and export** - import supported Playwright specs, export a single `.spec.ts`, or download a runnable Playwright project `.zip`
+- **Projects and roles** - organize checks, environments, schedules, alerts, and history; assign Owner, Editor, and read-only Viewer access
+- **Dashboard** - review run health, pass rates, recent failures, and flaky checks
+- **Interface languages** - English and Russian catalogs, instance-wide language selection, and administrator-managed JSON language packs
 
 ## How WrightTest compares
 
@@ -42,14 +43,14 @@
 
 ## 🚀 Quick Start (Docker-first)
 
-**Requirements:** Docker, Docker Compose
+**Requirements:** Docker Engine/Desktop with Docker Compose V2 (`docker compose`), and Node.js 20+ only if you use the host-development setup.
 
 ```bash
 git clone https://github.com/AlexFilippov-it/wrighttest.git
 cd wrighttest
 
 cp .env.example .env
-# Edit .env - set JWT_SECRET to a long random string (required)
+# Edit .env: set JWT_SECRET to a long random value and change the initial admin password.
 
 docker compose up --build
 ```
@@ -60,12 +61,12 @@ docker compose up --build
 | API | http://localhost:3000 |
 | noVNC | http://localhost:6080 |
 
-Default admin login is defined in `.env`:
+The initial system-admin account is seeded from `.env`:
 
 - `ADMIN_EMAIL=admin@wrighttest.app`
 - `ADMIN_PASSWORD=changeme`
 
-On an empty database the seed also creates a `Docker Demo` project with two sample tests, a `DEV` environment, a `Smoke Test` suite, and an hourly schedule.
+On an empty database the seed also creates a `Docker Demo` project with sample checks, a `DEV` environment, a suite, and an hourly schedule. Change the sample credentials before exposing the instance to other users.
 
 This path is the recommended first launch on any machine. The backend image is built on the Playwright-ready base image and includes the browser bundle, so no host browser or system library setup is required.
 
@@ -88,7 +89,7 @@ git clone https://github.com/AlexFilippov-it/wrighttest.git
 cd wrighttest
 
 cp .env.example .env
-# Set JWT_SECRET to a long random string.
+# Set JWT_SECRET to a long random value and change the initial admin password.
 
 docker compose -f docker-compose.hub.yml pull
 docker compose -f docker-compose.hub.yml up -d
@@ -98,14 +99,14 @@ Use `WRIGHTTEST_IMAGE_NAMESPACE` and `WRIGHTTEST_IMAGE_TAG` to select another Do
 
 ```env
 WRIGHTTEST_IMAGE_NAMESPACE=sacha1bu
-WRIGHTTEST_IMAGE_TAG=0.2.0
+WRIGHTTEST_IMAGE_TAG=0.3.0
 ```
 
 The regular `docker-compose.yml` remains the source-of-truth development compose file and builds the same image names from the current Git checkout. `docker-compose.hub.yml` is the pull-only runtime variant for Docker Hub users.
 
 Publishing is automated by `.github/workflows/docker-publish.yml`:
 
-- publishing a GitHub Release such as `v0.2.0` publishes both `0.2.0` and `latest` for all three images;
+- publishing a GitHub Release such as `v0.3.0` publishes both `0.3.0` and `latest` for all three images;
 - a manual workflow run publishes the requested tag and can optionally update `latest` to the same image digest;
 - Docker Hub credentials are stored only in the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` GitHub Actions secrets;
 - `DOCKERHUB_NAMESPACE` is configured as a GitHub Actions repository variable.
@@ -201,9 +202,9 @@ The recorder iframe connects to:
 
 This keeps the container image unchanged and moves the deployment-specific part into configuration only.
 
-## 🤖 AI Quick Start
+## 📖 Repository Guide
 
-If you are working with an AI coding agent, start here first:
+For repository setup, architecture, and contribution workflow, start here:
 
 - [AGENTS.md](./AGENTS.md)
 
@@ -228,13 +229,11 @@ cd backend && npx prisma migrate dev && npx prisma db seed && cd ..
 npm run dev
 ```
 
-`npm install` now runs a Playwright bootstrap step for Chromium and WebKit. On Ubuntu/Linux
-it will also try to install system dependencies when the terminal session allows
-it. If Playwright still cannot launch Chromium or mobile recording needs WebKit,
-run the same bootstrap manually and then install Linux deps:
+After `npm install`, run `npm run setup` to install Playwright Chromium and WebKit.
+On Linux, the script also attempts to install browser system dependencies. If that
+step requires elevated permissions or fails, install them explicitly:
 
 ```bash
-npm run setup
 npx playwright install chromium webkit
 sudo npx playwright install-deps chromium webkit
 ```
@@ -244,7 +243,7 @@ sudo npx playwright install-deps chromium webkit
 | Frontend | http://localhost:5173 |
 | Backend | http://localhost:3000 |
 
-If the host environment still reports missing Playwright libraries, rerun `npm run setup` once from the repo root. On Ubuntu/Linux this may fall back to `npx playwright install-deps chromium webkit` when needed.
+If the host environment still reports missing Playwright libraries, run `sudo npx playwright install-deps chromium webkit` from the repo root.
 
 ## 🔄 Updating
 
@@ -281,27 +280,17 @@ docker compose up --build -d
 
 ## 📸 Product Tour
 
-<p align="center">
-  <img src="./docs/Screenshot_1.png" alt="Projects overview" width="100%" />
-</p>
-<p align="center"><em>Projects overview with health summaries, project status, and onboarding.</em></p>
+Current screenshots are captured from the running application at a consistent 1920×1080 viewport. The project-tour set is intentionally limited to screens that do not expose local test URLs or inconsistent demo data.
 
 <p align="center">
-  <img src="./docs/Screenshot_2.png" alt="Project workspace checks tab" width="49%" />
-  <img src="./docs/Screenshot_3.png" alt="Project alerts tab" width="49%" />
+  <img src="./docs/release/suites.png" alt="Suites page in WrightTest" width="100%" />
 </p>
-<p align="center"><em>Project workspace with checks, schedules, alerts, and operational summaries.</em></p>
+<p align="center"><em>Organize reusable groups of browser checks.</em></p>
 
 <p align="center">
-  <img src="./docs/Screenshot_4.png" alt="Check editor" width="49%" />
-  <img src="./docs/Screenshot_6.png" alt="Global runs page" width="49%" />
+  <img src="./docs/release/language-settings.png" alt="English instance language settings in WrightTest" width="100%" />
 </p>
-<p align="center"><em>Edit browser checks visually and review global execution history across projects.</em></p>
-
-<p align="center">
-  <img src="./docs/Screenshot_5.png" alt="Live browser recording" width="100%" />
-</p>
-<p align="center"><em>Live recording captures Playwright-ready selectors directly from the browser session.</em></p>
+<p align="center"><em>Manage the instance interface language and language packs.</em></p>
 
 ## 🧪 Data-driven Checks
 
@@ -357,6 +346,14 @@ WrightTest can reuse encrypted Playwright authentication state separately for ea
 
 See [Project-level reusable authentication with Playwright storageState](https://github.com/AlexFilippov-it/wrighttest/discussions/4#discussioncomment-18757806) for the setup steps, security model, refresh behavior, and current MVP scope.
 
+## 🌐 Interface languages
+
+The instance administrator can select the shared interface language and manage JSON language packs under **System → Language**. English and Russian are built in; custom packs are stored in PostgreSQL, so they survive application container rebuilds.
+
+To add a language, download its template, translate the `translation` values, then upload and review the merge preview before applying it. Empty values and omitted keys preserve existing translations, while new English strings fall back automatically. Export the installed pack to continue translation after a WrightTest update. Run `npm run i18n:check` to validate the built-in catalogs.
+
+The built-in English and Russian catalogs are checked by `npm run i18n:check`. English is the fallback for newly added or untranslated keys. User-authored project names, check content, locator expressions, and diagnostic output are not translated.
+
 ## 🖥 Devices
 
 If no device is selected, WrightTest uses the default desktop browser context (`1280x720`). The device selector only stores explicit overrides such as:
@@ -366,12 +363,6 @@ If no device is selected, WrightTest uses the default desktop browser context (`
 - mobile and tablet presets from Playwright
 
 There is no separate saved value for "Desktop default"; leaving the selector empty is the default desktop mode.
-
-<p align="center">
-  <img src="./docs/Screenshot_7.png" alt="Test data editor" width="49%" />
-  <img src="./docs/Screenshot_8.png" alt="Selecting a test data case for a manual run" width="49%" />
-</p>
-<p align="center"><em>Create named data cases in the check editor, then select the enabled case to use for a manual run.</em></p>
 
 ## 📦 Export Playwright Project
 
@@ -478,7 +469,11 @@ Playwright headless
 
 ## 📦 Docker Image
 
-The Docker image badge will be added after the first public image publish.
+Published application images are available from Docker Hub:
+
+- [Backend](https://hub.docker.com/r/sacha1bu/wrighttest-backend)
+- [Frontend](https://hub.docker.com/r/sacha1bu/wrighttest-frontend)
+- [noVNC](https://hub.docker.com/r/sacha1bu/wrighttest-novnc)
 
 ## 📄 License
 

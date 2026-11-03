@@ -7,6 +7,9 @@ export interface TestJobData {
   environmentId?: string;
 }
 
+export const testQueuePrefix = process.env.BULLMQ_PREFIX?.trim() || 'bull';
+
 export const testQueue = new Queue<TestJobData>('test-runs', {
-  connection: redis
+  connection: redis,
+  prefix: testQueuePrefix
 });

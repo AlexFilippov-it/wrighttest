@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Col, Layout, Row, Select, Space, Table, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import RunStatusBadge from '../components/RunStatusBadge';
@@ -12,42 +14,23 @@ import type { DashboardRecentRun, ProjectSummary, RunsResponse } from '../types'
 const { Content } = Layout;
 const { Title, Text } = Typography;
 
-const PERIOD_OPTIONS = [
-  { value: 24, label: 'Last 24 hours' },
-  { value: 7, label: 'Last 7 days' },
-  { value: 30, label: 'Last 30 days' },
-  { value: 0, label: 'All time' }
-];
-
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All statuses' },
-  { value: 'passed', label: 'Passed' },
-  { value: 'failed', label: 'Failed' }
-];
-
-const TRIGGER_OPTIONS = [
-  { value: 'all', label: 'All triggers' },
-  { value: 'manual', label: 'Manual' },
-  { value: 'schedule', label: 'Schedule' }
-];
-
 const PAGE_SIZE = 20;
 const SLOW_RUN_THRESHOLD_MS = 30_000;
 
-function formatRelativeTime(value: string) {
+function formatRelativeTime(value: string, t: TFunction) {
   const diffMs = Date.now() - new Date(value).getTime();
   const minute = 60 * 1000;
   const hour = 60 * minute;
   const day = 24 * hour;
 
-  if (diffMs < minute) return 'just now';
-  if (diffMs < hour) return `${Math.round(diffMs / minute)} min ago`;
-  if (diffMs < day) return `${Math.round(diffMs / hour)} hour${Math.round(diffMs / hour) === 1 ? '' : 's'} ago`;
-  return `${Math.round(diffMs / day)} day${Math.round(diffMs / day) === 1 ? '' : 's'} ago`;
+  if (diffMs < minute) return t('time.justNow');
+  if (diffMs < hour) return t('time.minutesAgo', { count: Math.round(diffMs / minute) });
+  if (diffMs < day) return t('time.hoursAgo', { count: Math.round(diffMs / hour) });
+  return t('time.daysAgo', { count: Math.round(diffMs / day) });
 }
 
-function formatShortDate(value: string) {
-  return new Date(value).toLocaleString([], {
+function formatShortDate(value: string, locale: string) {
+  return new Date(value).toLocaleString(locale, {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -55,34 +38,38 @@ function formatShortDate(value: string) {
   });
 }
 
-function formatDuration(ms?: number | null) {
+function formatDuration(ms: number | null | undefined, locale: string) {
   if (ms === null || ms === undefined) return '—';
-  return `${(ms / 1000).toFixed(ms >= 10000 ? 1 : 2)}s`;
+  const digits = ms >= 10000 ? 1 : 2;
+  return `${new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(ms / 1000)}s`;
 }
 
-function formatDurationCompact(ms?: number | null) {
+function formatDurationCompact(ms: number | null | undefined, locale: string) {
   if (ms === null || ms === undefined) return '—';
-  return `${(ms / 1000).toFixed(2)}s`;
+  return `${new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(ms / 1000)}s`;
 }
 
-function formatProjectFilters(projects: ProjectSummary[], projectId?: string) {
-  if (!projectId) return 'All projects';
-  return projects.find((project) => project.id === projectId)?.name ?? 'All projects';
+function formatProjectFilters(projects: ProjectSummary[], projectId: string | undefined, t: TFunction) {
+  if (!projectId) return t('common.allProjects');
+  return projects.find((project) => project.id === projectId)?.name ?? t('common.allProjects');
 }
 
 function formatFilterSummary(
   projects: ProjectSummary[],
+  t: TFunction,
   projectId?: string,
   days = 30,
   status: 'all' | 'passed' | 'failed' = 'all',
   trigger: 'all' | 'manual' | 'schedule' = 'all'
 ) {
-  return [
-    formatProjectFilters(projects, projectId),
-    PERIOD_OPTIONS.find((option) => option.value === days)?.label ?? 'Last 30 days',
-    STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'All statuses',
-    TRIGGER_OPTIONS.find((option) => option.value === trigger)?.label ?? 'All triggers'
-  ].join(' · ');
+  const period = days === 24 ? t('common.last24Hours')
+    : days === 7 ? t('common.last7Days')
+      : days === 0 ? t('common.allTime') : t('common.last30Days');
+  const statusLabel = status === 'passed' ? t('common.passed') : status === 'failed' ? t('common.failed') : t('common.allStatuses');
+  const triggerLabel = trigger === 'manual' ? t('common.manual') : trigger === 'schedule' ? t('common.schedule') : t('common.allTriggers');
+  return t('runs.filterSummary', {
+    project: formatProjectFilters(projects, projectId, t), period, status: statusLabel, trigger: triggerLabel
+  });
 }
 
 function runsHaveNoFilters(projectId?: string, days = 30, status: 'all' | 'passed' | 'failed' = 'all', trigger: 'all' | 'manual' | 'schedule' = 'all') {
@@ -91,6 +78,8 @@ function runsHaveNoFilters(projectId?: string, days = 30, status: 'all' | 'passe
 
 export default function RunsPage() {
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? 'en';
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [days, setDays] = useState(30);
   const [projectId, setProjectId] = useState<string | undefined>(undefined);
@@ -104,10 +93,10 @@ export default function RunsPage() {
 
   const projectOptions = useMemo(
     () => [
-      { value: 'all', label: 'All projects' },
+      { value: 'all', label: t('common.allProjects') },
       ...projects.map((project) => ({ value: project.id, label: project.name }))
     ],
-    [projects]
+    [projects, t]
   );
 
   useEffect(() => {
@@ -134,7 +123,7 @@ export default function RunsPage() {
       })
       .catch(() => {
         if (cancelled) return;
-        setError('Recent runs could not be loaded');
+        setError(t('runs.latestRunsError'));
         setRuns([]);
         setSummary(null);
       })
@@ -154,8 +143,8 @@ export default function RunsPage() {
   const filtersEmpty = runsHaveNoFilters(projectId, days, status, trigger);
   const hasMore = totalRuns > visibleRuns;
   const hasCustomFilters = !filtersEmpty;
-  const tableSubtitle = totalRuns > 0 ? `Latest ${Math.min(PAGE_SIZE, totalRuns)} runs` : '';
-  const filterSummary = formatFilterSummary(projects, projectId, days, status, trigger);
+  const tableSubtitle = totalRuns > 0 ? t('runs.latestRuns', { count: Math.min(PAGE_SIZE, totalRuns) }) : '';
+  const filterSummary = formatFilterSummary(projects, t, projectId, days, status, trigger);
 
   const handleProjectChange = (value: string) => {
     setProjectId(value === 'all' ? undefined : value);
@@ -190,13 +179,13 @@ export default function RunsPage() {
   return (
     <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f7f3ff 0%, #eef4ff 55%, #ffffff 100%)' }}>
       <AppHeader actions={[<UserMenu key="menu" />]} />
-      <Content style={{ padding: 32, maxWidth: 1440, width: '100%', margin: '0 auto' }}>
+      <Content className="wt-surface-page" style={{ padding: 32, maxWidth: 1440, width: '100%', margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24, marginBottom: 24, flexWrap: 'wrap' }}>
           <div style={{ minWidth: 280 }}>
             <Title level={2} style={{ margin: 0 }}>
-              Runs
+              {t('runs.title')}
             </Title>
-            <Text type="secondary">Latest run history across projects, browser checks, schedules, and manual executions.</Text>
+            <Text type="secondary">{t('runs.description')}</Text>
           </div>
           <Space wrap align="start">
             <Select
@@ -209,19 +198,32 @@ export default function RunsPage() {
               value={days}
               onChange={handleDaysChange}
               style={{ width: 170 }}
-              options={PERIOD_OPTIONS}
+              options={[
+                { value: 24, label: t('common.last24Hours') },
+                { value: 7, label: t('common.last7Days') },
+                { value: 30, label: t('common.last30Days') },
+                { value: 0, label: t('common.allTime') }
+              ]}
             />
             <Select
               value={status}
               onChange={handleStatusChange}
               style={{ width: 160 }}
-              options={STATUS_OPTIONS}
+              options={[
+                { value: 'all', label: t('common.allStatuses') },
+                { value: 'passed', label: t('common.passed') },
+                { value: 'failed', label: t('common.failed') }
+              ]}
             />
             <Select
               value={trigger}
               onChange={handleTriggerChange}
               style={{ width: 160 }}
-              options={TRIGGER_OPTIONS}
+              options={[
+                { value: 'all', label: t('common.allTriggers') },
+                { value: 'manual', label: t('common.manual') },
+                { value: 'schedule', label: t('common.schedule') }
+              ]}
             />
           </Space>
         </div>
@@ -236,16 +238,16 @@ export default function RunsPage() {
         ) : null}
 
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title="Total runs" value={summary?.total ?? 0} description={filterSummary} loading={loading} /></Col>
-          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title="Passed" value={summary?.passed ?? 0} description={summary?.total ? `${Math.round((summary.passed / summary.total) * 100)}% of selected runs` : 'No data'} loading={loading} /></Col>
-          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title="Failed" value={summary?.failed ?? 0} description={summary?.total ? `${Math.round((summary.failed / summary.total) * 100)}% of selected runs` : 'No data'} status={(summary?.failed ?? 0) > 0 ? <Tag color="red">Failed</Tag> : undefined} loading={loading} /></Col>
-          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title="Avg duration" value={summary?.avgDurationMs ? formatDurationCompact(summary.avgDurationMs) : '—'} description="Across selected runs" loading={loading} /></Col>
+          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title={t('runs.totalRuns')} value={summary?.total ?? 0} description={filterSummary} loading={loading} /></Col>
+          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title={t('common.passed')} value={summary?.passed ?? 0} description={summary?.total ? t('common.ofSelectedRuns', { percent: Math.round((summary.passed / summary.total) * 100) }) : t('common.noData')} loading={loading} /></Col>
+          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title={t('common.failed')} value={summary?.failed ?? 0} description={summary?.total ? t('common.ofSelectedRuns', { percent: Math.round((summary.failed / summary.total) * 100) }) : t('common.noData')} status={(summary?.failed ?? 0) > 0 ? <Tag color="red">{t('common.failed')}</Tag> : undefined} loading={loading} /></Col>
+          <Col xs={24} sm={12} lg={8} xxl={4}><StatCard title={t('dashboard.avgDuration')} value={summary?.avgDurationMs ? formatDurationCompact(summary.avgDurationMs, locale) : '—'} description={t('runs.acrossSelectedRuns')} loading={loading} /></Col>
           <Col xs={24} sm={12} xl={8}>
             <StatCard
-              title="Longest run"
-              value={summary?.slowestRun ? formatDurationCompact(summary.slowestRun.durationMs) : '—'}
-              description={summary?.slowestRun?.checkName ?? 'No data'}
-              status={summary?.slowestRun && (summary.slowestRun.durationMs ?? 0) > SLOW_RUN_THRESHOLD_MS ? <Tag color="orange">Slow</Tag> : undefined}
+              title={t('runs.longestRun')}
+              value={summary?.slowestRun ? formatDurationCompact(summary.slowestRun.durationMs, locale) : '—'}
+              description={summary?.slowestRun?.checkName ?? t('common.noData')}
+              status={summary?.slowestRun && (summary.slowestRun.durationMs ?? 0) > SLOW_RUN_THRESHOLD_MS ? <Tag color="orange">{t('common.slow')}</Tag> : undefined}
               loading={loading}
             />
           </Col>
@@ -259,46 +261,46 @@ export default function RunsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
               <div>
                 <Title level={4} style={{ margin: 0 }}>
-                  Recent runs
+                  {t('runs.recentRuns')}
                 </Title>
                 {tableSubtitle ? <Text type="secondary">{tableSubtitle}</Text> : null}
               </div>
               <Space wrap>
-                {hasCustomFilters && totalRuns > 0 ? <Button onClick={resetFilters}>Reset filters</Button> : null}
+                {hasCustomFilters && totalRuns > 0 ? <Button onClick={resetFilters}>{t('runs.resetFilters')}</Button> : null}
               </Space>
             </div>
 
             {loading && runs.length === 0 ? (
-              <Text type="secondary">Loading runs...</Text>
+              <Text type="secondary">{t('runs.loading')}</Text>
             ) : error ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-                <Alert type="error" showIcon message={error} />
+                <Alert type="error" showIcon message={t('runs.latestRunsError')} />
               </div>
             ) : totalRuns === 0 ? (
               filtersEmpty ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
                   <div>
-                    <Text strong>No runs yet</Text>
+                    <Text strong>{t('common.noRunsYet')}</Text>
                     <Text type="secondary" style={{ display: 'block' }}>
-                      Run a check manually or create a schedule to start collecting execution history.
+                      {t('runs.noRunsDescription')}
                     </Text>
                   </div>
                   <Button type="primary" onClick={() => navigate('/projects')}>
-                    Go to projects
+                    {t('common.goProjects')}
                   </Button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
                   <div>
-                    <Text strong>No runs match these filters</Text>
+                    <Text strong>{t('runs.noMatches')}</Text>
                     <Text type="secondary" style={{ display: 'block' }}>
                       {filterSummary}
                     </Text>
                     <Text type="secondary" style={{ display: 'block' }}>
-                      Try changing the project, period, status, or trigger.
+                      {t('runs.changeFiltersHint')}
                     </Text>
                   </div>
-                  <Button onClick={resetFilters}>Reset filters</Button>
+                  <Button onClick={resetFilters}>{t('runs.resetFilters')}</Button>
                 </div>
               )
             ) : (
@@ -314,7 +316,7 @@ export default function RunsPage() {
                   tableLayout="fixed"
                   columns={[
                     {
-                      title: 'Check',
+                      title: t('common.check'),
                       dataIndex: 'checkName',
                       width: 260,
                       ellipsis: true,
@@ -336,13 +338,13 @@ export default function RunsPage() {
                       )
                     },
                     {
-                      title: 'Status',
+                      title: t('common.status'),
                       dataIndex: 'status',
                       width: 100,
                       render: (value: DashboardRecentRun['status']) => <RunStatusBadge status={value} />
                     },
                     {
-                      title: 'Duration',
+                      title: t('common.duration'),
                       dataIndex: 'durationMs',
                       width: 100,
                       render: (value: number | null) => {
@@ -350,11 +352,11 @@ export default function RunsPage() {
                         return (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                             <Text style={isSlow ? { color: '#b45309', fontWeight: 600 } : undefined}>
-                              {formatDuration(value)}
+                              {formatDuration(value, locale)}
                             </Text>
                             {isSlow ? (
                               <Tag color="orange" style={{ width: 'fit-content', marginTop: 2 }}>
-                                Slow
+                                {t('common.slow')}
                               </Tag>
                             ) : null}
                           </div>
@@ -362,32 +364,32 @@ export default function RunsPage() {
                       }
                     },
                     {
-                      title: 'Started',
+                      title: t('common.started'),
                       dataIndex: 'startedAt',
                       width: 160,
                       responsive: ['xl'],
                       render: (value: string) => (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                          <Text>{formatRelativeTime(value)}</Text>
+                          <Text>{formatRelativeTime(value, t)}</Text>
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            {formatShortDate(value)}
+                            {formatShortDate(value, locale)}
                           </Text>
                         </div>
                       )
                     },
                     {
-                      title: 'Trigger',
+                      title: t('common.trigger'),
                       dataIndex: 'trigger',
                       width: 110,
                       responsive: ['xl'],
-                      render: (value: string) => <Tag color={value === 'Schedule' ? 'blue' : 'default'}>{value}</Tag>
+                      render: (value: string) => <Tag color={value === 'Schedule' ? 'blue' : 'default'}>{value === 'Schedule' ? t('common.schedule') : t('common.manual')}</Tag>
                     },
                     {
-                      title: 'Result',
+                      title: t('runs.result'),
                       width: 120,
                       render: (_: unknown, row: DashboardRecentRun) => (
                         <Button size="small" onClick={() => navigate(`/runs/${row.runId}`)}>
-                          Open result
+                          {t('common.openResult')}
                         </Button>
                       )
                     }
@@ -396,14 +398,14 @@ export default function RunsPage() {
 
                 <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <Text type="secondary">
-                    Showing {visibleRuns} of {totalRuns} runs
+                    {t('runs.showingCount', { visible: visibleRuns, total: totalRuns })}
                   </Text>
                   {hasMore ? (
                     <Button onClick={loadMore} loading={loading}>
-                      Load more
+                      {t('runs.loadMore')}
                     </Button>
                   ) : (
-                    <Text type="secondary">All runs are shown</Text>
+                    <Text type="secondary">{t('runs.allShown')}</Text>
                   )}
                 </div>
               </>

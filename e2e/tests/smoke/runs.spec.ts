@@ -105,11 +105,11 @@ test('Runs opens a run result and both routes support refresh and browser histor
 
   await page.getByRole('button', { name: 'Open result' }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${runId}$`));
-  await expect(page.getByRole('heading', { name: 'Run Result' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Run details' })).toBeVisible();
   await expect(page.getByText('Step results')).toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Run Result' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Run details' })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/runs$/);
   await page.goForward();

@@ -10,10 +10,12 @@
   "dependencies": {
     "@ant-design/icons": "^6.2.2",
     "antd": "^6.3.7",
-    "axios": "^1.15.2",
+    "axios": "^1.21.0",
+    "i18next": "^26.7.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.14.2",
+    "react-i18next": "^17.1.11",
+    "react-router-dom": "^7.18.5",
     "recharts": "^3.8.1"
   },
   "devDependencies": {

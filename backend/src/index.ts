@@ -23,6 +23,7 @@ import { projectRoutes } from './routes/projects';
 import { webhookRoutes } from './routes/webhooks';
 import { testRoutes } from './routes/tests';
 import { projectAuthRoutes } from './routes/project-auth';
+import { localizationRoutes } from './routes/localization';
 import { schedulerService } from './services/scheduler';
 
 const envCandidates = [
@@ -101,6 +102,7 @@ async function start() {
     const publicRoutes = [
       { method: 'POST', url: '/auth/login' },
       { method: 'POST', url: '/auth/logout' },
+      { method: 'GET', url: '/localization/public' },
       { method: 'GET', url: '/health' },
       { method: 'GET', url: '/health/db' },
       { method: 'POST', url: '/webhooks/trigger' },
@@ -140,13 +142,14 @@ async function start() {
   });
 
   await fastify.register(authRoutes);
+  await fastify.register(localizationRoutes);
 
   await fastify.register(fastifyStatic, {
     root: screenshotsDir,
     prefix: '/screenshots/',
     decorateReply: false,
     setHeaders: (res) => {
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.raw.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     }
   });
 
@@ -155,8 +158,8 @@ async function start() {
     prefix: '/traces/',
     decorateReply: false,
     setHeaders: (res) => {
-      res.setHeader('Access-Control-Allow-Origin', 'https://trace.playwright.dev');
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.raw.setHeader('Access-Control-Allow-Origin', 'https://trace.playwright.dev');
+      res.raw.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     }
   });
 
@@ -165,8 +168,8 @@ async function start() {
     prefix: '/api/traces/',
     decorateReply: false,
     setHeaders: (res) => {
-      res.setHeader('Access-Control-Allow-Origin', 'https://trace.playwright.dev');
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.raw.setHeader('Access-Control-Allow-Origin', 'https://trace.playwright.dev');
+      res.raw.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     }
   });
 
@@ -176,7 +179,7 @@ async function start() {
     decorateReply: false,
     setHeaders: (res) => {
       const frameAncestors = ["'self'", ...collectFrontendOrigins()].join(' ');
-      res.setHeader('Content-Security-Policy', `frame-ancestors ${frameAncestors}`);
+      res.raw.setHeader('Content-Security-Policy', `frame-ancestors ${frameAncestors}`);
     }
   });
 
@@ -186,7 +189,7 @@ async function start() {
     decorateReply: false,
     setHeaders: (res) => {
       const frameAncestors = ["'self'", ...collectFrontendOrigins()].join(' ');
-      res.setHeader('Content-Security-Policy', `frame-ancestors ${frameAncestors}`);
+      res.raw.setHeader('Content-Security-Policy', `frame-ancestors ${frameAncestors}`);
     }
   });
 

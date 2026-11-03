@@ -18,6 +18,7 @@ import {
   Typography
 } from 'antd';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { getRun, runTest, runTestWithEnvironment } from '../api/client';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
@@ -46,25 +47,10 @@ function resolveBackendUrl(value?: string) {
   return value.startsWith('http') ? value : `${BACKEND_URL}${value}`;
 }
 
-function humanizeAction(action: StepAction | string) {
-  const labels: Record<string, string> = {
-    goto: 'Navigate to URL',
-    click: 'Click element',
-    fill: 'Fill input',
-    press: 'Press key',
-    keyboardPress: 'Keyboard press',
-    selectOption: 'Select option',
-    waitForSelector: 'Wait for element',
-    assertVisible: 'Assert visible',
-    assertHidden: 'Assert hidden',
-    assertText: 'Assert text',
-    assertValue: 'Assert value',
-    assertURL: 'Assert URL',
-    assertTitle: 'Assert title',
-    assertChecked: 'Assert checked',
-    assertCount: 'Assert count'
-  };
-  return labels[action] ?? action;
+function humanizeAction(action: StepAction | string, t: (key: string) => string) {
+  const key = `step.action.${action}`;
+  const translated = t(key);
+  return translated === key ? action : translated;
 }
 
 function formatDuration(ms?: number | null) {
@@ -72,9 +58,9 @@ function formatDuration(ms?: number | null) {
   return `${(ms / 1000).toFixed(ms >= 10000 ? 1 : 2)}s`;
 }
 
-function formatTimestamp(value?: string | null) {
+function formatTimestamp(value: string | null | undefined, locale: string) {
   if (!value) return '—';
-  return new Date(value).toLocaleString([], {
+  return new Date(value).toLocaleString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -83,30 +69,30 @@ function formatTimestamp(value?: string | null) {
   });
 }
 
-function formatRelativeTime(value?: string | null) {
-  if (!value) return 'Never';
+function formatRelativeTime(value: string | null | undefined, t: (key: string, options?: { count: number }) => string) {
+  if (!value) return t('common.never');
   const diffMs = Date.now() - new Date(value).getTime();
   const abs = Math.max(0, diffMs);
   const minute = 60 * 1000;
   const hour = 60 * minute;
   const day = 24 * hour;
 
-  if (abs < minute) return 'just now';
-  if (abs < hour) return `${Math.round(abs / minute)} min ago`;
-  if (abs < day) return `${Math.round(abs / hour)} hour${Math.round(abs / hour) === 1 ? '' : 's'} ago`;
-  return `${Math.round(abs / day)} day${Math.round(abs / day) === 1 ? '' : 's'} ago`;
+  if (abs < minute) return t('time.justNow');
+  if (abs < hour) return t('time.minutesAgo', { count: Math.round(abs / minute) });
+  if (abs < day) return t('time.hoursAgo', { count: Math.round(abs / hour) });
+  return t('time.daysAgo', { count: Math.round(abs / day) });
 }
 
 function extractCompactStepTarget(step: { selector?: string; value?: string; expected?: string }) {
   return step.selector ?? step.value ?? step.expected ?? '—';
 }
 
-function buildStepRows(run: TestRun): StepResultRow[] {
+function buildStepRows(run: TestRun, t: (key: string) => string): StepResultRow[] {
   if (run.stepResults?.length) {
     return run.stepResults.map((stepResult, index) => ({
       key: index + 1,
       step: index + 1,
-      action: humanizeAction(stepResult.action),
+      action: humanizeAction(stepResult.action, t),
       target: stepResult.target || '—',
       status: stepResult.status,
       durationMs: stepResult.durationMs,
@@ -120,7 +106,7 @@ function buildStepRows(run: TestRun): StepResultRow[] {
   return fallbackSteps.map((step, index) => ({
     key: index + 1,
     step: index + 1,
-    action: humanizeAction(step.action),
+    action: humanizeAction(step.action, t),
     target: extractCompactStepTarget(step),
     status:
       run.status === 'FAILED' && failedIndex === index + 1
@@ -171,6 +157,7 @@ function parseFailureSummary(error?: string) {
 }
 
 export default function RunResultPage() {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { runId } = useParams<{ runId: string }>();
   const { setProject: setShellProject } = useAppShell();
@@ -222,7 +209,7 @@ export default function RunResultPage() {
       )
     : undefined;
 
-  const stepRows = useMemo(() => (run ? buildStepRows(run) : []), [run]);
+  const stepRows = useMemo(() => (run ? buildStepRows(run, t) : []), [run, t]);
 
   const failedStepIndex = useMemo(() => {
     if (!run) return null;
@@ -278,29 +265,29 @@ export default function RunResultPage() {
       size="small"
       style={{ borderRadius: 16, height: '100%' }}
       bodyStyle={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 132 }}
-      title="Trace"
+      title={t('runResult.trace')}
     >
       {traceAvailable ? (
         <>
-          <Tag color="green">Available</Tag>
+          <Tag color="green">{t('runResult.available')}</Tag>
           <Space wrap size={8}>
             {traceViewerUrl && (
               <Button type="link" href={traceViewerUrl} target="_blank" rel="noreferrer" style={{ paddingInline: 0 }}>
-                Open trace
+                {t('runResult.openTrace')}
               </Button>
             )}
             {traceDownloadUrl && (
               <Button type="link" href={traceDownloadUrl} target="_blank" rel="noreferrer" style={{ paddingInline: 0 }}>
-                Download trace.zip
+                {t('runResult.downloadTrace')}
               </Button>
             )}
           </Space>
         </>
       ) : (
         <>
-          <Tag color="default">Unavailable</Tag>
+          <Tag color="default">{t('runResult.unavailable')}</Tag>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            {trace?.reason ?? run?.traceUnavailableReason ?? 'Trace is not available for this run.'}
+            {trace?.reason ?? run?.traceUnavailableReason ?? t('runResult.traceUnavailable')}
           </Text>
         </>
       )}
@@ -310,31 +297,31 @@ export default function RunResultPage() {
   return (
     <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #ffffff 100%)' }}>
       <AppHeader actions={[<UserMenu key="menu" />]} />
-      <Content style={{ padding: 32, maxWidth: 1440, width: '100%', margin: '0 auto' }}>
+      <Content className="wt-surface-page" style={{ padding: 32, maxWidth: 1440, width: '100%', margin: '0 auto' }}>
         <Row gutter={[24, 24]}>
           <Col span={24}>
             <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <Breadcrumb
                   items={[
-                    { title: <Link to="/projects">Projects</Link> },
+                    { title: <Link to="/projects">{t('nav.projects')}</Link> },
                     ...(run?.test?.project ? [
                       { title: <Link to={`/projects/${run.test.project.id}/checks`}>{run.test.project.name}</Link> },
-                      { title: <Link to={`/projects/${run.test.project.id}/runs`}>Runs</Link> }
+                      { title: <Link to={`/projects/${run.test.project.id}/runs`}>{t('project.runs')}</Link> }
                     ] : []),
-                    { title: 'Run Result' }
+                    { title: t('runResult.title') }
                   ]}
                 />
                 <Space wrap align="center" size={[12, 12]}>
                   <div>
                     <Space wrap align="center" size={10}>
                       <Title level={2} style={{ margin: 0 }}>
-                        Run Result
+                        {t('runResult.title')}
                       </Title>
                       {run && <RunStatusBadge status={run.status} />}
                     </Space>
                     <Text type="secondary">
-                      Debug a browser check execution, step by step.
+                      {t('runResult.description')}
                     </Text>
                     {runContext.length > 0 && (
                       <div style={{ marginTop: 6 }}>
@@ -344,7 +331,7 @@ export default function RunResultPage() {
                       </div>
                     )}
                   </div>
-                  {isActive && <Tag color="processing">Live polling</Tag>}
+                  {isActive && <Tag color="processing">{t('runResult.livePolling')}</Tag>}
                 </Space>
               </div>
             </Card>
@@ -354,7 +341,7 @@ export default function RunResultPage() {
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={12} md={8} lg={4}>
                 <Card size="small" style={{ borderRadius: 16 }} bodyStyle={{ minHeight: 116 }}>
-                  <Text type="secondary">Status</Text>
+                  <Text type="secondary">{t('common.status')}</Text>
                   <div style={{ marginTop: 10 }}>
                     {run ? <RunStatusBadge status={run.status} /> : <Skeleton.Input active size="small" />}
                   </div>
@@ -362,16 +349,16 @@ export default function RunResultPage() {
               </Col>
               <Col xs={24} sm={12} md={8} lg={4}>
                 <Card size="small" style={{ borderRadius: 16 }} bodyStyle={{ minHeight: 116 }}>
-                  <Text type="secondary">Progress</Text>
+                  <Text type="secondary">{t('runResult.progress')}</Text>
                   <div style={{ marginTop: 10 }}>
-                    <Text strong>{totalSteps > 0 ? `${currentStep}/${totalSteps} steps` : '—'}</Text>
+                    <Text strong>{totalSteps > 0 ? t('runResult.stepProgress', { current: currentStep, total: totalSteps }) : '—'}</Text>
                     <Progress percent={progressPercent} size="small" status={run?.status === 'FAILED' ? 'exception' : 'active'} />
                   </div>
                 </Card>
               </Col>
               <Col xs={24} sm={12} md={8} lg={4}>
                 <Card size="small" style={{ borderRadius: 16 }} bodyStyle={{ minHeight: 116 }}>
-                  <Text type="secondary">Duration</Text>
+                  <Text type="secondary">{t('common.duration')}</Text>
                   <div style={{ marginTop: 10 }}>
                     <Title level={4} style={{ margin: 0 }}>
                       {run?.durationMs ? formatDuration(run.durationMs) : '—'}
@@ -381,17 +368,17 @@ export default function RunResultPage() {
               </Col>
               <Col xs={24} sm={12} md={8} lg={4}>
                 <Card size="small" style={{ borderRadius: 16 }} bodyStyle={{ minHeight: 116 }}>
-                  <Text type="secondary">Started</Text>
+                  <Text type="secondary">{t('common.started')}</Text>
                   <div style={{ marginTop: 10 }}>
-                    <Text>{formatTimestamp(run?.startedAt)}</Text>
+                    <Text>{formatTimestamp(run?.startedAt, i18n.resolvedLanguage ?? 'en')}</Text>
                   </div>
                 </Card>
               </Col>
               <Col xs={24} sm={12} md={8} lg={4}>
                 <Card size="small" style={{ borderRadius: 16 }} bodyStyle={{ minHeight: 116 }}>
-                  <Text type="secondary">Finished</Text>
+                  <Text type="secondary">{t('runResult.finished')}</Text>
                   <div style={{ marginTop: 10 }}>
-                    <Text>{formatTimestamp(run?.finishedAt)}</Text>
+                    <Text>{formatTimestamp(run?.finishedAt, i18n.resolvedLanguage ?? 'en')}</Text>
                   </div>
                 </Card>
               </Col>
@@ -404,28 +391,28 @@ export default function RunResultPage() {
           {run?.status === 'FAILED' && (
             <Col span={24}>
               <Card
-                title="Failure summary"
+                title={t('runResult.failureSummary')}
                 style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
                 extra={
                   <Space wrap>
                     {traceViewerUrl && (
                       <Button href={traceViewerUrl} target="_blank" rel="noreferrer">
-                        Open trace
+                        {t('runResult.openTrace')}
                       </Button>
                     )}
                     {failedScreenshotUrl && (
                       <Button href={failedScreenshotUrl} target="_blank" rel="noreferrer">
-                        View failed screenshot
+                        {t('runResult.viewFailedScreenshot')}
                       </Button>
                     )}
                     {run.testId && (
                       <Button onClick={() => void handleRerun()} loading={rerunning}>
-                        Rerun
+                        {t('dashboard.rerun')}
                       </Button>
                     )}
                     {run.testId && (
                       <Button href={`/tests/${run.testId}/edit`}>
-                        Edit check
+                        {t('dashboard.editCheck')}
                       </Button>
                     )}
                   </Space>
@@ -433,13 +420,13 @@ export default function RunResultPage() {
               >
                 <Space direction="vertical" size={12} style={{ width: '100%' }}>
                   <Title level={4} style={{ margin: 0 }}>
-                    Failed at Step {failedStepIndex ?? run.currentStep ?? '—'} —{' '}
-                    {humanizeAction(failedStep?.action ?? failedTestStep?.action ?? 'step')}
+                    {t('runResult.failedAtStep', { step: failedStepIndex ?? run.currentStep ?? '—' })} —{' '}
+                    {humanizeAction(failedStep?.action ?? failedTestStep?.action ?? 'step', t)}
                   </Title>
                   <Row gutter={[16, 16]}>
                     <Col xs={24} md={8}>
                       <Card size="small" bordered={false} style={{ background: '#fafafa' }}>
-                        <Text type="secondary">Expected</Text>
+                        <Text type="secondary">{t('runResult.expected')}</Text>
                         <div style={{ marginTop: 4 }}>
                           <Text>{failureSummary?.expected ?? '—'}</Text>
                         </div>
@@ -447,7 +434,7 @@ export default function RunResultPage() {
                     </Col>
                     <Col xs={24} md={8}>
                       <Card size="small" bordered={false} style={{ background: '#fafafa' }}>
-                        <Text type="secondary">Received</Text>
+                        <Text type="secondary">{t('runResult.received')}</Text>
                         <div style={{ marginTop: 4 }}>
                           <Text>{failureSummary?.received ?? '—'}</Text>
                         </div>
@@ -455,7 +442,7 @@ export default function RunResultPage() {
                     </Col>
                     <Col xs={24} md={8}>
                       <Card size="small" bordered={false} style={{ background: '#fafafa' }}>
-                        <Text type="secondary">Timeout</Text>
+                        <Text type="secondary">{t('runResult.timeout')}</Text>
                         <div style={{ marginTop: 4 }}>
                           <Text>{failureSummary?.timeout ?? '—'}</Text>
                         </div>
@@ -463,13 +450,13 @@ export default function RunResultPage() {
                     </Col>
                   </Row>
                   <Card size="small" bordered={false} style={{ background: '#fafafa' }}>
-                    <Text type="secondary">Error summary</Text>
+                    <Text type="secondary">{t('runResult.errorSummary')}</Text>
                     <div style={{ marginTop: 4 }}>
-                      <Text>{failureSummary?.summary ?? 'Check failed'}</Text>
+                      <Text>{failureSummary?.summary ?? t('runResult.checkFailed')}</Text>
                     </div>
                   </Card>
                   <Collapse ghost>
-                    <Collapse.Panel header="Show raw error" key="raw">
+                    <Collapse.Panel header={t('runResult.showRawError')} key="raw">
                       <Paragraph
                         copyable
                         style={{
@@ -490,14 +477,14 @@ export default function RunResultPage() {
 
           <Col span={24}>
             <Card
-              title="Step results"
+              title={t('runResult.stepResults')}
               style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
-              extra={totalSteps > 0 ? <Text type="secondary">{totalSteps} step{totalSteps === 1 ? '' : 's'}</Text> : null}
+              extra={totalSteps > 0 ? <Text type="secondary">{t('runResult.stepCount', { count: totalSteps })}</Text> : null}
             >
               {!run ? (
                 <Skeleton active />
               ) : stepRows.length === 0 ? (
-                <Text type="secondary">No step results available yet.</Text>
+                <Text type="secondary">{t('runResult.noStepResults')}</Text>
               ) : (
                 <Table
                   dataSource={stepRows}
@@ -507,17 +494,17 @@ export default function RunResultPage() {
                   rowClassName={(record?: StepResultRow) => (record?.status === 'failed' ? 'run-step-row-failed' : '')}
                   columns={[
                     {
-                      title: 'Step',
+                      title: t('runResult.step'),
                       dataIndex: 'step',
                       width: 80
                     },
                     {
-                      title: 'Action',
+                      title: t('runResult.action'),
                       dataIndex: 'action',
                       width: 180
                     },
                     {
-                      title: 'Target',
+                      title: t('runResult.target'),
                       dataIndex: 'target',
                       render: (value: string) => (
                         <Tooltip title={value} placement="topLeft">
@@ -528,19 +515,19 @@ export default function RunResultPage() {
                       )
                     },
                     {
-                      title: 'Status',
+                      title: t('common.status'),
                       dataIndex: 'status',
                       width: 120,
                       render: (status: StepResultRow['status']) => {
                         const color =
                           status === 'passed' ? 'green' : status === 'failed' ? 'red' : 'default';
                         const label =
-                          status === 'passed' ? 'Passed' : status === 'failed' ? 'Failed' : 'Pending';
+                          status === 'passed' ? t('common.passed') : status === 'failed' ? t('common.failed') : t('status.pending');
                         return <Tag color={color}>{label}</Tag>;
                       }
                     },
                     {
-                      title: 'Error',
+                      title: t('runResult.error'),
                       dataIndex: 'error',
                       render: (error?: string | null, record?: StepResultRow) =>
                         error ? (
@@ -560,19 +547,19 @@ export default function RunResultPage() {
                         )
                     },
                     {
-                      title: 'Duration',
+                      title: t('common.duration'),
                       dataIndex: 'durationMs',
                       width: 120,
                       render: (durationMs?: number | null) => formatDuration(durationMs)
                     },
                     {
-                      title: 'Screenshot',
+                      title: t('runResult.screenshot'),
                       dataIndex: 'screenshot',
                       width: 120,
                       render: (screenshot?: string | null) =>
                         screenshot ? (
                           <a href={resolveBackendUrl(`/screenshots/${screenshot}`)} target="_blank" rel="noreferrer">
-                            View
+                            {t('common.view')}
                           </a>
                         ) : (
                           '—'
@@ -587,7 +574,7 @@ export default function RunResultPage() {
           {(run?.screenshots?.length ?? 0) > 0 && (
             <Col span={24}>
               <Card
-                title="Screenshots"
+                title={t('runResult.screenshots')}
                 style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
               >
                 <Space wrap>
@@ -598,13 +585,13 @@ export default function RunResultPage() {
                       style={{ width: 320, borderRadius: 16 }}
                       cover={
                         <Image
-                          alt={`Step ${index + 1}`}
+                          alt={t('runResult.stepNumber', { number: index + 1 })}
                           src={`${BACKEND_URL}/screenshots/${name}`}
                           preview
                         />
                       }
                     >
-                      <Card.Meta title={`Step ${index + 1}`} description={name} />
+                      <Card.Meta title={t('runResult.stepNumber', { number: index + 1 })} description={name} />
                     </Card>
                   ))}
                 </Space>
@@ -615,16 +602,16 @@ export default function RunResultPage() {
           {traceAvailable && traceViewerUrl && (
             <Col span={24}>
               <Card
-                title="Trace Viewer"
+                title={t('runResult.traceViewer')}
                 style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
                 extra={
                   <Space wrap>
                     <a href={traceViewerUrl} target="_blank" rel="noreferrer">
-                      Open in new tab
+                      {t('runResult.openInNewTab')}
                     </a>
                     {traceDownloadUrl && (
                       <a href={traceDownloadUrl} target="_blank" rel="noreferrer">
-                        Download trace.zip
+                        {t('runResult.downloadTrace')}
                       </a>
                     )}
                   </Space>
@@ -639,7 +626,7 @@ export default function RunResultPage() {
                     borderRadius: 12,
                     background: '#fff'
                   }}
-                  title="Playwright Trace Viewer"
+                  title={t('runResult.traceViewerFrameTitle')}
                 />
               </Card>
             </Col>
@@ -650,7 +637,7 @@ export default function RunResultPage() {
               <Alert
                 type="error"
                 showIcon
-                message="Run failed"
+                message={t('runResult.runFailed')}
                 description={run.error}
               />
             </Col>

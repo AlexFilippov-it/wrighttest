@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, Checkbox, Collapse, Empty, Input, Modal, Popconfirm, Segmented, Space, Switch, Table, Typography } from 'antd';
 import { CopyOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import {
   addEditableVariableToAllCases,
   createEmptyCase,
@@ -48,6 +49,7 @@ export default function TestDataEditor({
   onUseTestDataChange,
   onCasesChange
 }: TestDataEditorProps) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<'table' | 'cards'>(() => {
     const stored = window.localStorage.getItem(TABLE_MODE_STORAGE_KEY);
     if (stored === 'table' || stored === 'cards') return stored;
@@ -155,7 +157,7 @@ export default function TestDataEditor({
 
   const tableColumns = useMemo(() => [
     {
-      title: 'Enabled',
+      title: t('common.enabled'),
       width: 96,
       fixed: 'left' as const,
       render: (_: unknown, testCase: EditableTestDataCase) => (
@@ -167,7 +169,7 @@ export default function TestDataEditor({
       )
     },
     {
-      title: 'Case name',
+      title: t('testData.caseName'),
       width: 240,
       fixed: 'left' as const,
       render: (_: unknown, testCase: EditableTestDataCase) => {
@@ -190,9 +192,9 @@ export default function TestDataEditor({
         <Space size={6}>
           <span>{key}</span>
           <Popconfirm
-            title={`Delete variable ${key}?`}
-            description="This removes the variable from all cases."
-            okText="Delete"
+            title={t('testData.deleteVariableTitle', { name: key })}
+            description={t('testData.deleteVariableDescription')}
+            okText={t('common.delete')}
             okButtonProps={{ danger: true }}
             onConfirm={() => deleteVariableColumn(key)}
             disabled={readOnly}
@@ -209,7 +211,7 @@ export default function TestDataEditor({
           <Space direction="vertical" size={2} style={{ width: '100%' }}>
             <Input.TextArea
               value={variable?.value ?? ''}
-              placeholder={variable ? 'Empty string' : 'Missing'}
+              placeholder={variable ? t('testData.emptyString') : t('testData.missing')}
               autoSize={{ minRows: 1, maxRows: 3 }}
               status={variableErrors?.value ? 'error' : undefined}
               disabled={readOnly}
@@ -217,7 +219,7 @@ export default function TestDataEditor({
             />
             {!variable && (
               <Text type="secondary" style={{ fontSize: 11 }}>
-                Missing until edited
+                {t('testData.missingUntilEdited')}
               </Text>
             )}
             {variableErrors?.value && <Text type="danger" style={{ fontSize: 12 }}>{variableErrors.value}</Text>}
@@ -226,13 +228,13 @@ export default function TestDataEditor({
       }
     })),
     {
-      title: 'Actions',
+      title: t('common.actions'),
       width: 230,
       fixed: 'right' as const,
       render: (_: unknown, testCase: EditableTestDataCase) => (
         <Space wrap>
           <Button size="small" onClick={() => openDetails(testCase.id)}>
-            Open details
+            {t('testData.openDetails')}
           </Button>
           <Button
             size="small"
@@ -240,7 +242,7 @@ export default function TestDataEditor({
             onClick={() => onCasesChange(duplicateCase(cases, testCase.id))}
             disabled={readOnly}
           >
-            Duplicate
+            {t('common.duplicate')}
           </Button>
           <Button
             size="small"
@@ -252,7 +254,7 @@ export default function TestDataEditor({
         </Space>
       )
     }
-  ], [cases, errors.cases, onCasesChange, readOnly, variableColumns]);
+  ], [cases, errors.cases, onCasesChange, readOnly, t, variableColumns]);
 
   const renderEditorActions = () => (
     <Space wrap>
@@ -260,15 +262,15 @@ export default function TestDataEditor({
         value={mode}
         onChange={(value) => setEditorMode(value as 'table' | 'cards')}
         options={[
-          { label: 'Table', value: 'table' },
-          { label: 'Cards', value: 'cards' }
+          { label: t('testData.table'), value: 'table' },
+          { label: t('testData.cards'), value: 'cards' }
         ]}
       />
       <Button icon={<PlusOutlined />} onClick={addCase} disabled={readOnly || cases.length >= 100}>
-        Add case
+        {t('testData.addCase')}
       </Button>
       <Button icon={<PlusOutlined />} onClick={openAddVariable} disabled={readOnly || cases.length === 0}>
-        Add variable
+        {t('testData.addVariable')}
       </Button>
     </Space>
   );
@@ -278,15 +280,15 @@ export default function TestDataEditor({
       className="wt-editor-section-card wt-editor-test-data-card"
       title={
         <div className="wt-editor-section-card__heading">
-          <span>Test data</span>
+          <span>{t('testData.title')}</span>
           <Text type="secondary" className="wt-editor-section-card__description">
-            Define scenario variables used anywhere in your browser flow, including inputs and expected results.
+            {t('testData.description')}
           </Text>
         </div>
       }
       extra={
         <Space>
-          <Text>Use test data</Text>
+          <Text>{t('testData.use')}</Text>
           <Switch checked={useTestData} onChange={setUseTestData} disabled={readOnly} />
         </Space>
       }
@@ -299,37 +301,37 @@ export default function TestDataEditor({
 
         {!useTestData ? (
           <Text type="secondary">
-            Test data is off. Saved checks will run exactly as regular checks.
+            {t('testData.offDescription')}
           </Text>
         ) : (
           <>
             <Alert
               type="info"
               showIcon
-              message="Use uppercase letters, numbers and underscores. Examples: EMAIL, PASS, EXPECTED_MESSAGE, EXPECTED_URL."
-              description="Use them in steps as Fill {{EMAIL}} or Assert text {{EXPECTED_MESSAGE}}."
+              message={t('testData.variableNamingHelp')}
+              description={t('testData.variableUsageHelp')}
             />
 
             {diagnostics && (
-              <Card size="small" title="Variables check" style={{ borderRadius: 14, background: '#fcfcfd' }}>
+              <Card size="small" title={t('testData.variablesCheck')} style={{ borderRadius: 14, background: '#fcfcfd' }}>
                 <Space direction="vertical" size={8} style={{ width: '100%' }}>
                   {diagnostics.errors.length === 0 ? (
                     <Alert
                       type="success"
                       showIcon
-                      message={`All variables are available for ${enabledCasesCount} enabled case${enabledCasesCount === 1 ? '' : 's'}.`}
+                      message={t('testData.variablesAvailable', { count: enabledCasesCount })}
                     />
                   ) : (
                     <Alert
                       type="error"
                       showIcon
-                      message={`${diagnostics.errors.length} issue${diagnostics.errors.length === 1 ? '' : 's'} found`}
+                      message={t('testData.issuesFound', { count: diagnostics.errors.length })}
                       description={
                         <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
                           {diagnostics.errors.slice(0, 6).map((issue) => (
                             <li key={issue}>{issue}</li>
                           ))}
-                          {diagnostics.errors.length > 6 && <li>{diagnostics.errors.length - 6} more issues</li>}
+                          {diagnostics.errors.length > 6 && <li>{t('testData.moreIssues', { count: diagnostics.errors.length - 6 })}</li>}
                         </ul>
                       }
                     />
@@ -339,13 +341,13 @@ export default function TestDataEditor({
                     <Alert
                       type="warning"
                       showIcon
-                      message={`${diagnostics.warnings.length} warning${diagnostics.warnings.length === 1 ? '' : 's'}`}
+                      message={t('testData.warningsFound', { count: diagnostics.warnings.length })}
                       description={
                         <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
                           {diagnostics.warnings.slice(0, 6).map((warning) => (
                             <li key={warning}>{warning}</li>
                           ))}
-                          {diagnostics.warnings.length > 6 && <li>{diagnostics.warnings.length - 6} more warnings</li>}
+                          {diagnostics.warnings.length > 6 && <li>{t('testData.moreWarnings', { count: diagnostics.warnings.length - 6 })}</li>}
                         </ul>
                       }
                     />
@@ -353,7 +355,7 @@ export default function TestDataEditor({
 
                   {diagnostics.usedVariables.length > 0 && (
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      Used variables: {diagnostics.usedVariables.map((name) => `{{${name}}}`).join(', ')}
+                      {t('testData.usedVariables')}: {diagnostics.usedVariables.map((name) => `{{${name}}}`).join(', ')}
                     </Text>
                   )}
                 </Space>
@@ -363,10 +365,10 @@ export default function TestDataEditor({
             {cases.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="No test cases yet"
+                description={t('testData.noCases')}
               >
                 <Button icon={<PlusOutlined />} onClick={addCase} disabled={readOnly}>
-                  Add case
+                  {t('testData.addCase')}
                 </Button>
               </Empty>
             ) : (
@@ -394,15 +396,15 @@ export default function TestDataEditor({
                     label: (
                       <Space wrap>
                         <Text strong>{testCase.name || `Case ${caseIndex + 1}`}</Text>
-                        {!testCase.enabled && <Text type="secondary">Disabled</Text>}
-                        {caseErrors && <Text type="danger">Has errors</Text>}
+                        {!testCase.enabled && <Text type="secondary">{t('common.disabled')}</Text>}
+                        {caseErrors && <Text type="danger">{t('testData.hasErrors')}</Text>}
                       </Space>
                     ),
                     children: (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                         <Space wrap align="start" style={{ justifyContent: 'space-between', width: '100%' }}>
                           <div style={{ minWidth: 280, flex: 1 }}>
-                            <Text type="secondary">Case name</Text>
+                            <Text type="secondary">{t('testData.caseName')}</Text>
                             <Input
                               value={testCase.name}
                               onChange={(event) => onCasesChange(updateCase(cases, testCase.id, { name: event.target.value }))}
@@ -421,7 +423,7 @@ export default function TestDataEditor({
                             disabled={readOnly}
                             onChange={(event) => onCasesChange(updateCase(cases, testCase.id, { enabled: event.target.checked }))}
                           >
-                            Enabled
+                            {t('common.enabled')}
                           </Checkbox>
                           <Space>
                             <Button
@@ -429,7 +431,7 @@ export default function TestDataEditor({
                               onClick={() => onCasesChange(duplicateCase(cases, testCase.id))}
                               disabled={readOnly}
                             >
-                              Duplicate
+                              {t('common.duplicate')}
                             </Button>
                             <Button
                               icon={<DeleteOutlined />}
@@ -437,16 +439,16 @@ export default function TestDataEditor({
                               onClick={() => removeCase(testCase.id)}
                               disabled={readOnly}
                             >
-                              Delete
+                              {t('common.delete')}
                             </Button>
                           </Space>
                         </Space>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
-                            <Text strong>Variables</Text>
+                            <Text strong>{t('testData.variables')}</Text>
                             <Button icon={<PlusOutlined />} onClick={() => addVariable(testCase.id)} disabled={readOnly}>
-                              Add variable
+                              {t('testData.addVariable')}
                             </Button>
                           </Space>
                           {caseErrors?.variablesLimit && (
@@ -460,10 +462,10 @@ export default function TestDataEditor({
                               <thead>
                                 <tr>
                                   <th style={{ textAlign: 'left', width: '28%', paddingRight: 8 }}>
-                                    <Text type="secondary">Variable</Text>
+                                    <Text type="secondary">{t('testData.variable')}</Text>
                                   </th>
                                   <th style={{ textAlign: 'left', paddingRight: 8 }}>
-                                    <Text type="secondary">Value</Text>
+                                    <Text type="secondary">{t('common.value')}</Text>
                                   </th>
                                   <th style={{ width: 96 }} />
                                 </tr>
@@ -478,7 +480,7 @@ export default function TestDataEditor({
                                         <Input
                                           value={variable.key}
                                           onChange={(event) => updateVariable(testCase.id, variable.id, { key: event.target.value })}
-                                          placeholder="EMAIL"
+                                          placeholder={t('testData.variableExample')}
                                           status={variableErrors?.key ? 'error' : undefined}
                                           disabled={readOnly}
                                         />
@@ -492,7 +494,7 @@ export default function TestDataEditor({
                                         <Input.TextArea
                                           value={variable.value}
                                           onChange={(event) => updateVariable(testCase.id, variable.id, { value: event.target.value })}
-                                          placeholder="Value"
+                                          placeholder={t('common.value')}
                                           autoSize={{ minRows: 1, maxRows: 4 }}
                                           status={variableErrors?.value ? 'error' : undefined}
                                           disabled={readOnly}
@@ -519,7 +521,7 @@ export default function TestDataEditor({
 
                           {testCase.variables.length === 0 && (
                             <Text type="secondary" style={{ fontSize: 13 }}>
-                              Add variables that can later be used as {'{{EMAIL}}'} or {'{{EXPECTED_MESSAGE}}'}.
+                              {t('testData.addVariablesHelp', { email: '{{EMAIL}}', expected: '{{EXPECTED_MESSAGE}}' })}
                             </Text>
                           )}
                         </div>
@@ -535,7 +537,7 @@ export default function TestDataEditor({
         )}
       </div>
       <Modal
-        title="Add variable"
+        title={t('testData.addVariable')}
         open={addVariableOpen}
         onOk={confirmAddVariable}
         onCancel={() => setAddVariableOpen(false)}
@@ -543,18 +545,18 @@ export default function TestDataEditor({
       >
         <Space direction="vertical" size={8} style={{ width: '100%' }}>
           <Text type="secondary">
-            Add this key to all cases. Values start as an explicit empty string.
+            {t('testData.addVariableDescription')}
           </Text>
           <Input
             value={newVariableKey}
             onChange={(event) => setNewVariableKey(event.target.value.toUpperCase())}
-            placeholder="EXPECTED_MESSAGE"
+            placeholder={t('testData.variableExpectedExample')}
             status={newVariableKey && !VARIABLE_KEY_PATTERN.test(newVariableKey.trim()) ? 'error' : undefined}
             autoFocus
           />
           {newVariableKey && !VARIABLE_KEY_PATTERN.test(newVariableKey.trim()) && (
             <Text type="danger" style={{ fontSize: 12 }}>
-              Use uppercase letters, numbers and underscores. Start with a letter.
+              {t('testData.variableKeyValidation')}
             </Text>
           )}
         </Space>

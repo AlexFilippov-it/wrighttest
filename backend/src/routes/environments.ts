@@ -6,7 +6,7 @@ import { deleteAuthStateArtifact } from '../services/auth-state';
 
 const EnvironmentSchema = z.object({
   name: z.string().min(1).max(50),
-  variables: z.record(z.string())
+  variables: z.record(z.string(), z.string())
 });
 
 export async function environmentRoutes(fastify: FastifyInstance) {

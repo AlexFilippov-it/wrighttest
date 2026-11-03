@@ -350,7 +350,7 @@ export default function SchedulesPage() {
   return (
     <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 55%, #ffffff 100%)' }}>
       <AppHeader actions={[<UserMenu key="menu" />]} />
-      <Content style={{ padding: 32, maxWidth: 1280, width: '100%', margin: '0 auto' }}>
+      <Content className="wt-surface-page" style={{ padding: 32, maxWidth: 1280, width: '100%', margin: '0 auto' }}>
         <Row gutter={[24, 24]}>
           <Col span={24}>
             <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}>

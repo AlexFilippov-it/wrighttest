@@ -1,9 +1,9 @@
 import { expect, openAuthenticatedPage, test } from '../support/workspace';
 
 test('registered project routes survive refresh and Suites supports Back/Forward', async ({ page, workspace }) => {
-  const projectNavigation = page.getByLabel('Project navigation');
+  const projectNavigation = page.locator('.wt-shell-navigation').first();
   await openAuthenticatedPage(page, workspace.owner, `/projects/${workspace.projectId}/overview`);
-  await expect(page.getByRole('combobox', { name: 'Switch project' })).toBeVisible();
+  await expect(page.locator('.wt-app-shell__project-switcher .ant-select')).toBeVisible();
   await expect(page.getByRole('heading', { name: workspace.projectName })).toHaveCount(0);
   await expect(page.getByRole('link', { name: workspace.projectName })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Overview' })).toHaveClass(/active/);
@@ -59,7 +59,7 @@ test('project switcher changes project context and URL', async ({ page, workspac
 
   try {
     await openAuthenticatedPage(page, workspace.owner, `/projects/${workspace.projectId}/checks`);
-    await page.getByRole('combobox', { name: 'Switch project' }).click();
+    await page.locator('.wt-app-shell__project-switcher .ant-select').click();
     await page.getByText(projectName, { exact: true }).last().click();
     await expect(page).toHaveURL(new RegExp(`/projects/${created.id}/checks$`));
     await expect(page.getByRole('link', { name: projectName })).toBeVisible();

@@ -1,0 +1,80 @@
+name: Release Validation
+
+on:
+  push:
+    branches: [release/0.3.0]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compose-build-and-e2e:
+    name: Compose build and isolated E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Configure isolated test stack
+        run: |
+          cat > .env <<'EOF'
+          FRONTEND_PORT=5173
+          BACKEND_PORT=3000
+          POSTGRES_PORT=5432
+          REDIS_PORT=6379
+          VNC_PORT=5900
+          NOVNC_PORT=6080
+          FRONTEND_HOST_PORT=5173
+          BACKEND_HOST_PORT=3000
+          POSTGRES_HOST_PORT=55432
+          REDIS_HOST_PORT=56379
+          VNC_HOST_PORT=55900
+          NOVNC_HOST_PORT=56080
+          WRIGHTTEST_IMAGE_NAMESPACE=wrighttest-ci
+          WRIGHTTEST_IMAGE_TAG=release-validation
+          DATABASE_URL=postgresql://postgres:postgres@localhost:55432/playwright_testing
+          REDIS_HOST=localhost
+          FRONTEND_URL=http://localhost:5173
+          FRONTEND_DEV_URL=http://localhost:5173
+          VITE_BACKEND_URL=http://localhost:3000
+          VITE_NOVNC_URL=http://localhost:56080
+          VITE_ENABLE_NOVNC=false
+          NODE_ENV=production
+          ADMIN_EMAIL=admin@wrighttest.app
+          ADMIN_PASSWORD=wrighttest-ci-only-password
+          JWT_SECRET=wrighttest-ci-only-secret-not-for-production-6c93e24b
+          JWT_EXPIRES_IN=24h
+          WEBHOOK_SECRET=wrighttest-ci-only-webhook-secret
+          SCREENSHOTS_DIR=./screenshots
+          TRACES_DIR=./traces
+          AUTH_STATES_DIR=./auth-states
+          AUTH_STATE_ENCRYPTION_KEY=wrighttest-ci-only-auth-state-key
+          EOF
+
+      - name: Build images and start isolated Compose stack
+        run: docker compose up --build --detach --wait --wait-timeout 600
+
+      - name: Install test dependencies
+        run: npm ci
+
+      - name: Install Chromium for the host E2E runner
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E smoke
+        run: npm run test:e2e
+
+      - name: Run integration scenarios
+        run: npm run test:e2e:integration
+
+      - name: Stop and remove isolated test stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans

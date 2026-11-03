@@ -47,10 +47,44 @@
   box-shadow: none;
 }
 
+.wt-content-surface.ant-card {
+  border: 1px var(--wt-surface-border-style) var(--wt-color-border);
+  border-radius: var(--wt-radius-large);
+  background: var(--wt-color-surface);
+  box-shadow: none !important;
+}
+
+.wt-content-surface--empty.ant-card {
+  border-style: var(--wt-empty-surface-border-style);
+}
+
+.wt-content-surface .ant-card-body {
+  padding: var(--wt-surface-padding);
+}
+
+.wt-surface-page .ant-card.ant-card-bordered:not(.ant-card-small) {
+  border-color: var(--wt-color-border);
+  border-radius: var(--wt-radius-large) !important;
+  background: var(--wt-color-surface);
+  box-shadow: none !important;
+}
+
+.wt-surface-page .ant-card.ant-card-bordered:not(.ant-card-small) .ant-card-head {
+  border-bottom-color: var(--wt-color-border);
+}
+
+.wt-surface-page .ant-card.ant-card-bordered:not(.ant-card-small) .ant-card-body {
+  padding: var(--wt-surface-padding);
+}
+
+.wt-surface-page .ant-card.wt-content-surface--empty {
+  border-style: var(--wt-empty-surface-border-style);
+}
+
 .wt-section-card .ant-card-head {
   min-height: 44px;
   padding-inline: var(--wt-space-5);
-  border-bottom-color: #eaedf0;
+  border-bottom-color: var(--wt-color-border);
 }
 
 .wt-section-card__heading {
@@ -159,8 +193,8 @@
 .wt-error-state {
   width: 100%;
   min-width: 0;
-  padding: var(--wt-space-8) var(--wt-space-5);
-  border: 1px dashed var(--wt-color-border);
+  padding: var(--wt-empty-surface-padding);
+  border: 1px var(--wt-empty-surface-border-style) var(--wt-color-border);
   border-radius: var(--wt-radius-large);
   background: var(--wt-color-surface);
 }
@@ -186,6 +220,13 @@
 
 .wt-empty-state__description {
   color: var(--wt-color-muted);
+}
+
+.wt-empty-state--contained {
+  padding: var(--wt-surface-padding-compact) 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .wt-error-state {
@@ -257,6 +298,14 @@
   .wt-empty-state,
   .wt-loading-state,
   .wt-error-state {
-    padding: var(--wt-space-6) var(--wt-space-4);
+    padding: var(--wt-empty-surface-padding-compact);
+  }
+
+  .wt-content-surface .ant-card-body {
+    padding: var(--wt-surface-padding-compact);
+  }
+
+  .wt-surface-page .ant-card.ant-card-bordered:not(.ant-card-small) .ant-card-body {
+    padding: var(--wt-surface-padding-compact);
   }
 }

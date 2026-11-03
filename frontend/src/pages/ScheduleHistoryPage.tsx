@@ -2,21 +2,24 @@ import { useEffect, useState } from 'react';
 import { AppstoreOutlined, FileTextOutlined, HistoryOutlined } from '@ant-design/icons';
 import { Breadcrumb, Button, Card, Col, Layout, Row, Space, Table, Tag, Typography } from 'antd';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { getScheduleHistory } from '../api/client';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import RunStatusBadge from '../components/RunStatusBadge';
 import UserMenu from '../components/UserMenu';
+import { EmptyState } from '../design-system';
 import type { ScheduleHistoryResponse } from '../types';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
 
-function formatTime(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : '—';
+function formatTime(value: string | null | undefined, locale: string) {
+  return value ? new Date(value).toLocaleString(locale) : '—';
 }
 
 export default function ScheduleHistoryPage() {
+  const { t, i18n } = useTranslation();
   const { scheduleId } = useParams<{ scheduleId: string }>();
   const navigate = useNavigate();
   const [data, setData] = useState<ScheduleHistoryResponse | null>(null);
@@ -29,28 +32,28 @@ export default function ScheduleHistoryPage() {
   return (
     <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 55%, #ffffff 100%)' }}>
       <AppHeader actions={[<UserMenu key="menu" />]} />
-      <Content style={{ padding: 32, maxWidth: 1280, width: '100%', margin: '0 auto' }}>
+      <Content className="wt-surface-page" style={{ padding: 32, maxWidth: 1280, width: '100%', margin: '0 auto' }}>
         <Breadcrumb
           style={{ marginBottom: 16 }}
           items={[
-            { title: <Link to="/projects">Projects</Link> },
-            { title: data?.schedule.projectId ? <Link to={`/projects/${data.schedule.projectId}/schedules`}>Schedules</Link> : 'Schedules' },
-            { title: 'History' }
+            { title: <Link to="/projects">{t('nav.projects')}</Link> },
+            { title: data?.schedule.projectId ? <Link to={`/projects/${data.schedule.projectId}/schedules`}>{t('project.schedules')}</Link> : t('project.schedules') },
+            { title: t('scheduleHistory.title') }
           ]}
         />
 
         <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)', marginBottom: 24 }}>
           <Row gutter={[24, 24]}>
             <Col xs={24} md={8}>
-              <Title level={5} style={{ marginTop: 0 }}>Schedule</Title>
-              <div>{data?.schedule.name ?? 'Loading...'}</div>
+              <Title level={5} style={{ marginTop: 0 }}>{t('common.schedule')}</Title>
+              <div>{data?.schedule.name ?? t('common.loading')}</div>
             </Col>
             <Col xs={24} md={8}>
-              <Title level={5} style={{ marginTop: 0 }}>Cron</Title>
+              <Title level={5} style={{ marginTop: 0 }}>{t('scheduleHistory.cron')}</Title>
               <Tag color="blue"><code>{data?.schedule.cron ?? '—'}</code></Tag>
             </Col>
             <Col xs={24} md={8}>
-              <Title level={5} style={{ marginTop: 0 }}>Target</Title>
+              <Title level={5} style={{ marginTop: 0 }}>{t('scheduleHistory.target')}</Title>
               <div>{data?.schedule.target ?? '—'}</div>
             </Col>
           </Row>
@@ -58,22 +61,14 @@ export default function ScheduleHistoryPage() {
 
         <Space align="center" style={{ marginBottom: 16 }}>
           <HistoryOutlined />
-          <Title level={4} style={{ margin: 0 }}>Run History</Title>
+          <Title level={4} style={{ margin: 0 }}>{t('scheduleHistory.runHistory')}</Title>
         </Space>
 
         {!data || data.batches.length === 0 ? (
-          <Card
-            size="small"
-            style={{ borderRadius: 16, marginBottom: 12 }}
-            styles={{ body: { padding: '16px 20px' } }}
-          >
-            <Typography.Text type="secondary" style={{ display: 'block', lineHeight: 1.6 }}>
-              No runs yet.
-            </Typography.Text>
-            <Typography.Text type="secondary" style={{ display: 'block', lineHeight: 1.6 }}>
-              Schedule will trigger automatically.
-            </Typography.Text>
-          </Card>
+          <EmptyState
+            title={t('common.noRunsYet')}
+            description={t('scheduleHistory.emptyDescription')}
+          />
         ) : (
           data.batches.map((batch) => (
             <Card
@@ -83,9 +78,9 @@ export default function ScheduleHistoryPage() {
               title={
                 <Space wrap>
                   <RunStatusBadge status={batch.status} />
-                  <span>{formatTime(batch.tick)}</span>
+                  <span>{formatTime(batch.tick, i18n.resolvedLanguage ?? 'en')}</span>
                   <Tag>{batch.summary}</Tag>
-                  <Tag color="geekblue">{(batch.durationMs / 1000).toFixed(1)}s total</Tag>
+                  <Tag color="geekblue">{t('scheduleHistory.durationTotal', { duration: (batch.durationMs / 1000).toFixed(1) })}</Tag>
                 </Space>
               }
             >
@@ -96,7 +91,7 @@ export default function ScheduleHistoryPage() {
                 pagination={false}
                 columns={[
                   {
-                    title: 'Test',
+                    title: t('scheduleHistory.check'),
                     dataIndex: 'testName',
                     render: (value: string) => (
                       <Space>
@@ -106,22 +101,22 @@ export default function ScheduleHistoryPage() {
                     )
                   },
                   {
-                    title: 'Status',
+                    title: t('common.status'),
                     dataIndex: 'status',
                     render: (status) => <RunStatusBadge status={status} />
                   },
                   {
-                    title: 'Duration',
+                    title: t('common.duration'),
                     dataIndex: 'durationMs',
                     render: (value: number | null) => (value ? `${(value / 1000).toFixed(2)}s` : '—')
                   },
                   {
-                    title: 'Started',
+                    title: t('common.started'),
                     dataIndex: 'startedAt',
-                    render: (value: string) => formatTime(value)
+                    render: (value: string) => formatTime(value, i18n.resolvedLanguage ?? 'en')
                   },
                   {
-                    title: 'Error',
+                    title: t('scheduleHistory.error'),
                     dataIndex: 'error',
                     render: (value: string | null | undefined) => (value ? <Typography.Text type="danger">{value}</Typography.Text> : '—')
                   },
@@ -129,7 +124,7 @@ export default function ScheduleHistoryPage() {
                     title: '',
                     render: (_, run) => (
                       <Button size="small" onClick={() => navigate(`/runs/${run.id}`)}>
-                        View
+                        {t('common.view')}
                       </Button>
                     )
                   }

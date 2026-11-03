@@ -18,6 +18,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY backend/package.json ./backend/package.json
+COPY shared/ ./shared/
 
 RUN npm ci --workspace=backend --ignore-scripts
 

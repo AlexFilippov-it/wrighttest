@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Checkbox, Input, Layout, Modal, Popconfirm, Radio, Space, Table, Tag, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { createSuite, deleteSuite, getEnvironments, getSuites, runSuite, updateSuite } from '../api/client';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
@@ -12,8 +13,8 @@ import type { Environment, Suite, Test } from '../types';
 const { Content } = Layout;
 const { Text } = Typography;
 
-function formatTime(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : '—';
+function formatTime(value?: string | null, locale?: string) {
+  return value ? new Date(value).toLocaleString(locale) : '—';
 }
 
 function suiteTestNames(suite: Suite, tests: Test[]) {
@@ -22,6 +23,7 @@ function suiteTestNames(suite: Suite, tests: Test[]) {
 }
 
 export default function SuitesPage() {
+  const { t, i18n } = useTranslation();
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const { project } = useProjectShell();
@@ -75,12 +77,12 @@ export default function SuitesPage() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      message.error('Suite name is required');
+      message.error(t('suites.nameRequired'));
       return;
     }
 
     if (selectedTestIds.length === 0) {
-      message.error('Select at least one test');
+      message.error(t('suites.selectTestRequired'));
       return;
     }
 
@@ -89,10 +91,10 @@ export default function SuitesPage() {
       const payload = { name: name.trim(), testIds: selectedTestIds };
       if (editingSuite) {
         await updateSuite(editingSuite.id, payload);
-        message.success('Suite updated');
+        message.success(t('suites.updatedToast'));
       } else {
         await createSuite(projectId!, payload);
-        message.success('Suite created');
+        message.success(t('suites.createdToast'));
       }
       setModalOpen(false);
       await load();
@@ -103,14 +105,14 @@ export default function SuitesPage() {
 
   const handleDelete = async (id: string) => {
     await deleteSuite(id);
-    message.success('Suite deleted');
+    message.success(t('suites.deletedToast'));
     await load();
   };
 
   const handleRun = async (suiteId: string) => {
     if (environments.length === 0) {
       await runSuite(suiteId);
-      message.success('Suite queued');
+      message.success(t('suites.queuedToast'));
       navigate('/dashboard');
       return;
     }
@@ -127,10 +129,10 @@ export default function SuitesPage() {
     try {
       await runSuite(runSuiteId, selectedEnvironmentId);
       setRunModalOpen(false);
-      message.success('Suite queued');
+      message.success(t('suites.queuedToast'));
       navigate('/dashboard');
     } catch {
-      message.error('Failed to run suite');
+      message.error(t('suites.runFailed'));
     } finally {
       setRunLoading(false);
     }
@@ -139,47 +141,46 @@ export default function SuitesPage() {
   return (
     <Layout style={{ minHeight: 'auto', background: 'transparent' }}>
       <AppHeader />
-      <Content style={{ width: '100%', minWidth: 0 }}>
+      <Content className="wt-surface-page" style={{ width: '100%', minWidth: 0 }}>
         <Space direction="vertical" size={24} style={{ width: '100%' }}>
           <PageHeader
-            title="Suites"
-            description="Reusable groups of checks that can be run together."
+            title={t('suites.title')}
+            description={t('suites.description')}
             breadcrumbs={[
-              { key: 'projects', label: 'Projects', href: '/projects' },
+              { key: 'projects', label: t('nav.projects'), href: '/projects' },
               { key: 'project', label: project.name, href: `/projects/${projectId}/checks` },
-              { key: 'suites', label: 'Suites' }
+              { key: 'suites', label: t('suites.title') }
             ]}
             actions={canWriteProject ? (
                 <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-                  New Suite
+                  {t('suites.new')}
                 </Button>
             ) : undefined}
           />
 
           {!canWriteProject ? (
-            <Alert type="info" showIcon message="Read-only access" description="You can view suites, but you cannot change or run them." />
+            <Alert type="info" showIcon message={t('suites.readOnly')} description={t('suites.readOnlyDescription')} />
           ) : null}
 
-          <Card style={{ borderRadius: 12, boxShadow: 'var(--wt-shadow-subtle)' }}>
-            {suites.length === 0 && !loading ? (
-              <EmptyState
-                title="No suites yet"
-                description="Create a suite to run a reusable group of checks."
-                action={canWriteProject ? <Button type="primary" onClick={openCreate}>New Suite</Button> : undefined}
-              />
-            ) : (
+          {suites.length === 0 && !loading ? (
+            <EmptyState
+              title={t('suites.emptyTitle')}
+              description={t('suites.emptyDescription')}
+            />
+          ) : (
+            <Card className="wt-content-surface">
               <Table
                 dataSource={suites}
                 rowKey="id"
                 loading={loading}
                 pagination={false}
                 columns={[
-                  { title: 'Name', dataIndex: 'name' },
+                  { title: t('suites.name'), dataIndex: 'name' },
                   {
-                    title: 'Tests',
+                    title: t('suites.tests'),
                     render: (_, row) => (
                       <Space wrap>
-                        <Tag color="blue">{Array.isArray(row.testIds) ? row.testIds.length : 0} tests</Tag>
+                        <Tag color="blue">{t('suites.testCount', { count: Array.isArray(row.testIds) ? row.testIds.length : 0 })}</Tag>
                         {suiteTestNames(row, projectTests).slice(0, 3).map((testName) => (
                           <Tag key={testName}>{testName}</Tag>
                         ))}
@@ -187,42 +188,42 @@ export default function SuitesPage() {
                     )
                   },
                   {
-                    title: 'Schedules',
+                    title: t('suites.schedules'),
                     dataIndex: ['_count', 'schedules'],
                     render: (value: number | undefined) => <Tag color="purple">{value ?? 0}</Tag>
                   },
                   {
-                    title: 'Updated',
+                    title: t('suites.updated'),
                     dataIndex: 'updatedAt',
-                    render: (value: string) => formatTime(value)
+                    render: (value: string) => formatTime(value, i18n.language)
                   },
                   {
-                    title: 'Actions',
+                    title: t('suites.actions'),
                     render: (_, row) => canWriteProject ? (
                       <Space onClick={(event) => event.stopPropagation()}>
                         <Button icon={<PlayCircleOutlined />} size="small" type="primary" onClick={() => void handleRun(row.id)}>
-                          Run
+                          {t('suites.run')}
                         </Button>
                         <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(row)}>
-                          Edit
+                          {t('suites.edit')}
                         </Button>
-                        <Popconfirm title="Delete suite?" onConfirm={() => void handleDelete(row.id)}>
+                        <Popconfirm title={t('suites.deleteConfirm')} onConfirm={() => void handleDelete(row.id)}>
                           <Button danger icon={<DeleteOutlined />} size="small">
-                            Delete
+                            {t('suites.delete')}
                           </Button>
                         </Popconfirm>
                       </Space>
-                    ) : <Text type="secondary">Read-only</Text>
+                    ) : <Text type="secondary">{t('suites.readOnlyLabel')}</Text>
                   }
                 ]}
               />
-            )}
-          </Card>
+            </Card>
+          )}
         </Space>
       </Content>
 
       <Modal
-        title={editingSuite ? `Edit Suite: ${editingSuite.name}` : 'New Suite'}
+        title={editingSuite ? t('suites.editTitle', { name: editingSuite.name }) : t('suites.newTitle')}
         open={modalOpen}
         onOk={() => void handleSave()}
         onCancel={() => setModalOpen(false)}
@@ -231,12 +232,12 @@ export default function SuitesPage() {
       >
         <Space direction="vertical" style={{ width: '100%' }} size={16}>
           <div>
-            <Text type="secondary">Suite name</Text>
-            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Smoke tests" />
+            <Text type="secondary">{t('suites.suiteName')}</Text>
+            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('suites.namePlaceholder')} />
           </div>
 
           <div>
-            <Text type="secondary">Select tests</Text>
+            <Text type="secondary">{t('suites.selectTests')}</Text>
             <div style={{ marginTop: 8 }}>
               <Checkbox.Group value={selectedTestIds} onChange={(values) => setSelectedTestIds(values as string[])}>
                 <Space direction="vertical" style={{ width: '100%' }}>
@@ -256,7 +257,7 @@ export default function SuitesPage() {
       </Modal>
 
       <Modal
-        title="Run Suite"
+        title={t('suites.runTitle')}
         open={runModalOpen}
         onOk={() => void handleConfirmRun()}
         onCancel={() => setRunModalOpen(false)}
@@ -267,11 +268,11 @@ export default function SuitesPage() {
           value={selectedEnvironmentId ?? ''}
           onChange={(event) => setSelectedEnvironmentId(event.target.value || undefined)}
         >
-          <Radio value="">No environment (use values as-is)</Radio>
+          <Radio value="">{t('suites.noEnvironmentUseAsIs')}</Radio>
           {environments.map((environment) => (
             <Radio key={environment.id} value={environment.id}>
               {environment.name}
-              <Tag style={{ marginLeft: 8 }}>{Object.keys(environment.variables).length} variables</Tag>
+              <Tag style={{ marginLeft: 8 }}>{t('suites.variableCount', { count: Object.keys(environment.variables).length })}</Tag>
             </Radio>
           ))}
         </Radio.Group>

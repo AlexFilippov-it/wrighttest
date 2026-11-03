@@ -7,9 +7,11 @@ import {
   LeftOutlined,
   MenuOutlined,
   PlayCircleOutlined,
-  RightOutlined
+  RightOutlined,
+  TranslationOutlined
 } from '@ant-design/icons';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { getProjects } from '../api/client';
 import appLogo from '../assets/wrighttest_logo.png';
 import UserMenu from '../components/UserMenu';
@@ -36,7 +38,8 @@ function readCachedProjects(cacheKey: string) {
 
 export default function AppShell() {
   const navigate = useNavigate();
-  const { email } = useAuth();
+  const { email, isSystemAdmin } = useAuth();
+  const { t } = useTranslation();
   const projectsCacheKey = `wt_projects:${email ?? 'anonymous'}`;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [project, setProject] = useState<AppShellProject | null>(null);
@@ -104,7 +107,7 @@ export default function AppShell() {
           <Link
             to={`/projects/${project.id}/checks`}
             className="wt-app-shell__compact-project"
-            aria-label={`Current project: ${project.name}`}
+            aria-label={t('nav.currentProjectNamed', { name: project.name })}
           >
             <AppstoreOutlined />
           </Link>
@@ -114,11 +117,11 @@ export default function AppShell() {
 
     return (
       <div className="wt-app-shell__project-switcher">
-        <Text type="secondary">{project ? 'Current project' : 'Open project'}</Text>
+        <Text type="secondary">{project ? t('nav.currentProject') : t('nav.openProject')}</Text>
         <Select
-          aria-label="Switch project"
+          aria-label={t('common.switchProject')}
           value={project?.id}
-          placeholder="Select a project"
+          placeholder={t('nav.selectProject')}
           onChange={openProject}
           options={projectOptions.map((option) => ({
             value: option.id,
@@ -128,9 +131,9 @@ export default function AppShell() {
               </Tooltip>
             )
           }))}
-          notFoundContent="No projects available"
+          notFoundContent={t('nav.noProjects')}
         />
-        {project?.role ? <span className="wt-app-shell__role">{project.role.toLowerCase()}</span> : null}
+        {project?.role ? <span className="wt-app-shell__role">{t(`role.${project.role.toLowerCase()}`)}</span> : null}
       </div>
     );
   };
@@ -143,7 +146,7 @@ export default function AppShell() {
           {!compact ? (
             <span>
               <strong>{APP_NAME}</strong>
-              <small>{APP_DESCRIPTION}</small>
+              <small>{t('brand.description', { defaultValue: APP_DESCRIPTION })}</small>
             </span>
           ) : null}
         </Link>
@@ -152,46 +155,48 @@ export default function AppShell() {
       {project ? (
         <>
           {renderProjectSwitcher(compact)}
-          <nav aria-label="Project navigation" className="wt-shell-navigation">
-            <ShellNavLink compact={compact} to="/projects" label="All projects" icon={<FolderOpenOutlined />} end onNavigate={() => setDrawerOpen(false)} />
-            <NavigationGroup compact={compact} title="Project">
+          <nav aria-label={t('nav.project')} className="wt-shell-navigation">
+            <ShellNavLink compact={compact} to="/projects" label={t('nav.allProjects')} icon={<FolderOpenOutlined />} end onNavigate={() => setDrawerOpen(false)} />
+            <NavigationGroup compact={compact} title={t('nav.project')}>
               {projectMainNavigation.map((item) => (
                 <ShellNavLink
                   key={item.key}
                   compact={compact}
                   to={`/projects/${project.id}/${item.key}`}
-                  label={item.label}
+                  label={t(`project.${item.key}`)}
                   icon={item.icon}
                   onNavigate={() => setDrawerOpen(false)}
                 />
               ))}
             </NavigationGroup>
-            <NavigationGroup compact={compact} title="Configuration">
+            <NavigationGroup compact={compact} title={t('nav.configuration')}>
               {visibleConfiguration.map((item) => (
                 <ShellNavLink
                   key={item.key}
                   compact={compact}
                   to={`/projects/${project.id}/${item.key}`}
-                  label={item.label}
+                  label={t(`project.${item.key}`)}
                   icon={item.icon}
                   onNavigate={() => setDrawerOpen(false)}
                 />
               ))}
             </NavigationGroup>
-            <NavigationGroup compact={compact} title="Workspace">
-              <ShellNavLink compact={compact} to="/dashboard" label="Dashboard" icon={<DashboardOutlined />} end onNavigate={() => setDrawerOpen(false)} />
-              <ShellNavLink compact={compact} to="/runs" label="All Runs" icon={<PlayCircleOutlined />} end onNavigate={() => setDrawerOpen(false)} />
+            <NavigationGroup compact={compact} title={t('nav.workspace')}>
+              <ShellNavLink compact={compact} to="/dashboard" label={t('nav.dashboard')} icon={<DashboardOutlined />} end onNavigate={() => setDrawerOpen(false)} />
+              <ShellNavLink compact={compact} to="/runs" label={t('nav.allRuns')} icon={<PlayCircleOutlined />} end onNavigate={() => setDrawerOpen(false)} />
             </NavigationGroup>
+            {isSystemAdmin ? <NavigationGroup compact={compact} title={t('nav.system')}><ShellNavLink compact={compact} to="/instance/language" label={t('nav.language')} icon={<TranslationOutlined />} end onNavigate={() => setDrawerOpen(false)} /></NavigationGroup> : null}
           </nav>
         </>
       ) : (
         <>
-          <nav aria-label="Primary navigation" className="wt-shell-navigation">
-            <ShellNavLink compact={compact} to="/dashboard" label="Dashboard" icon={<DashboardOutlined />} end onNavigate={() => setDrawerOpen(false)} />
-            <ShellNavLink compact={compact} to="/projects" label="Projects" icon={<FolderOpenOutlined />} end onNavigate={() => setDrawerOpen(false)} />
-            <ShellNavLink compact={compact} to="/runs" label="All Runs" icon={<PlayCircleOutlined />} end onNavigate={() => setDrawerOpen(false)} />
+          <nav aria-label={t('nav.primary')} className="wt-shell-navigation">
+            <ShellNavLink compact={compact} to="/dashboard" label={t('nav.dashboard')} icon={<DashboardOutlined />} end onNavigate={() => setDrawerOpen(false)} />
+            <ShellNavLink compact={compact} to="/projects" label={t('nav.projects')} icon={<FolderOpenOutlined />} end onNavigate={() => setDrawerOpen(false)} />
+            <ShellNavLink compact={compact} to="/runs" label={t('nav.allRuns')} icon={<PlayCircleOutlined />} end onNavigate={() => setDrawerOpen(false)} />
           </nav>
           {projectOptions.length > 0 ? renderProjectSwitcher(compact) : null}
+          {isSystemAdmin ? <NavigationGroup compact={compact} title={t('nav.system')}><ShellNavLink compact={compact} to="/instance/language" label={t('nav.language')} icon={<TranslationOutlined />} end onNavigate={() => setDrawerOpen(false)} /></NavigationGroup> : null}
         </>
       )}
 
@@ -200,10 +205,10 @@ export default function AppShell() {
           className="wt-app-shell__collapse"
           type="text"
           icon={compact ? <RightOutlined /> : <LeftOutlined />}
-          aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={compact ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
           onClick={() => setSidebarCollapsed((current) => !current)}
         >
-          {compact ? null : 'Collapse sidebar'}
+          {compact ? null : t('nav.collapseSidebar')}
         </Button>
         <UserMenu tone="light" compact={compact} />
       </div>
@@ -238,7 +243,7 @@ export default function AppShell() {
 
         <Layout className="wt-app-shell__main">
           <header className="wt-app-shell__mobile-header">
-            <Button type="text" icon={<MenuOutlined />} aria-label="Open navigation" onClick={() => setDrawerOpen(true)} />
+            <Button type="text" icon={<MenuOutlined />} aria-label={t('nav.openNavigation')} onClick={() => setDrawerOpen(true)} />
             <Link to="/dashboard" className="wt-app-shell__mobile-brand">
               <img src={appLogo} alt="" />
               <Title level={5}>{APP_NAME}</Title>

@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
+COPY shared/ ./shared/
 
 RUN npm ci --workspace=frontend
 

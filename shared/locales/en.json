@@ -1,0 +1,922 @@
+{
+  "nav.dashboard": "Dashboard",
+  "nav.projects": "Projects",
+  "nav.allProjects": "All projects",
+  "nav.allRuns": "All Runs",
+  "nav.openProject": "Open project",
+  "nav.currentProject": "Current project",
+  "nav.selectProject": "Select a project",
+  "nav.project": "Project",
+  "nav.configuration": "Configuration",
+  "nav.workspace": "Workspace",
+  "nav.language": "Language",
+  "nav.primary": "Primary navigation",
+  "nav.openNavigation": "Open navigation",
+  "nav.collapseSidebar": "Collapse sidebar",
+  "nav.expandSidebar": "Expand sidebar",
+  "nav.noProjects": "No projects available",
+  "nav.system": "System",
+  "project.overview": "Overview",
+  "project.checks": "Checks",
+  "project.suites": "Suites",
+  "project.runs": "Runs",
+  "project.schedules": "Schedules",
+  "project.environments": "Environments",
+  "project.authentication": "Authentication",
+  "project.alerts": "Alerts",
+  "project.settings": "Settings",
+  "project.members": "Members",
+  "role.owner": "Owner",
+  "role.editor": "Editor",
+  "role.viewer": "Viewer",
+  "brand.description": "UI Test Automation Platform",
+  "auth.welcome": "Welcome back",
+  "auth.signInDescription": "Sign in to continue to your workspace.",
+  "auth.email": "Email",
+  "auth.password": "Password",
+  "auth.signIn": "Sign in",
+  "auth.invalidCredentials": "Invalid email or password",
+  "language.pageTitle": "Instance language",
+  "language.pageDescription": "Choose the interface language for everyone using this WrightTest installation.",
+  "language.interfaceLanguage": "Interface language",
+  "language.interfaceLanguageHelp": "This setting applies to all users and projects. Users will see the new language after refreshing the page.",
+  "language.apply": "Apply language",
+  "language.packs": "Language packs",
+  "language.downloadTemplate": "Download template",
+  "language.importLanguage": "Import language",
+  "language.export": "Export",
+  "language.update": "Update",
+  "language.delete": "Delete",
+  "language.language": "Language",
+  "language.locale": "Locale",
+  "language.translated": "Translated",
+  "language.translatedCount_one": "{{count}} translated string",
+  "language.translatedCount_other": "{{count}} translated strings",
+  "language.status": "Status",
+  "language.actions": "Actions",
+  "language.builtIn": "Built-in",
+  "language.installed": "Installed",
+  "language.needsReview": "Needs review",
+  "language.importTitle": "Review language pack",
+  "language.file": "Language file",
+  "language.missing": "Missing translations",
+  "language.stale": "Outdated source strings",
+  "language.unknown": "Unknown keys",
+  "language.validationError": "The language file is invalid. No changes have been applied.",
+  "language.applyImport": "Apply translations",
+  "language.confirmDelete": "Delete this language pack?",
+  "language.confirmDeleteDescription": "This cannot be undone. If it is active, the interface will return to English.",
+  "language.customOverride": "Custom override",
+  "language.mergeHelp": "Blank values and omitted keys keep existing translations.",
+  "language.loadError": "Could not load language settings.",
+  "language.saved": "Language settings saved.",
+  "language.imported": "Language pack imported safely.",
+  "language.deleted": "Language pack deleted.",
+  "language.fileTooLarge": "Choose a JSON file smaller than 1 MB.",
+  "language.invalidJson": "The selected file is not valid JSON.",
+  "common.cancel": "Cancel"
+  ,"common.allProjects": "All projects"
+  ,"common.project_one": "{{count}} project"
+  ,"common.project_other": "{{count}} projects"
+  ,"common.ofSelectedRuns": "{{percent}}% of selected runs"
+  ,"common.noData": "No data"
+  ,"common.check": "Check"
+  ,"common.project": "Project"
+  ,"common.status": "Status"
+  ,"common.actions": "Actions"
+  ,"common.duration": "Duration"
+  ,"common.started": "Started"
+  ,"common.trigger": "Trigger"
+  ,"common.failed": "Failed"
+  ,"common.passed": "Passed"
+  ,"common.slow": "Slow"
+  ,"common.open": "Open"
+  ,"common.openResult": "Open result"
+  ,"common.goProjects": "Go to projects"
+  ,"common.noRunsYet": "No runs yet"
+  ,"common.allStatuses": "All statuses"
+  ,"common.allTriggers": "All triggers"
+  ,"common.last24Hours": "Last 24 hours"
+  ,"common.last7Days": "Last 7 days"
+  ,"common.last30Days": "Last 30 days"
+  ,"common.last90Days": "Last 90 days"
+  ,"common.allTime": "All time"
+  ,"common.manual": "Manual"
+  ,"common.schedule": "Schedule"
+  ,"common.passing": "Passing"
+  ,"common.failing": "Failing"
+  ,"common.flaky": "Flaky"
+  ,"common.never": "Never"
+  ,"common.notConfigured": "Not configured"
+  ,"time.justNow": "just now"
+  ,"time.minutesAgo_one": "{{count}} min ago"
+  ,"time.minutesAgo_other": "{{count}} min ago"
+  ,"time.hoursAgo_one": "{{count}} hour ago"
+  ,"time.hoursAgo_other": "{{count}} hours ago"
+  ,"time.daysAgo_one": "{{count}} day ago"
+  ,"time.daysAgo_other": "{{count}} days ago"
+  ,"dashboard.title": "Dashboard"
+  ,"dashboard.description": "Global health across projects, browser checks, schedules, and runs."
+  ,"dashboard.loading": "Loading dashboard..."
+  ,"dashboard.totalRuns": "Total runs"
+  ,"dashboard.selectedPeriod": "Selected period"
+  ,"dashboard.passRate": "Pass rate"
+  ,"dashboard.passRateDetail": "{{passed}} of {{total}} runs · Last {{days}} days"
+  ,"dashboard.activeFailures": "Active failures"
+  ,"dashboard.latestRunFailed": "Checks whose latest run failed"
+  ,"dashboard.noActiveFailures": "No active failures"
+  ,"dashboard.notEvaluated": "Not evaluated"
+  ,"dashboard.actionNeeded": "Action needed"
+  ,"dashboard.failedRuns": "Failed runs"
+  ,"dashboard.failedInPeriod": "Failed in selected period"
+  ,"dashboard.flakyChecks": "Flaky checks"
+  ,"dashboard.passedAndFailed": "Passed and failed in this period"
+  ,"dashboard.noFlaky": "No flaky checks detected"
+  ,"dashboard.avgDuration": "Avg duration"
+  ,"dashboard.averageRunDuration": "Average run duration"
+  ,"dashboard.needsAttention": "Needs attention"
+  ,"dashboard.allChecksPassing": "All browser checks are currently passing."
+  ,"dashboard.earlierFailures": "Some runs failed earlier in this period. Review Recent runs for details."
+  ,"dashboard.lastFailureOrRun": "Last failure / Last run"
+  ,"dashboard.editCheck": "Edit check"
+  ,"dashboard.viewAllIssues": "View all issues"
+  ,"dashboard.latestRuns_one": "Latest {{count}} run"
+  ,"dashboard.latestRuns_other": "Latest {{count}} runs"
+  ,"dashboard.recentRuns": "Recent runs"
+  ,"dashboard.recentRunsLoadError": "Recent runs could not be loaded"
+  ,"dashboard.recentRunsUnavailable": "The dashboard has run data, but the recent runs list is temporarily unavailable."
+  ,"dashboard.refresh": "Refresh"
+  ,"dashboard.noRecentRunsInPeriod": "No recent runs found in this period"
+  ,"dashboard.noRunsYet": "No runs yet"
+  ,"dashboard.runOrScheduleForRecent": "Run a check manually or create a schedule to start collecting recent run data."
+  ,"dashboard.runOrScheduleForDashboard": "Run a check manually or create a schedule to start collecting dashboard data."
+  ,"dashboard.createCheck": "Create check"
+  ,"dashboard.viewAllRuns": "View all runs"
+  ,"dashboard.passRateOverTime": "Pass rate over time"
+  ,"dashboard.rerun": "Rerun"
+  ,"dashboard.openCheck": "Open check"
+  ,"dashboard.lastFailure": "Last failure"
+  ,"dashboard.dailyPassRate": "Daily pass rate for selected runs."
+  ,"dashboard.noRunsSelectedPeriod": "No runs in selected period"
+  ,"dashboard.widerRangeHint": "Choose a wider time range or run a check to populate the dashboard."
+  ,"dashboard.runsPerDay": "Runs per day"
+  ,"dashboard.passedFailedByDay": "Passed and failed runs grouped by day."
+  ,"dashboard.noFlakyInRange": "No checks had both passed and failed runs in the selected period."
+  ,"dashboard.openLatestFailedResult": "Open latest failed result"
+  ,"projects.title": "Projects"
+  ,"projects.nameRequired": "Project name is required"
+  ,"projects.renameTitle": "Rename project"
+  ,"projects.description": "Track browser checks, schedules, alerts, and run history by project."
+  ,"projects.totalProjects": "Total projects"
+  ,"projects.browserChecks": "Browser checks"
+  ,"projects.acrossAllProjects": "Across all projects"
+  ,"projects.failedChecks": "Failed checks"
+  ,"projects.latestRunFailed": "Latest run failed"
+  ,"projects.noProjects": "No projects yet"
+  ,"projects.emptyDescription": "Create a project to group browser checks, environments, schedules, and alerts."
+  ,"projects.create": "Create project"
+  ,"projects.readOnlyCreateUnavailable": "Project creation is not available for read-only access."
+  ,"projects.newProject": "New Project"
+  ,"projects.created": "Project created"
+  ,"projects.renamed": "Project renamed"
+  ,"projects.deleted": "Project deleted"
+  ,"projects.deleteTitle": "Delete project?"
+  ,"projects.deleteDescription": "This will remove \"{{name}}\" and all related tests, schedules, environments, and alerts."
+  ,"projects.rename": "Rename"
+  ,"projects.save": "Save"
+  ,"projects.createTitle": "Create"
+  ,"projects.projectName": "Project name"
+  ,"projects.namePlaceholder": "My browser checks"
+  ,"projects.gettingStarted": "Getting started"
+  ,"projects.gettingStartedDescription": "Projects group checks, environments, schedules, and alert channels."
+  ,"projects.addOrImportCheck": "Add or import a browser check"
+  ,"projects.runManually": "Run it manually"
+  ,"projects.scheduleRuns": "Schedule regular runs"
+  ,"projects.addAlerts": "Add Telegram or Slack alerts"
+  ,"projects.checks": "Checks"
+  ,"projects.health": "Health"
+  ,"projects.passRate": "Pass rate"
+  ,"projects.lastRun": "Last run"
+  ,"projects.schedules": "Schedules"
+  ,"projects.alerts": "Alerts"
+  ,"projects.actions": "Actions"
+  ,"projects.open": "Open"
+  ,"projects.activeSchedules_one": "{{count}} active"
+  ,"projects.activeSchedules_other": "{{count}} active"
+  ,"projects.alertChannels_one": "{{count}} channel"
+  ,"projects.alertChannels_other": "{{count}} channels"
+  ,"projects.projectCreatedDate": "Created {{date}}"
+  ,"projects.totalRunsPassRate": "{{passed}} of {{total}} runs · Last 30 days"
+  ,"projects.noRuns": "No runs yet"
+  ,"projects.notEvaluated": "Not evaluated"
+  ,"runs.title": "Runs"
+  ,"runs.result": "Result"
+  ,"status.pending": "Pending"
+  ,"status.running": "Running"
+  ,"runs.filterSummary": "{{project}} · {{period}} · {{status}} · {{trigger}}"
+  ,"runs.description": "Latest run history across projects, browser checks, schedules, and manual executions."
+  ,"runs.totalRuns": "Total runs"
+  ,"runs.acrossSelectedRuns": "Across selected runs"
+  ,"runs.longestRun": "Longest run"
+  ,"runs.recentRuns": "Recent runs"
+  ,"runs.latestRuns_one": "Latest {{count}} run"
+  ,"runs.latestRuns_other": "Latest {{count}} runs"
+  ,"runs.resetFilters": "Reset filters"
+  ,"runs.loading": "Loading runs..."
+  ,"runs.noRunsDescription": "Run a check manually or create a schedule to start collecting execution history."
+  ,"runs.noMatches": "No runs match these filters"
+  ,"runs.changeFiltersHint": "Try changing the project, period, status, or trigger."
+  ,"runs.showingCount": "Showing {{visible}} of {{total}} runs"
+  ,"runs.loadMore": "Load more"
+  ,"runs.allShown": "All runs are shown"
+  ,"runs.latestRunsError": "Recent runs could not be loaded"
+  ,"project.lastResult": "Last result"
+  ,"projectDescription.overview": "Monitor browser checks, schedules, and recent results."
+  ,"projectDescription.checks": "Create, organize, and run browser checks."
+  ,"projectDescription.suites": "Group checks into reusable suites."
+  ,"projectDescription.runs": "Review runs for this project."
+  ,"projectDescription.schedules": "Automate checks with project schedules."
+  ,"projectDescription.environments": "Manage variables used by checks in this project."
+  ,"projectDescription.authentication": "Configure reusable sign-in state for project environments."
+  ,"projectDescription.alerts": "Configure notifications for check results."
+  ,"projectDescription.settings": "Manage project details and defaults."
+  ,"projectDescription.members": "Manage who can access this project."
+  ,"projectDescription.readOnly": "You can view this project, but you cannot make changes."
+  ,"project.check": "Check"
+  ,"project.status": "Status"
+  ,"project.lastRun": "Last run"
+  ,"project.schedule": "Schedule"
+  ,"project.device": "Device"
+  ,"project.runsCount": "Runs"
+  ,"project.actions": "Actions"
+  ,"project.neverRun": "Never run"
+  ,"project.never": "Never"
+  ,"project.stepCount_one": "{{count}} step"
+  ,"project.stepCount_other": "{{count}} steps"
+  ,"project.runCount_one": "{{count}} run"
+  ,"project.runCount_other": "{{count}} runs"
+  ,"project.run": "Run"
+  ,"project.open": "Open"
+  ,"project.edit": "Edit"
+  ,"project.duplicate": "Duplicate"
+  ,"project.exportSpec": "Export .spec.ts"
+  ,"project.delete": "Delete"
+  ,"project.deleteCheckTitle": "Delete check?"
+  ,"project.deleteCheckDescription": "This will remove \"{{name}}\" and its run history."
+  ,"project.checksTitle": "Checks"
+  ,"project.noBrowserChecks": "No browser checks yet"
+  ,"project.noBrowserChecksDescription": "Create your first check or import an existing Playwright .spec.ts file."
+  ,"project.newCheck": "New Check"
+  ,"project.importSpec": "Import .spec.ts"
+  ,"project.recentResults": "Recent results"
+  ,"project.openResult": "Open"
+  ,"project.runHistoryEmpty": "Run history will appear here once checks have been executed."
+  ,"project.runSuite": "Run suite"
+  ,"project.goToChecks": "Go to Checks"
+  ,"project.needsAttention": "Needs attention"
+  ,"project.allClear": "All clear"
+  ,"project.flakyCount": "{{count}} flaky"
+  ,"project.lastFailure": "Last failure"
+  ,"project.errorSummary": "Error summary"
+  ,"project.noErrorSummary": "No error summary"
+  ,"project.openResultAction": "Open result"
+  ,"project.rerun": "Rerun"
+  ,"project.noRunsYet": "No runs yet"
+  ,"project.noRunsHealthDescription": "Run a check to evaluate project health and surface failures here."
+  ,"project.noActiveFailures": "No active failures"
+  ,"project.allChecksPassing": "All browser checks in this project are currently passing."
+  ,"project.flakyRecent": "{{count}} flaky checks were detected in recent runs."
+  ,"project.projectSetup": "Project setup"
+  ,"project.configured": "Configured"
+  ,"project.notConfigured": "Not configured"
+  ,"project.checksCount": "Browser checks in this project"
+  ,"project.passRate": "Pass rate"
+  ,"project.passRateDetail": "{{passed}} of {{total}} runs · Last 30 days"
+  ,"project.activeSchedules": "Active schedules"
+  ,"project.projectSchedules": "Project-level schedules"
+  ,"project.alertChannels": "Alert channels"
+  ,"project.telegramSlack": "Telegram and Slack"
+  ,"project.avgDuration": "Avg duration"
+  ,"project.notEvaluated": "Not evaluated"
+  ,"project.failingChecks": "{{count}} failing checks"
+  ,"project.acrossRecentRuns": "Across recent runs"
+  ,"project.runsInDays": "{{count}} runs in 30 days"
+  ,"project.runScheduleForResults": "Run a check manually or create a schedule to start collecting results."
+  ,"project.schedulesTitle": "Schedules"
+  ,"project.newSchedule": "New Schedule"
+  ,"project.schedulesDescription": "Run browser checks or suites automatically on a cron expression."
+  ,"project.noSchedules": "No schedules yet"
+  ,"project.noSchedulesDescription": "Create a schedule to run checks automatically."
+  ,"project.target": "Target"
+  ,"project.cron": "Cron"
+  ,"project.active": "Active"
+  ,"project.paused": "Paused"
+  ,"project.nextRun": "Next run"
+  ,"project.overdue": "Overdue"
+  ,"project.history": "History"
+  ,"project.runNow": "Run now"
+  ,"project.resume": "Resume"
+  ,"project.deleteScheduleTitle": "Delete schedule?"
+  ,"project.deleteScheduleDescription": "This will remove \"{{name}}\" and stop automatic runs."
+  ,"project.noEnvironment": "No environment"
+  ,"project.desktop": "Desktop"
+  ,"suites.title": "Suites"
+  ,"suites.description": "Reusable groups of checks that can be run together."
+  ,"suites.new": "New Suite"
+  ,"suites.readOnly": "Read-only access"
+  ,"suites.readOnlyDescription": "You can view suites, but you cannot change or run them."
+  ,"suites.emptyTitle": "No suites yet"
+  ,"suites.emptyDescription": "Create a suite to run a reusable group of checks."
+  ,"suites.emptyRunDescription": "Create a suite to run multiple browser checks together."
+  ,"suites.create": "Create suite"
+  ,"suites.name": "Name"
+  ,"suites.tests": "Tests"
+  ,"suites.testCount_one": "{{count}} test"
+  ,"suites.testCount_other": "{{count}} tests"
+  ,"suites.schedules": "Schedules"
+  ,"suites.updated": "Updated"
+  ,"suites.actions": "Actions"
+  ,"suites.run": "Run"
+  ,"suites.edit": "Edit"
+  ,"suites.delete": "Delete"
+  ,"suites.deleteConfirm": "Delete suite?"
+  ,"suites.readOnlyLabel": "Read-only"
+  ,"suites.nameRequired": "Suite name is required"
+  ,"suites.selectTestRequired": "Select at least one test"
+  ,"suites.updatedToast": "Suite updated"
+  ,"suites.createdToast": "Suite created"
+  ,"suites.deletedToast": "Suite deleted"
+  ,"suites.queuedToast": "Suite queued"
+  ,"suites.runFailed": "Failed to run suite"
+  ,"suites.editTitle": "Edit Suite: {{name}}"
+  ,"suites.newTitle": "New Suite"
+  ,"suites.suiteName": "Suite name"
+  ,"suites.namePlaceholder": "Smoke tests"
+  ,"suites.selectTests": "Select tests"
+  ,"suites.runTitle": "Run Suite"
+  ,"suites.noEnvironmentUseAsIs": "No environment (use values as-is)"
+  ,"suites.variableCount_one": "{{count}} variable"
+  ,"suites.variableCount_other": "{{count}} variables"
+  ,"common.active": "Active"
+  ,"common.paused": "Paused"
+  ,"common.edit": "Edit"
+  ,"common.delete": "Delete"
+  ,"common.pause": "Pause"
+  ,"common.activate": "Activate"
+  ,"common.readOnly": "Read-only access"
+  ,"common.saveChanges": "Save changes"
+  ,"alerts.failed": "Failed"
+  ,"alerts.recovered": "Recovered"
+  ,"alerts.passed": "Passed"
+  ,"alerts.noRules": "No rules"
+  ,"alerts.addTelegram": "Add Telegram alert"
+  ,"alerts.addSlack": "Add Slack alert"
+  ,"alerts.addChannel": "Add channel"
+  ,"alerts.editTelegram": "Edit Telegram alert"
+  ,"alerts.editSlack": "Edit Slack alert"
+  ,"alerts.description": "Send failed and recovered check notifications to Telegram or Slack."
+  ,"alerts.emptyTitle": "No alert channels configured"
+  ,"alerts.emptyDescription": "Send failed and recovered browser check notifications to Telegram or Slack."
+  ,"alerts.alert": "Alert"
+  ,"alerts.type": "Type"
+  ,"alerts.rules": "Rules"
+  ,"alerts.lastTest": "Last test"
+  ,"alerts.sendTest": "Send test"
+  ,"alerts.deleteTitle": "Delete alert channel?"
+  ,"alerts.deleteDescription": "This will remove \"{{name}}\"."
+  ,"alerts.failedRuns": "Failed runs"
+  ,"alerts.failedRunsHelp": "Send a notification when a check fails."
+  ,"alerts.recoveredRuns": "Recovered runs"
+  ,"alerts.recoveredRunsHelp": "Send a notification when a previously failing check passes again."
+  ,"alerts.passedRuns": "Passed runs"
+  ,"alerts.passedRunsHelp": "Send a notification on every successful run."
+  ,"alerts.updated": "Alert channel updated"
+  ,"alerts.created": "Alert channel created"
+  ,"alerts.saveError": "Failed to save alert channel"
+  ,"alerts.testSent": "Test notification sent"
+  ,"alerts.testError": "Failed to send test notification"
+  ,"alerts.deleted": "Alert channel deleted"
+  ,"alerts.paused": "Alert paused"
+  ,"alerts.activated": "Alert activated"
+  ,"alerts.statusError": "Failed to update alert status"
+  ,"alerts.sendTestNotification": "Send test notification"
+  ,"alerts.create": "Create alert"
+  ,"alerts.name": "Alert name"
+  ,"alerts.devPlaceholder": "Dev alerts"
+  ,"alerts.productionPlaceholder": "Production alerts"
+  ,"alerts.botToken": "Bot token"
+  ,"alerts.chatId": "Chat ID"
+  ,"alerts.telegramHelp": "Add the bot to your Telegram chat or channel, then paste the chat ID here."
+  ,"alerts.webhookUrl": "Webhook URL"
+  ,"alerts.replaceWebhook": "Replace webhook URL"
+  ,"alerts.slackHelp": "Paste an incoming webhook URL from your Slack workspace."
+  ,"alerts.notificationRules": "Notification rules"
+  ,"alerts.nameRequired": "Alert name is required"
+  ,"alerts.botTokenRequired": "Bot token is required"
+  ,"alerts.chatIdRequired": "Chat ID is required"
+  ,"alerts.webhookRequired": "Webhook URL is required"
+  ,"alerts.webhookInvalid": "Webhook URL must start with https://hooks.slack.com/services/"
+  ,"alerts.telegramFieldsRequired": "Bot token and Chat ID are required"
+  ,"editor.noEnvironment": "No environment selected"
+  ,"editor.stepsCount_one": "{{count}} step"
+  ,"editor.stepsCount_other": "{{count}} steps"
+  ,"editor.noAssertions": "No assertions"
+  ,"editor.assertionsCount_one": "{{count}} assertion"
+  ,"editor.assertionsCount_other": "{{count}} assertions"
+  ,"editor.exportSpec": "Export single spec (.spec.ts)"
+  ,"editor.exportProject": "Export Playwright project (.zip)"
+  ,"editor.export": "Export"
+  ,"editor.newCheck": "New Check"
+  ,"editor.editCheck": "Edit Check"
+  ,"editor.updateDescription": "Update the browser flow, target, device, and assertions for this check."
+  ,"editor.createDescription": "Create a browser flow, choose a target and device, and add result assertions."
+  ,"editor.readOnlyDescription": "You can view this check, but you cannot make changes."
+  ,"editor.runCheck": "Run check"
+  ,"editor.runAllCases": "Run all enabled cases"
+  ,"editor.startRecording": "Start recording"
+  ,"editor.stopRecording": "Stop recording"
+  ,"editor.createCheck": "Create check"
+  ,"editor.checkSettings": "Check settings"
+  ,"editor.checkName": "Check name"
+  ,"editor.checkNameRequired": "Check name is required"
+  ,"editor.checkNamePlaceholder": "Check homepage title"
+  ,"editor.device": "Device"
+  ,"editor.deviceHelp": "Leave empty for desktop. Select a device to emulate mobile viewport, user agent and touch events."
+  ,"editor.devicePlaceholder": "Desktop 1280px by default"
+  ,"editor.desktop": "Desktop"
+  ,"editor.iphoneIpad": "iPhone / iPad"
+  ,"editor.android": "Android"
+  ,"editor.startUrl": "Start URL"
+  ,"editor.environmentVariablesSupported": "Supports environment variables."
+  ,"editor.startUrlRequired": "Start URL is required"
+  ,"editor.startUrlInvalid": "Enter a valid URL or use {{VARIABLE}} placeholders"
+  ,"editor.environmentVariablesHelp": "Variables from the selected environment can be used in Start URL and steps as {{BASE_URL}}, {{USERNAME}}, or {{PASSWORD}}."
+  ,"editor.reusableAuthentication": "Use reusable project authentication for this environment"
+  ,"editor.reusableAuthenticationHelp": "Disable this for login, logout, registration, password reset, and guest checks that must start unauthenticated."
+  ,"editor.testDataCase": "Test data case"
+  ,"editor.selectCase": "Select case"
+  ,"editor.noEnabledCases": "No enabled cases"
+  ,"editor.enableCaseBeforeRun": "Enable at least one test data case before running this test."
+  ,"editor.selectedCaseVariablesHelp": "Selected case variables are used for manual runs."
+  ,"editor.steps": "Steps"
+  ,"editor.stepsDescription": "Record, edit, and validate the browser flow."
+  ,"editor.discardChangesTitle": "Discard changes?"
+  ,"editor.discardChangesDescription": "You have unsaved changes. Leave this page and lose your edits?"
+  ,"editor.leavePage": "Leave page"
+  ,"editor.stayOnPage": "Stay"
+  ,"editor.addStep": "Add step"
+  ,"editor.openValidationTrace": "Open validation trace"
+  ,"editor.liveBrowserSession": "Live browser session:"
+  ,"editor.liveBrowser": "Live browser"
+  ,"editor.liveBrowserUnavailable": "Live browser preview is unavailable in the current setup. Start the Docker noVNC service to enable it."
+  ,"editor.recordingInProgress": "Recording in progress..."
+  ,"editor.noSteps": "No steps yet"
+  ,"editor.noStepsDescription": "Start recording a browser flow or add the first step manually."
+  ,"testData.title": "Test data"
+  ,"testData.description": "Define scenario variables used anywhere in your browser flow, including inputs and expected results."
+  ,"testData.use": "Use test data"
+  ,"testData.offDescription": "Test data is off. Saved checks will run exactly as regular checks."
+  ,"step.action.goto": "Navigate to URL"
+  ,"step.action.click": "Click element"
+  ,"step.action.fill": "Fill input"
+  ,"step.action.press": "Press key"
+  ,"step.action.keyboardPress": "Keyboard press"
+  ,"step.action.selectOption": "Select option"
+  ,"step.action.assertVisible": "Assert visible"
+  ,"step.action.assertHidden": "Assert hidden"
+  ,"step.action.assertText": "Assert text"
+  ,"step.action.assertValue": "Assert value"
+  ,"step.action.assertURL": "Assert URL"
+  ,"step.action.assertTitle": "Assert title"
+  ,"step.action.assertChecked": "Assert checked"
+  ,"step.action.assertCount": "Assert count"
+  ,"step.action.waitForSelector": "Wait for element"
+  ,"step.duplicate": "Duplicate step"
+  ,"step.moveUp": "Move up"
+  ,"step.moveDown": "Move down"
+  ,"step.more": "More"
+  ,"step.numberedTitle": "Step {{number}}"
+  ,"step.selectorAmbiguous": "selector ambiguous"
+  ,"step.selectorNotFound": "selector not found"
+  ,"step.actionFailed": "action failed"
+  ,"step.actions": "Actions"
+  ,"step.assertions": "Assertions"
+  ,"step.variableRuntimeHint": "Variable will be replaced at runtime"
+  ,"step.urlExactHelp": "Exact match checks the full URL, including path and query string."
+  ,"step.urlPartialHelp": "Substring match is allowed. Use a stable fragment like /dashboard or /settings."
+  ,"step.titleExactHelp": "Exact match checks the full page title."
+  ,"step.titlePartialHelp": "Substring match is allowed. Use the stable part of the title, for example Dashboard."
+  ,"step.textExactHelp": "Exact match compares the full visible text."
+  ,"step.textPartialHelp": "Substring match is allowed. Use the unique fragment you expect to see."
+  ,"step.valueHelp": "Checks the current value of the input or control."
+  ,"step.countHelp": "Enter the expected number of matching elements."
+  ,"environments.new": "New Environment"
+  ,"environments.description": "Manage variable sets used in check URLs and steps."
+  ,"environments.variableUsage": "Use variables in checks as {{BASE_URL}}, {{USERNAME}}, or {{PASSWORD}}."
+  ,"environments.emptyTitle": "No environments yet"
+  ,"environments.emptyDescription": "Create an environment to reuse variables like {{BASE_URL}} across checks."
+  ,"environments.name": "Environment"
+  ,"environments.variables": "Variables"
+  ,"environments.usedByChecks": "Used by checks"
+  ,"environments.created": "Created"
+  ,"environments.actions": "Actions"
+  ,"environments.variableCount_one": "{{count}} variable"
+  ,"environments.variableCount_other": "{{count}} variables"
+  ,"environments.edit": "Edit"
+  ,"environments.duplicate": "Duplicate"
+  ,"environments.delete": "Delete"
+  ,"environments.deleteConfirm": "Delete environment?"
+  ,"environments.deleteDescription": "This will remove \"{{name}}\" and stop variable reuse."
+  ,"environments.deletedToast": "Environment deleted"
+  ,"environments.updatedToast": "Environment updated"
+  ,"environments.createdToast": "Environment created"
+  ,"environments.duplicatedToast": "Environment duplicated"
+  ,"environments.saveFailed": "Failed to save environment"
+  ,"environments.duplicateFailed": "Failed to duplicate environment"
+  ,"environments.nameRequired": "Environment name is required"
+  ,"environments.variableNameRequired": "Variable name is required"
+  ,"environments.variableValueRequired": "Variable value is required"
+  ,"environments.variableNameFormat": "Variable names should use uppercase letters, numbers, and underscores"
+  ,"environments.variableNameUnique": "Variable name \"{{name}}\" must be unique"
+  ,"environments.modalCreate": "New Environment"
+  ,"environments.modalEdit": "Edit Environment: {{name}}"
+  ,"environments.create": "Create environment"
+  ,"environments.nameLabel": "Environment name"
+  ,"environments.namePlaceholder": "Dev"
+  ,"environments.variableName": "Variable name"
+  ,"environments.value": "Value"
+  ,"environments.remove": "Remove"
+  ,"environments.addVariable": "Add variable"
+  ,"environments.variableNameHelp": "Variable names should use uppercase letters, numbers, and underscores."
+  ,"environments.readOnly": "Read-only"
+  ,"authSettings.title": "Authentication"
+  ,"authSettings.description": "Reuse an authenticated browser session for checks in each environment. Authentication state is stored privately and is never returned to the browser."
+  ,"authSettings.environmentRequired": "Create an environment before configuring reusable authentication."
+  ,"authSettings.environment": "Environment"
+  ,"authSettings.check": "Authentication check"
+  ,"authSettings.selectLoginCheck": "Select the login check"
+  ,"authSettings.useForEnvironment": "Use authentication state for checks in this environment"
+  ,"authSettings.assertionRequired": "Authentication check needs an assertion"
+  ,"authSettings.assertionHelp": "Add Assert URL or Assert visible after the login action so WrightTest can confirm authentication completed before saving the reusable session."
+  ,"authSettings.editCheck": "Edit check"
+  ,"authSettings.status": "Status"
+  ,"authSettings.disabled": "Disabled"
+  ,"authSettings.previousStateActive": "Previous state active"
+  ,"authSettings.lastRefreshed": "Last refreshed:"
+  ,"authSettings.openRefreshRun": "Open successful refresh run"
+  ,"authSettings.unavailable": "Unavailable"
+  ,"authSettings.refreshing": "Refreshing"
+  ,"authSettings.available": "Available"
+  ,"authSettings.refreshFailed": "Refresh failed"
+  ,"authSettings.notConfigured": "Not configured"
+  ,"authSettings.refreshFailedTitle": "Authentication refresh failed"
+  ,"authSettings.previousStatePreserved": " Previous authentication remains active."
+  ,"authSettings.noStateAvailable": " No reusable authentication state is available."
+  ,"authSettings.save": "Save authentication settings"
+  ,"authSettings.refresh": "Refresh authentication"
+  ,"authSettings.remove": "Remove configuration"
+  ,"authSettings.removeTitle": "Remove authentication configuration?"
+  ,"authSettings.removeDescription": "The saved browser authentication state for this environment will be deleted."
+  ,"authSettings.saveBeforeRefresh": "Save the changed configuration before refreshing authentication."
+  ,"authSettings.selectEnvironmentAndCheck": "Select an environment and authentication check"
+  ,"authSettings.savedToast": "Authentication settings saved"
+  ,"authSettings.saveFailed": "Failed to save authentication settings"
+  ,"authSettings.addAssertionFirst": "Add an assertion to the authentication check before refreshing"
+  ,"authSettings.refreshStarted": "Authentication refresh started (run {{runId}})"
+  ,"authSettings.refreshStartFailed": "Failed to start authentication refresh"
+  ,"authSettings.removedToast": "Authentication configuration removed"
+  ,"authSettings.removeFailed": "Failed to remove authentication configuration"
+  ,"projectSettings.title": "Project settings"
+  ,"projectSettings.name": "Project name"
+  ,"projectSettings.noDefaultEnvironment": "No default environment"
+  ,"projectSettings.defaultEnvironment": "Default environment"
+  ,"projectSettings.description": "Description"
+  ,"projectSettings.descriptionPlaceholder": "Describe what this project monitors"
+  ,"projectSettings.optionalLimit": "Optional. Up to 500 characters."
+  ,"projectSettings.defaultDevice": "Default device"
+  ,"projectSettings.save": "Save changes"
+  ,"projectSettings.reset": "Reset"
+  ,"projectSettings.savedToast": "Project settings saved"
+  ,"projectSettings.resetToast": "Project settings reset"
+  ,"projectSettings.nameRequired": "Project name is required"
+  ,"projectSettings.descriptionTooLong": "Description must be 500 characters or fewer"
+  ,"projectSettings.metadata": "Metadata"
+  ,"projectSettings.projectId": "Project ID"
+  ,"projectSettings.created": "Created"
+  ,"projectSettings.checks": "Checks"
+  ,"projectSettings.runs": "Runs"
+  ,"projectSettings.schedules": "Schedules"
+  ,"projectSettings.environments": "Environments"
+  ,"projectSettings.alertChannels": "Alert channels"
+  ,"projectSettings.lastRun": "Last run"
+  ,"projectSettings.lastResult": "Last result"
+  ,"projectSettings.passed": "Passed"
+  ,"projectSettings.failed": "Failed"
+  ,"projectSettings.noRuns": "No runs"
+  ,"projectSettings.dangerZone": "Danger zone"
+  ,"projectSettings.deleteProject": "Delete project"
+  ,"projectSettings.deleteDescription": "Permanently delete this project, checks, schedules, environments, alerts, run history, screenshots, and traces."
+  ,"projectSettings.deleteTitle": "Delete project?"
+  ,"projectSettings.deleteWarning": "This action cannot be undone. It will permanently delete this project and all related data: checks, schedules, environments, alert channels, run history, screenshots, and traces."
+  ,"projectSettings.typeName": "Type project name to confirm"
+  ,"projectSettings.typeNameHint": "Type \"{{name}}\" to enable deletion."
+  ,"projectSettings.projectNamePlaceholder": "Project name"
+  ,"projectSettings.deleteConfirmed": "Delete project"
+  ,"projectSettings.ownerOnly": "Only the project owner can delete the project"
+  ,"projectSettings.deletedToast": "Project deleted"
+  ,"projectSettings.deleteFailed": "Failed to delete project"
+  ,"members.title": "Project members"
+  ,"members.createAccess": "Create user access"
+  ,"members.description": "Create user access by email, password, and role."
+  ,"members.nameEmail": "Name / Email"
+  ,"members.role": "Role"
+  ,"members.status": "Status"
+  ,"members.actions": "Actions"
+  ,"members.systemAdmin": "System admin"
+  ,"members.pending": "Pending"
+  ,"members.active": "Active"
+  ,"members.pendingHelp": "User has not signed in with this email yet."
+  ,"members.ownerAccessRequired": "Owner access required"
+  ,"members.ownerAccessDescription": "Only project owners can view and manage project members."
+  ,"members.remove": "Remove"
+  ,"members.roleUpdatedToast": "Member role updated"
+  ,"members.roleUpdateFailed": "Failed to update member"
+  ,"members.removedToast": "Member removed"
+  ,"members.removeFailed": "Failed to remove member"
+  ,"members.modalTitle": "Create user access"
+  ,"members.createAccessButton": "Create access"
+  ,"members.email": "Email"
+  ,"members.emailPlaceholder": "teammate@company.com"
+  ,"members.createAccountHelp": "If this email does not exist yet, a new login account will be created with this password."
+  ,"members.password": "Password"
+  ,"members.passwordExistingPlaceholder": "Not required for existing users"
+  ,"members.passwordNewPlaceholder": "Create a login password"
+  ,"members.checkingUser": "Checking whether this user already exists..."
+  ,"members.existingPasswordIgnored": "This user already exists. The password will be ignored."
+  ,"members.newPasswordHelp": "This password will be used to create a new login account."
+  ,"members.passwordIgnored": "If the user already exists, the password will be ignored."
+  ,"members.roleLabel": "Role"
+  ,"members.ownerRoleDescription": "Owner — full project control"
+  ,"members.editorRoleDescription": "Editor — can edit and run checks"
+  ,"members.viewerRoleDescription": "Viewer — read-only access"
+  ,"members.emailRequired": "Email is required"
+  ,"members.emailInvalid": "Enter a valid email address"
+  ,"members.passwordRequired": "Password is required for a new user"
+  ,"members.createdToast": "User access created"
+  ,"members.createFailed": "Failed to create user access",
+  "common.unavailable": "Unavailable",
+  "common.checking": "Checking...",
+  "common.healthy": "Healthy",
+  "common.available": "Available",
+  "common.logout": "Sign out",
+  "common.close": "Close",
+  "common.new": "New",
+  "common.view": "View",
+  "common.viewResult": "View result",
+  "common.loading": "Loading...",
+  "step.selectorPlaceholder": "Enter a Playwright locator",
+  "step.valuePlaceholder": "Enter a value",
+  "step.exactMatch": "Exact match",
+  "runResult.trace": "Trace",
+  "runResult.available": "Trace available",
+  "runResult.openTrace": "Open trace",
+  "runResult.downloadTrace": "Download trace",
+  "runResult.unavailable": "Trace unavailable",
+  "runResult.traceUnavailable": "The trace could not be loaded.",
+  "runResult.title": "Run details",
+  "runResult.description": "Inspect the result, step output, screenshots, and trace for this run.",
+  "runResult.livePolling": "Live updates",
+  "runResult.progress": "Progress",
+  "runResult.stepProgress": "Step {{current}} of {{total}}",
+  "runResult.finished": "Finished",
+  "runResult.failureSummary": "Failure summary",
+  "runResult.viewFailedScreenshot": "View failed-step screenshot",
+  "runResult.failedAtStep": "Failed at step {{step}}",
+  "runResult.expected": "Expected",
+  "runResult.received": "Received",
+  "runResult.timeout": "Timeout",
+  "runResult.errorSummary": "Error summary",
+  "runResult.checkFailed": "Check failed",
+  "runResult.showRawError": "Show raw error",
+  "runResult.stepResults": "Step results",
+  "runResult.stepCount_one": "{{count}} step",
+  "runResult.stepCount_other": "{{count}} steps",
+  "runResult.noStepResults": "No step results are available.",
+  "runResult.step": "Step",
+  "runResult.action": "Action",
+  "runResult.target": "Target",
+  "runResult.error": "Error",
+  "runResult.screenshot": "Screenshot",
+  "runResult.screenshots": "Screenshots",
+  "runResult.stepNumber": "Step {{number}}",
+  "runResult.traceViewer": "Trace viewer",
+  "runResult.openInNewTab": "Open trace in a new tab",
+  "runResult.traceViewerFrameTitle": "Playwright trace viewer",
+  "runResult.runFailed": "Run failed",
+  "runBatch.starting": "Starting",
+  "runBatch.waiting": "Waiting",
+  "runBatch.completed": "Completed",
+  "runBatch.notFound": "Batch not found",
+  "runBatch.noAccess": "You do not have access to this batch.",
+  "runBatch.loadFailed": "Unable to load batch results",
+  "runBatch.backToRuns": "Back to runs",
+  "runBatch.title": "Batch results",
+  "runBatch.description_one": "Results for {{count}} test case.",
+  "runBatch.description_other": "Results for {{count}} test cases.",
+  "runBatch.backToCheck": "Back to check",
+  "runBatch.summary": "Summary",
+  "runBatch.caseCount_one": "{{count}} case",
+  "runBatch.caseCount_other": "{{count}} cases",
+  "runBatch.successfulCases": "Successful cases",
+  "runBatch.failedCases": "Failed cases",
+  "runBatch.timing": "Timing",
+  "runBatch.startedAt": "Started {{date}}",
+  "runBatch.testCases": "Test cases",
+  "runBatch.empty": "No test cases were included in this batch.",
+  "runBatch.case": "Case",
+  "runBatch.caseNumber": "Case {{number}}",
+  "runBatch.order": "Order {{order}}",
+  "runBatch.progressFailedStep": "Failed at step {{step}}",
+  "scheduleHistory.title": "Schedule history",
+  "scheduleHistory.cron": "Cron",
+  "scheduleHistory.target": "Target",
+  "scheduleHistory.runHistory": "Run history",
+  "scheduleHistory.emptyDescription": "Runs started by this schedule will appear here.",
+  "scheduleHistory.durationTotal": "Total: {{duration}}",
+  "scheduleHistory.check": "Check",
+  "scheduleHistory.error": "Error",
+  "userMenu.passwordChanged": "Password changed successfully",
+  "userMenu.passwordChangeFailed": "Failed to change password",
+  "userMenu.product": "Product",
+  "userMenu.description": "Description",
+  "userMenu.version": "Version",
+  "userMenu.gitCommit": "Git commit",
+  "userMenu.buildDate": "Build date",
+  "userMenu.environment": "Environment",
+  "userMenu.currentUser": "Current user",
+  "userMenu.unknownUser": "Unknown user",
+  "userMenu.signedInAs": "Signed in as {{email}}",
+  "userMenu.about": "About WrightTest",
+  "userMenu.releaseNotes": "Release notes",
+  "userMenu.changePassword": "Change password",
+  "userMenu.openAccountMenu": "Open account menu",
+  "userMenu.account": "Account",
+  "userMenu.changingPassword": "Changing password...",
+  "userMenu.currentPassword": "Current password",
+  "userMenu.currentPasswordRequired": "Enter your current password",
+  "userMenu.newPassword": "New password",
+  "userMenu.newPasswordRequired": "Enter a new password",
+  "userMenu.passwordMinLength": "Password must be at least 8 characters",
+  "userMenu.confirmPassword": "Confirm new password",
+  "userMenu.confirmPasswordRequired": "Confirm your new password",
+  "userMenu.passwordsDoNotMatch": "Passwords do not match",
+  "userMenu.backendApiStatus": "Backend/API status",
+  "userMenu.databaseStatus": "Database status",
+  "userMenu.runnerStatus": "Runner status",
+  "project.scheduleNameRequired": "Schedule name is required",
+  "project.cronRequired": "Cron expression is required",
+  "project.selectScheduleTarget": "Select a suite or a check",
+  "project.environmentRequiredForVariables": "Select an environment for checks that use variables",
+  "project.scheduleUpdated": "Schedule updated",
+  "project.scheduleCreated": "Schedule created",
+  "project.scheduleSaveFailed": "Failed to save schedule",
+  "project.scheduleRunStarted": "Schedule run started",
+  "project.scheduleRunFailed": "Failed to run schedule",
+  "project.scheduleUpdateFailed": "Failed to update schedule",
+  "project.schedulePaused": "Schedule paused",
+  "project.scheduleResumed": "Schedule resumed",
+  "project.scheduleDeleted": "Schedule deleted",
+  "project.newScheduleTitle": "New schedule",
+  "project.editScheduleTitle": "Edit schedule: {{name}}",
+  "project.saveChanges": "Save changes",
+  "project.createSchedule": "Create schedule",
+  "project.scheduleName": "Schedule name",
+  "project.nightlySmoke": "Nightly smoke",
+  "project.cronPreset": "Cron preset",
+  "project.everyHour": "Every hour",
+  "project.everyDay9am": "Every day at 9 AM",
+  "project.everyDay2am": "Every day at 2 AM",
+  "project.everyMonday": "Every Monday",
+  "project.customCron": "Custom...",
+  "project.cronExpression": "Cron expression",
+  "project.schedulePreview": "Schedule preview",
+  "project.timezone": "Timezone",
+  "project.target": "Target",
+  "project.suite": "Suite",
+  "project.check": "Check",
+  "project.selectSuite": "Select a suite",
+  "project.selectCheck": "Select a check",
+  "project.environment": "Environment",
+  "project.noEnvironment": "No environment",
+  "project.noEnvironmentSelected": "No environment selected",
+  "project.environmentVariablesWarning": "Checks using variables like {{BASE_URL}} may fail.",
+  "project.status": "Status"
+  ,"common.readOnly": "Read-only access"
+  ,"project.readOnlyCannotRunSuites": "Read-only access cannot run suites"
+  ,"project.testCasesQueued_one": "{{count}} test case queued."
+  ,"project.testCasesQueued_other": "{{count}} test cases queued."
+  ,"project.checkStarted": "Check started"
+  ,"project.checkStartFailed": "Failed to start check"
+  ,"project.checkDeleted": "Check deleted"
+  ,"project.checkDuplicated": "Check duplicated"
+  ,"project.checkDuplicateFailed": "Failed to duplicate check"
+  ,"project.checkExported": "Check exported"
+  ,"project.checkExportFailed": "Failed to export check"
+  ,"project.createSuiteBeforeRun": "Create a suite first to run multiple checks together"
+  ,"project.runSuiteFailed": "Failed to run suite"
+  ,"common.duplicate": "Duplicate"
+  ,"common.disabled": "Disabled"
+  ,"common.enabled": "Enabled"
+  ,"common.value": "Value"
+  ,"testData.deleteVariableTitle": "Delete variable {{name}}?"
+  ,"testData.deleteVariableDescription": "This removes the variable from all cases."
+  ,"testData.emptyString": "Empty string"
+  ,"testData.missing": "Missing"
+  ,"testData.missingUntilEdited": "Missing until edited"
+  ,"testData.openDetails": "Open details"
+  ,"testData.table": "Table"
+  ,"testData.cards": "Cards"
+  ,"testData.addCase": "Add case"
+  ,"testData.addVariable": "Add variable"
+  ,"testData.variableNamingHelp": "Use uppercase letters, numbers and underscores. Examples: EMAIL, PASS, EXPECTED_MESSAGE, EXPECTED_URL."
+  ,"testData.variableUsageHelp": "Use variables in steps, for example Fill EMAIL or Assert text EXPECTED_MESSAGE."
+  ,"testData.variablesCheck": "Variable check"
+  ,"testData.variablesAvailable_one": "All variables are available for {{count}} enabled case."
+  ,"testData.variablesAvailable_other": "All variables are available for {{count}} enabled cases."
+  ,"testData.issuesFound_one": "{{count}} issue found"
+  ,"testData.issuesFound_other": "{{count}} issues found"
+  ,"testData.moreIssues_one": "{{count}} more issue"
+  ,"testData.moreIssues_other": "{{count}} more issues"
+  ,"testData.warningsFound_one": "{{count}} warning"
+  ,"testData.warningsFound_other": "{{count}} warnings"
+  ,"testData.moreWarnings_one": "{{count}} more warning"
+  ,"testData.moreWarnings_other": "{{count}} more warnings"
+  ,"testData.usedVariables": "Used variables"
+  ,"testData.noCases": "No test cases yet"
+  ,"testData.hasErrors": "Has errors"
+  ,"testData.caseName": "Case name"
+  ,"testData.variables": "Variables"
+  ,"testData.variable": "Variable"
+  ,"testData.variableExample": "EMAIL"
+  ,"testData.addVariablesHelp": "Add variables that can later be used as {{email}} or {{expected}}."
+  ,"testData.addVariableDescription": "Add this key to all cases. Values start as an explicit empty string."
+  ,"testData.variableExpectedExample": "EXPECTED_MESSAGE"
+  ,"testData.variableKeyValidation": "Use uppercase letters, numbers and underscores. Start with a letter."
+  ,"editor.validationTraceReady": "Validation trace ready"
+  ,"editor.addStepBeforeRun": "Add at least one step before running"
+  ,"editor.fixTestDataBeforeRun": "Fix test data errors before running"
+  ,"editor.selectCaseBeforeRun": "Select a test data case before running this test."
+  ,"editor.twoEnabledCasesBeforeRun": "Add at least two enabled test data cases first"
+  ,"editor.enterStartUrlBeforeRecording": "Enter Start URL before recording"
+  ,"editor.environmentRequiredForTemplate": "Create an environment before using a variable in Start URL"
+  ,"editor.recordingStarted": "Browser opened. Interact with the page, then click Stop Recording."
+  ,"editor.recordingStartFailed": "Failed to start recording"
+  ,"editor.recordingStopFailed": "Failed to stop recording"
+  ,"editor.recordedSteps_one": "Recorded {{count}} step"
+  ,"editor.recordedSteps_other": "Recorded {{count}} steps"
+  ,"editor.selectEnvironmentForInlineExport": "Select an environment for inline export"
+  ,"editor.projectExported": "Playwright project exported"
+  ,"editor.projectExportFailed": "Failed to export Playwright project"
+  ,"editor.fixTestDataBeforeSave": "Fix test data errors before saving"
+  ,"editor.selectEnvironmentForRecording": "Select environment for recording"
+  ,"editor.noEnvironmentUseAsIs": "No environment (use values as-is)"
+  ,"editor.variableCount_one": "{{count}} variable"
+  ,"editor.variableCount_other": "{{count}} variables"
+  ,"editor.recordingEnvironmentHelp": "If Start URL contains an environment variable, choose the environment that defines it."
+  ,"editor.exportProjectTitle": "Export Playwright project"
+  ,"editor.exportSpecTitle": "Export as Playwright spec"
+  ,"editor.exportProjectEnvironmentHelp": "Choose how to handle environment variables in the generated Playwright project."
+  ,"editor.exportEnvironmentHelp": "Choose how to handle environment variables."
+  ,"editor.exportInlineValues": "Inline values - replace variables with values from the selected environment"
+  ,"editor.exportProcessEnv": "process.env - use Node.js environment variables"
+  ,"editor.exportKeepPlaceholders": "Keep as-is - leave variable placeholders"
+  ,"editor.selectEnvironment": "Select environment"
+  ,"editor.downloadExport": "Download {{extension}}"
+  ,"common.notFound": "Page not found"
+  ,"common.requestedPageMissing": "The requested WrightTest page does not exist."
+  ,"common.openDashboard": "Open Dashboard"
+  ,"common.switchProject": "Switch project"
+  ,"common.loadingProjectWorkspace": "Loading project workspace..."
+  ,"common.projectUnavailable": "Project unavailable"
+  ,"common.tryAgain": "Try again"
+  ,"projectShell.noAccess": "You do not have access to this project."
+  ,"projectShell.notFound": "This project does not exist or was removed."
+  ,"projectShell.loadFailed": "The project could not be loaded. Check the connection and try again."
+  ,"nav.currentProjectNamed": "Current project: {{name}}"
+  ,"project.setupChecksCreated": "Checks created"
+  ,"project.setupEnvironmentConfigured": "Environment configured"
+  ,"project.setupScheduleConfigured": "Schedule configured"
+  ,"project.setupAlertConfigured": "Alert channel configured"
+  ,"step.validation.urlRequired": "URL is required."
+  ,"step.validation.targetRequired": "Target is required."
+  ,"step.validation.valueRequired": "Value is required."
+  ,"step.validation.keyRequired": "Key is required."
+  ,"step.validation.optionRequired": "Option value is required."
+  ,"step.validation.expectedTextRequired": "Expected text is required."
+  ,"step.validation.expectedValueRequired": "Expected value is required."
+  ,"step.validation.expectedTitleRequired": "Expected title is required."
+  ,"step.validation.expectedUrlRequired": "Expected URL/pattern is required."
+  ,"step.validation.expectedCountRequired": "Expected count is required."
+  ,"step.validation.summary": "{{number}}. {{action}}: {{message}}"
+  ,"step.validation.missingRequiredFields": "Some steps are missing required fields."
+}

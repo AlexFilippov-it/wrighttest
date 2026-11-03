@@ -17,6 +17,9 @@ export default async function globalTeardown(_config: FullConfig) {
 
   try {
     await adminApi.delete(`/projects/${state.projectId}`).catch(() => undefined);
+    if (state.originalActiveLocale) {
+      await adminApi.patch('/instance/settings/language', { data: { locale: state.originalActiveLocale } }).catch(() => undefined);
+    }
   } finally {
     await adminApi.dispose();
     await fs.rm(workspaceStatePath, { force: true });

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Button, Descriptions, Dropdown, Form, Input, Modal, Space, Tag, Typography, message } from 'antd';
 import { InfoCircleOutlined, LogoutOutlined, ProfileOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -40,6 +41,7 @@ type UserMenuProps = {
 };
 
 export default function UserMenu({ tone = 'dark', compact = false }: UserMenuProps) {
+  const { t } = useTranslation();
   const { email, logout, changePassword } = useAuth();
   const navigate = useNavigate();
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -92,11 +94,11 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
     setSaving(true);
     try {
       await changePassword(values.currentPassword, values.newPassword);
-      message.success('Password changed');
+      message.success(t('userMenu.passwordChanged'));
       setChangeOpen(false);
       form.resetFields();
     } catch (error) {
-      message.error(getApiErrorMessage(error, 'Failed to change password'));
+      message.error(getApiErrorMessage(error, t('userMenu.passwordChangeFailed')));
     } finally {
       setSaving(false);
     }
@@ -108,39 +110,39 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
   };
 
   const aboutItems = [
-    { label: 'Product', children: APP_NAME },
-    { label: 'Description', children: APP_DESCRIPTION },
-    { label: 'Version', children: APP_VERSION },
-    { label: 'Git commit', children: APP_GIT_COMMIT || 'Unavailable' },
-    { label: 'Build date', children: formatBuildDate(APP_BUILD_DATE) || 'Unavailable' },
-    { label: 'Environment', children: APP_ENVIRONMENT },
-    { label: 'Current user', children: email ?? 'Unknown user' },
+    { label: t('userMenu.product'), children: APP_NAME },
+    { label: t('userMenu.description'), children: APP_DESCRIPTION },
+    { label: t('userMenu.version'), children: APP_VERSION },
+    { label: t('userMenu.gitCommit'), children: APP_GIT_COMMIT || t('common.unavailable') },
+    { label: t('userMenu.buildDate'), children: formatBuildDate(APP_BUILD_DATE) || t('common.unavailable') },
+    { label: t('userMenu.environment'), children: APP_ENVIRONMENT },
+    { label: t('userMenu.currentUser'), children: email ?? t('userMenu.unknownUser') },
     {
-      label: 'Backend/API status',
+      label: t('userMenu.backendApiStatus'),
       children:
         health.api === 'checking'
-          ? 'Checking...'
+          ? t('common.checking')
           : health.api === 'healthy'
-            ? 'Healthy'
-            : 'Unavailable'
+            ? t('common.healthy')
+            : t('common.unavailable')
     },
     {
-      label: 'Database status',
+      label: t('userMenu.databaseStatus'),
       children:
         health.database === 'checking'
-          ? 'Checking...'
+          ? t('common.checking')
           : health.database === 'healthy'
-            ? 'Healthy'
-            : 'Unavailable'
+            ? t('common.healthy')
+            : t('common.unavailable')
     },
     {
-      label: 'Runner status',
+      label: t('userMenu.runnerStatus'),
       children:
         health.api === 'healthy' && health.database === 'healthy'
-          ? 'Available'
+          ? t('common.available')
           : health.api === 'checking' || health.database === 'checking'
-            ? 'Checking...'
-            : 'Unavailable'
+            ? t('common.checking')
+            : t('common.unavailable')
     }
   ];
 
@@ -157,18 +159,18 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
               label: (
                 <div style={{ minWidth: 220, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Text type="secondary" style={{ fontSize: 11, opacity: 0.72 }}>
-                    Signed in as
+                    {t('userMenu.signedInAs', { email })}
                   </Text>
                   <Text strong style={{ color: 'rgba(15, 23, 42, 0.88)' }}>{email ?? 'Unknown user'}</Text>
                 </div>
               )
             },
             { type: 'divider' },
-            { key: 'about', icon: <InfoCircleOutlined />, label: 'About WrightTest' },
-            { key: 'release-notes', icon: <ProfileOutlined />, label: 'Release notes' },
-            { key: 'change-password', icon: <UserOutlined />, label: 'Change password' },
+            { key: 'about', icon: <InfoCircleOutlined />, label: t('userMenu.about') },
+            { key: 'release-notes', icon: <ProfileOutlined />, label: t('userMenu.releaseNotes') },
+            { key: 'change-password', icon: <UserOutlined />, label: t('userMenu.changePassword') },
             { type: 'divider' },
-            { key: 'logout', icon: <LogoutOutlined />, label: 'Logout', danger: true }
+            { key: 'logout', icon: <LogoutOutlined />, label: t('common.logout'), danger: true }
           ],
           onClick: ({ key }) => {
             if (key === 'about') setAboutOpen(true);
@@ -180,29 +182,29 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
       >
         <Button
           type="text"
-          aria-label={compact ? 'Open account menu' : undefined}
+          aria-label={compact ? t('userMenu.openAccountMenu') : undefined}
           style={{ color: tone === 'dark' ? '#fff' : 'var(--wt-color-text)', paddingInline: 10 }}
         >
           <Space>
             <UserOutlined />
-            {compact ? null : <span>{email ?? 'Account'}</span>}
+            {compact ? null : <span>{email ?? t('userMenu.account')}</span>}
           </Space>
         </Button>
       </Dropdown>
 
       <Modal
-        title="About WrightTest"
+        title={t('userMenu.about')}
         open={aboutOpen}
         onCancel={() => setAboutOpen(false)}
         footer={
           <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
             <Space wrap>
-              <Button onClick={() => { setAboutOpen(false); navigate('/dashboard'); }}>Dashboard</Button>
-              <Button onClick={() => { setAboutOpen(false); navigate('/projects'); }}>Projects</Button>
-              <Button onClick={() => { setAboutOpen(false); navigate('/runs'); }}>Runs</Button>
+              <Button onClick={() => { setAboutOpen(false); navigate('/dashboard'); }}>{t('nav.dashboard')}</Button>
+              <Button onClick={() => { setAboutOpen(false); navigate('/projects'); }}>{t('nav.projects')}</Button>
+              <Button onClick={() => { setAboutOpen(false); navigate('/runs'); }}>{t('project.runs')}</Button>
             </Space>
             <Button type="primary" onClick={() => setAboutOpen(false)}>
-              Close
+              {t('common.close')}
             </Button>
           </Space>
         }
@@ -218,12 +220,12 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
       </Modal>
 
       <Modal
-        title="Release notes"
+        title={t('userMenu.releaseNotes')}
         open={releaseNotesOpen}
         onCancel={() => setReleaseNotesOpen(false)}
         footer={
           <Button type="primary" onClick={() => setReleaseNotesOpen(false)}>
-            Close
+            {t('common.close')}
           </Button>
         }
       >
@@ -234,7 +236,7 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
           <Space direction="vertical" size={10} style={{ width: '100%' }}>
             {APP_RELEASE_NOTES.items.map((item) => (
               <div key={item} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <Tag color="blue" style={{ marginRight: 0 }}>New</Tag>
+                <Tag color="blue" style={{ marginRight: 0 }}>{t('common.new')}</Tag>
                 <Text>{item}</Text>
               </div>
             ))}
@@ -243,7 +245,7 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
       </Modal>
 
       <Modal
-        title="Change password"
+        title={t('userMenu.changePassword')}
         open={changeOpen}
         onCancel={() => {
           setChangeOpen(false);
@@ -258,10 +260,10 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
               }}
               disabled={saving}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="primary" onClick={() => void handleChangePassword()} loading={saving} disabled={saving}>
-              {saving ? 'Changing...' : 'Change password'}
+              {saving ? t('userMenu.changingPassword') : t('userMenu.changePassword')}
             </Button>
           </Space>
         }
@@ -269,30 +271,30 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
         <Form form={form} layout="vertical">
           <Form.Item
             name="currentPassword"
-            label="Current password"
-            rules={[{ required: true, message: 'Current password is required' }]}
+            label={t('userMenu.currentPassword')}
+            rules={[{ required: true, message: t('userMenu.currentPasswordRequired') }]}
           >
             <Input.Password autoComplete="current-password" />
           </Form.Item>
           <Form.Item
             name="newPassword"
-            label="New password"
-            rules={[{ required: true, message: 'New password is required' }, { min: 8, message: 'New password must be at least 8 characters' }]}
+            label={t('userMenu.newPassword')}
+            rules={[{ required: true, message: t('userMenu.newPasswordRequired') }, { min: 8, message: t('userMenu.passwordMinLength') }]}
           >
             <Input.Password autoComplete="new-password" />
           </Form.Item>
           <Form.Item
             name="confirmPassword"
-            label="Confirm new password"
+            label={t('userMenu.confirmPassword')}
             dependencies={['newPassword']}
             rules={[
-              { required: true, message: 'Please confirm new password' },
+              { required: true, message: t('userMenu.confirmPasswordRequired') },
               ({ getFieldValue }) => ({
                 validator(_, value) {
                   if (!value || getFieldValue('newPassword') === value) {
                     return Promise.resolve();
                   }
-                  return Promise.reject(new Error('Passwords do not match'));
+                  return Promise.reject(new Error(t('userMenu.passwordsDoNotMatch')));
                 }
               })
             ]}

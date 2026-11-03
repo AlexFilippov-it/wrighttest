@@ -31,9 +31,62 @@ export type TestPayload = {
   useProjectAuthentication?: boolean;
 };
 
+export type LanguagePackSummary = {
+  locale: string;
+  displayName: string;
+  isBuiltIn: boolean;
+  hasCustomPack: boolean;
+  translated: number;
+  total: number;
+  stale: number;
+  status: 'built-in' | 'installed' | 'needs-review';
+};
+
+export type LanguagePackage = {
+  format: 'wrighttest-locale';
+  version: 1;
+  locale: string;
+  messages: Record<string, { source: string; translation: string; sourceHash?: string }>;
+};
+
+export type LanguageImportPreview = {
+  locale: string;
+  displayName: string;
+  translated: number;
+  total: number;
+  missing: number;
+  stale: number;
+  staleKeys: string[];
+  unknown: number;
+  unknownKeys: string[];
+  invalidParameters: string[];
+};
+
 export const api = axios.create({
   baseURL: BACKEND_URL
 });
+
+export const getLanguageSettings = () =>
+  api.get<{ activeLocale: string; packs: LanguagePackSummary[] }>('/instance/locales').then((r) => r.data);
+
+export const getLanguageTemplate = (locale: string) =>
+  api.get<LanguagePackage>(`/instance/locales/template/${encodeURIComponent(locale)}`).then((r) => r.data);
+
+export const exportLanguagePack = (locale: string) =>
+  api.get<LanguagePackage>(`/instance/locales/${encodeURIComponent(locale)}/export`).then((r) => r.data);
+
+export const validateLanguagePack = (file: LanguagePackage) =>
+  api.post<LanguageImportPreview>('/instance/locales/validate', file).then((r) => r.data);
+
+export const applyLanguagePack = (file: LanguagePackage) =>
+  api.put<LanguageImportPreview>(`/instance/locales/${encodeURIComponent(file.locale)}/apply`, file).then((r) => r.data);
+
+export const setInstanceLocale = (locale: string) =>
+  api.patch<{ activeLocale: string }>('/instance/settings/language', { locale }).then((r) => r.data);
+
+export const deleteLanguagePack = (locale: string) =>
+  api.delete<{ ok: boolean; activeLocale: string }>(`/instance/locales/${encodeURIComponent(locale)}`)
+    .then((r) => r.data);
 
 export const getProjects = () =>
   api.get<ProjectSummary[]>('/projects').then((r) => r.data);

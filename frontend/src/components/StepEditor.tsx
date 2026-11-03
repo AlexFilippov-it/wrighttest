@@ -21,6 +21,8 @@ import {
 } from '@ant-design/icons';
 import { Button, Card, Checkbox, Dropdown, Input, Select, Space, Tooltip, Typography } from 'antd';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { Step, StepAction, StepValidationResult } from '../types';
 import VariableAutocompleteInput from './VariableAutocompleteInput';
 
@@ -30,7 +32,6 @@ type ActionGroup = 'Actions' | 'Assertions';
 
 type ActionOption = {
   value: StepAction;
-  label: string;
   icon: ReactNode;
   group: ActionGroup;
   needsSelector: boolean;
@@ -39,21 +40,21 @@ type ActionOption = {
 };
 
 const ACTION_OPTIONS: ActionOption[] = [
-  { value: 'goto', label: 'Navigate to URL', icon: <GlobalOutlined />, group: 'Actions', needsSelector: false, needsValue: true, needsExpected: false },
-  { value: 'click', label: 'Click element', icon: <AimOutlined />, group: 'Actions', needsSelector: true, needsValue: false, needsExpected: false },
-  { value: 'fill', label: 'Fill input', icon: <EditOutlined />, group: 'Actions', needsSelector: true, needsValue: true, needsExpected: false },
-  { value: 'press', label: 'Press key', icon: <KeyOutlined />, group: 'Actions', needsSelector: true, needsValue: true, needsExpected: false },
-  { value: 'keyboardPress', label: 'Keyboard press', icon: <KeyOutlined />, group: 'Actions', needsSelector: false, needsValue: true, needsExpected: false },
-  { value: 'selectOption', label: 'Select option', icon: <UnorderedListOutlined />, group: 'Actions', needsSelector: true, needsValue: true, needsExpected: false },
-  { value: 'assertVisible', label: 'Assert visible', icon: <EyeOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: false },
-  { value: 'assertHidden', label: 'Assert hidden', icon: <EyeInvisibleOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: false },
-  { value: 'assertText', label: 'Assert text', icon: <FileTextOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: true },
-  { value: 'assertValue', label: 'Assert value', icon: <FieldNumberOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: true },
-  { value: 'assertURL', label: 'Assert URL', icon: <LinkOutlined />, group: 'Assertions', needsSelector: false, needsValue: false, needsExpected: true },
-  { value: 'assertTitle', label: 'Assert title', icon: <TagOutlined />, group: 'Assertions', needsSelector: false, needsValue: false, needsExpected: true },
-  { value: 'assertChecked', label: 'Assert checked', icon: <CheckSquareOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: false },
-  { value: 'assertCount', label: 'Assert count', icon: <OrderedListOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: true },
-  { value: 'waitForSelector', label: 'Wait for element', icon: <EyeOutlined />, group: 'Actions', needsSelector: true, needsValue: false, needsExpected: false }
+  { value: 'goto', icon: <GlobalOutlined />, group: 'Actions', needsSelector: false, needsValue: true, needsExpected: false },
+  { value: 'click', icon: <AimOutlined />, group: 'Actions', needsSelector: true, needsValue: false, needsExpected: false },
+  { value: 'fill', icon: <EditOutlined />, group: 'Actions', needsSelector: true, needsValue: true, needsExpected: false },
+  { value: 'press', icon: <KeyOutlined />, group: 'Actions', needsSelector: true, needsValue: true, needsExpected: false },
+  { value: 'keyboardPress', icon: <KeyOutlined />, group: 'Actions', needsSelector: false, needsValue: true, needsExpected: false },
+  { value: 'selectOption', icon: <UnorderedListOutlined />, group: 'Actions', needsSelector: true, needsValue: true, needsExpected: false },
+  { value: 'assertVisible', icon: <EyeOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: false },
+  { value: 'assertHidden', icon: <EyeInvisibleOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: false },
+  { value: 'assertText', icon: <FileTextOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: true },
+  { value: 'assertValue', icon: <FieldNumberOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: true },
+  { value: 'assertURL', icon: <LinkOutlined />, group: 'Assertions', needsSelector: false, needsValue: false, needsExpected: true },
+  { value: 'assertTitle', icon: <TagOutlined />, group: 'Assertions', needsSelector: false, needsValue: false, needsExpected: true },
+  { value: 'assertChecked', icon: <CheckSquareOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: false },
+  { value: 'assertCount', icon: <OrderedListOutlined />, group: 'Assertions', needsSelector: true, needsValue: false, needsExpected: true },
+  { value: 'waitForSelector', icon: <EyeOutlined />, group: 'Actions', needsSelector: true, needsValue: false, needsExpected: false }
 ];
 
 interface Props {
@@ -95,84 +96,46 @@ function getExpectedPlaceholder(action: StepAction) {
   }
 }
 
-function getExpectedHint(action: StepAction, exact?: boolean) {
+function getExpectedHint(action: StepAction, exact: boolean | undefined, t: TFunction) {
   if (action === 'assertURL') {
-    return exact
-      ? 'Exact match checks the full URL, including path and query string.'
-      : 'Substring match is allowed. Use a stable fragment like /dashboard or /settings.';
+    return t(exact ? 'step.urlExactHelp' : 'step.urlPartialHelp');
   }
 
   if (action === 'assertTitle') {
-    return exact
-      ? 'Exact match checks the full page title.'
-      : 'Substring match is allowed. Use the stable part of the title, for example Dashboard.';
+    return t(exact ? 'step.titleExactHelp' : 'step.titlePartialHelp');
   }
 
   if (action === 'assertText') {
-    return exact
-      ? 'Exact match compares the full visible text.'
-      : 'Substring match is allowed. Use the unique fragment you expect to see.';
+    return t(exact ? 'step.textExactHelp' : 'step.textPartialHelp');
   }
 
   if (action === 'assertValue') {
-    return 'Checks the current value of the input or control.';
+    return t('step.valueHelp');
   }
 
   if (action === 'assertCount') {
-    return 'Enter the expected number of matching elements.';
+    return t('step.countHelp');
   }
 
   return null;
 }
 
-function humanizeStepAction(action: StepAction) {
-  switch (action) {
-    case 'goto':
-      return 'Navigate to URL';
-    case 'click':
-      return 'Click element';
-    case 'fill':
-      return 'Fill input';
-    case 'press':
-      return 'Press key';
-    case 'keyboardPress':
-      return 'Keyboard press';
-    case 'selectOption':
-      return 'Select option';
-    case 'assertVisible':
-      return 'Assert visible';
-    case 'assertHidden':
-      return 'Assert hidden';
-    case 'assertText':
-      return 'Assert text';
-    case 'assertValue':
-      return 'Assert value';
-    case 'assertURL':
-      return 'Assert URL';
-    case 'assertTitle':
-      return 'Assert title';
-    case 'assertChecked':
-      return 'Assert checked';
-    case 'assertCount':
-      return 'Assert count';
-    case 'waitForSelector':
-      return 'Wait for element';
-    default:
-      return action;
-  }
+function humanizeStepAction(action: StepAction, t: TFunction) {
+  return t(`step.action.${action}`);
 }
 
-function variableHint(value?: string) {
+function variableHint(value: string | undefined, t: TFunction) {
   if (!value || !value.includes('{{')) return null;
 
   return (
-    <Tooltip title="Variable will be replaced at runtime">
+    <Tooltip title={t('step.variableRuntimeHint')}>
       <InfoCircleOutlined style={{ color: '#1677ff' }} />
     </Tooltip>
   );
 }
 
 export default function StepEditor({ steps, onChange, readOnly = false, validationResults, stepIssues = [], variableNames = [] }: Props) {
+  const { t } = useTranslation();
   const addStep = () => onChange([...steps, { action: 'goto', value: '' }]);
 
   const removeStep = (index: number) => onChange(steps.filter((_, idx) => idx !== index));
@@ -209,7 +172,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
         const needsSelector = opt.needsSelector;
         const needsValue = opt.needsValue;
         const needsExpected = opt.needsExpected;
-        const stepLabel = humanizeStepAction(step.action);
+        const stepLabel = humanizeStepAction(step.action, t);
         const rowStyle = {
           display: 'flex',
           alignItems: 'flex-start',
@@ -239,11 +202,11 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                 trigger={['click']}
                 menu={{
                   items: [
-                    { key: 'duplicate', icon: <CopyOutlined />, label: 'Duplicate step', disabled: readOnly },
-                    { key: 'move-up', icon: <HolderOutlined />, label: 'Move up', disabled: readOnly || index === 0 },
-                    { key: 'move-down', icon: <HolderOutlined />, label: 'Move down', disabled: readOnly || index === steps.length - 1 },
+                    { key: 'duplicate', icon: <CopyOutlined />, label: t('step.duplicate'), disabled: readOnly },
+                    { key: 'move-up', icon: <HolderOutlined />, label: t('step.moveUp'), disabled: readOnly || index === 0 },
+                    { key: 'move-down', icon: <HolderOutlined />, label: t('step.moveDown'), disabled: readOnly || index === steps.length - 1 },
                     { type: 'divider' },
-                    { key: 'delete', icon: <DeleteOutlined />, label: 'Delete', danger: true, disabled: readOnly }
+                    { key: 'delete', icon: <DeleteOutlined />, label: t('common.delete'), danger: true, disabled: readOnly }
                   ],
                   onClick: ({ key, domEvent }) => {
                     domEvent.stopPropagation();
@@ -256,7 +219,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                 }}
               >
                 <Button icon={<DownOutlined />} size="small" disabled={readOnly}>
-                  More
+                  {t('step.more')}
                 </Button>
               </Dropdown>
             }
@@ -267,14 +230,14 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                   {opt.icon}
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                  <span>Step {index + 1}</span>
+                  <span>{t('step.numberedTitle', { number: index + 1 })}</span>
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {stepLabel}
                   </Text>
                 </div>
-                {validation?.status === 'ambiguous' && <span style={{ color: '#ad8b00', fontSize: 12 }}>selector ambiguous</span>}
-                {validation?.status === 'not_found' && <span style={{ color: '#cf1322', fontSize: 12 }}>selector not found</span>}
-                {validation?.status === 'action_failed' && <span style={{ color: '#cf1322', fontSize: 12 }}>action failed</span>}
+                {validation?.status === 'ambiguous' && <span style={{ color: '#ad8b00', fontSize: 12 }}>{t('step.selectorAmbiguous')}</span>}
+                {validation?.status === 'not_found' && <span style={{ color: '#cf1322', fontSize: 12 }}>{t('step.selectorNotFound')}</span>}
+                {validation?.status === 'action_failed' && <span style={{ color: '#cf1322', fontSize: 12 }}>{t('step.actionFailed')}</span>}
               </Space>
             }
           >
@@ -286,22 +249,22 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                   disabled={readOnly}
                   onChange={(action) => updateStep(index, { action })}
                 >
-                  <Select.OptGroup label="Actions">
+                  <Select.OptGroup label={t('step.actions')}>
                     {ACTION_OPTIONS.filter((option) => option.group === 'Actions').map((option) => (
                       <Select.Option key={option.value} value={option.value}>
                         <Space size={8}>
                           {option.icon}
-                          <span>{option.label}</span>
+                          <span>{humanizeStepAction(option.value, t)}</span>
                         </Space>
                       </Select.Option>
                     ))}
                   </Select.OptGroup>
-                  <Select.OptGroup label="Assertions">
+                  <Select.OptGroup label={t('step.assertions')}>
                     {ACTION_OPTIONS.filter((option) => option.group === 'Assertions').map((option) => (
                       <Select.Option key={option.value} value={option.value}>
                         <Space size={8}>
                           {option.icon}
-                          <span>{option.label}</span>
+                          <span>{humanizeStepAction(option.value, t)}</span>
                         </Space>
                       </Select.Option>
                     ))}
@@ -312,12 +275,12 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
               {needsSelector && (
                 <div style={{ flex: '1 1 320px', minWidth: 0 }}>
                   <VariableAutocompleteInput
-                    placeholder="CSS selector or Playwright locator"
+                    placeholder={t('step.selectorPlaceholder')}
                     value={step.selector ?? ''}
                     style={{ width: '100%' }}
                     disabled={readOnly}
                     status={fieldIssue?.selector ? 'error' : undefined}
-                    suffix={variableHint(step.selector)}
+                    suffix={variableHint(step.selector, t)}
                     variableNames={variableNames}
                     onValueChange={(nextValue) => updateStep(index, { selector: nextValue })}
                   />
@@ -337,7 +300,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                 <div style={{ flex: '1 1 320px', minWidth: 0, display: 'grid', gap: 4 }}>
                   {step.action === 'fill' ? (
                     <Input
-                      placeholder="Value"
+                      placeholder={t('step.valuePlaceholder')}
                       value={step.value ?? ''}
                       style={{ width: '100%' }}
                       disabled={readOnly}
@@ -347,12 +310,12 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                     />
                   ) : (
                     <VariableAutocompleteInput
-                      placeholder={step.action === 'goto' ? 'https://example.com' : 'Value'}
+                      placeholder={step.action === 'goto' ? 'https://example.com' : t('step.valuePlaceholder')}
                       value={step.value ?? ''}
                       style={{ width: '100%' }}
                       disabled={readOnly}
                       status={fieldIssue?.value ? 'error' : undefined}
-                      suffix={variableHint(step.value)}
+                      suffix={variableHint(step.value, t)}
                       variableNames={variableNames}
                       onValueChange={(nextValue) => updateStep(index, { value: nextValue })}
                     />
@@ -377,7 +340,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                     style={{ width: '100%' }}
                     disabled={readOnly}
                     status={fieldIssue?.expected ? 'error' : undefined}
-                    suffix={variableHint(step.expected)}
+                    suffix={variableHint(step.expected, t)}
                     variableNames={variableNames}
                     onValueChange={(nextValue) => updateStep(index, { expected: nextValue })}
                   />
@@ -390,7 +353,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                       {validation.error}
                     </Text>
                   ) : null}
-                  {getExpectedHint(step.action, step.options?.exact) && (
+                  {getExpectedHint(step.action, step.options?.exact, t) && (
                     <Text
                       type="secondary"
                       style={{
@@ -400,7 +363,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                         display: 'block'
                       }}
                     >
-                      {getExpectedHint(step.action, step.options?.exact)}
+                      {getExpectedHint(step.action, step.options?.exact, t)}
                     </Text>
                   )}
                 </div>
@@ -420,7 +383,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                       })
                     }
                   >
-                    Exact match
+                    {t('step.exactMatch')}
                   </Checkbox>
                 </div>
               )}
@@ -429,7 +392,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
         );
       })}
       <Button icon={<PlusOutlined />} onClick={addStep} type="dashed" block disabled={readOnly}>
-        Add step
+        {t('editor.addStep')}
       </Button>
     </div>
   );

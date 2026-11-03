@@ -6,7 +6,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import prisma from '../prisma';
 import redis from '../redis';
-import type { TestJobData } from './queue';
+import { testQueuePrefix, type TestJobData } from './queue';
 import { getTestWorkerConcurrency, markBatchRunning, updateBatchAfterRun } from './batch-sequencer';
 import type { Step } from '../types/step';
 import { resolveBrowserUrl } from '../utils/runtime-url';
@@ -529,6 +529,7 @@ export async function startTestWorker() {
 
   testWorker = new Worker<TestJobData>('test-runs', runTest, {
     connection: redis,
+    prefix: testQueuePrefix,
     concurrency: getTestWorkerConcurrency()
   });
 

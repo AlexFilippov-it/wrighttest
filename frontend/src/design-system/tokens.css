@@ -5,6 +5,8 @@
   --wt-color-surface-hover: #f8f9fb;
   --wt-color-border: #dfe3e8;
   --wt-color-border-strong: #c9d0d9;
+  --wt-surface-border-style: solid;
+  --wt-empty-surface-border-style: dashed;
   --wt-color-text: #16181d;
   --wt-color-muted: #667085;
   --wt-color-subtle: #8a94a3;
@@ -53,6 +55,10 @@
   --wt-radius-medium: 10px;
   --wt-radius-large: 12px;
   --wt-radius-xlarge: 16px;
+  --wt-surface-padding: 24px;
+  --wt-surface-padding-compact: 20px;
+  --wt-empty-surface-padding: 32px 24px;
+  --wt-empty-surface-padding-compact: 24px 16px;
   --wt-shadow-subtle: 0 1px 2px rgba(16, 24, 40, 0.05);
   --wt-shadow-elevated: 0 8px 24px rgba(16, 24, 40, 0.08);
 

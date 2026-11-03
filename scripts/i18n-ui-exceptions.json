@@ -1,0 +1,25 @@
+{
+  "files": {
+    "design-system/showcase/DesignSystemShowcase.tsx": "Development-only component showcase with intentionally sample copy.",
+    "pages/EnvironmentsPage.tsx": "Legacy page no longer registered in the application routes.",
+    "pages/NotificationsPage.tsx": "Legacy page no longer registered in the application routes.",
+    "pages/SchedulesPage.tsx": "Legacy page no longer registered in the application routes."
+  },
+  "literals": {
+    "WrightTest": "Product name / brand.",
+    "ru-RU, de-DE, fr-FR": "Example locale identifiers in a locale input.",
+    "Welcome back": "Sample page title used as test data in an editor placeholder.",
+    "Search...": "Input example, not an interface message.",
+    "https://example.com": "Example URL placeholder.",
+    "https://dev.example.com": "Example environment URL placeholder.",
+    "https://hooks.slack.com/services/...": "Example webhook URL placeholder.",
+    "123456789:AA...": "Example bot token placeholder.",
+    "user@example.com": "Example email input placeholder.",
+    "name@example.com": "Example email input placeholder.",
+    "0 9 * * *": "Example cron expression.",
+    "BASE_URL": "Environment variable identifier example.",
+    "USERNAME": "Environment variable identifier example.",
+    "PASSWORD": "Environment variable identifier example.",
+    "{{BASE_URL}}/projects or https://example.com": "Start URL syntax example."
+  }
+}

@@ -1,6 +1,7 @@
 import { Layout, Space, Typography } from 'antd';
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import appLogo from '../assets/wrighttest_logo.png';
 import { APP_DESCRIPTION, APP_NAME } from '../utils/appMeta';
 import { useAppShellOptional } from '../shell/ShellContext';
@@ -13,6 +14,7 @@ type AppHeaderProps = {
 };
 
 export default function AppHeader({ actions }: AppHeaderProps) {
+  const { t } = useTranslation();
   const location = useLocation();
   const appShell = useAppShellOptional();
 
@@ -20,12 +22,12 @@ export default function AppHeader({ actions }: AppHeaderProps) {
 
   const navItems = [
     {
-      label: 'Dashboard',
+      label: t('nav.dashboard'),
       to: '/dashboard',
       active: location.pathname === '/dashboard'
     },
     {
-      label: 'Projects',
+      label: t('nav.projects'),
       to: '/projects',
       active:
         location.pathname === '/projects' ||
@@ -33,7 +35,7 @@ export default function AppHeader({ actions }: AppHeaderProps) {
         location.pathname.startsWith('/tests/')
     },
     {
-      label: 'Runs',
+      label: t('nav.allRuns'),
       to: '/runs',
       active: location.pathname === '/runs' || location.pathname.startsWith('/runs/')
     }

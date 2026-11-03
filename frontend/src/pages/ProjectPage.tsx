@@ -26,6 +26,7 @@ import {
   CheckCircleOutlined,
   CopyOutlined,
   DeleteOutlined,
+  DownOutlined,
   EditOutlined,
   EllipsisOutlined,
   ExportOutlined,
@@ -37,6 +38,8 @@ import {
   UploadOutlined
 } from '@ant-design/icons';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   api,
   createTest,
@@ -76,7 +79,7 @@ import {
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import RunStatusBadge from '../components/RunStatusBadge';
-import { ErrorState, PageHeader, StatCard } from '../design-system';
+import { EmptyState, ErrorState, PageHeader, StatCard } from '../design-system';
 import { useProjectShell } from '../shell/ProjectShellContext';
 import {
   clearProjectSettingsDraft,
@@ -132,11 +135,11 @@ type ScheduleFormState = {
 };
 
 const CRON_PRESETS = [
-  { label: 'Every hour', value: '0 * * * *' },
-  { label: 'Every day 9am', value: '0 9 * * *' },
-  { label: 'Every day 2am', value: '0 2 * * *' },
-  { label: 'Every Monday', value: '0 9 * * 1' },
-  { label: 'Custom...', value: 'custom' }
+  { labelKey: 'project.everyHour', value: '0 * * * *' },
+  { labelKey: 'project.everyDay9am', value: '0 9 * * *' },
+  { labelKey: 'project.everyDay2am', value: '0 2 * * *' },
+  { labelKey: 'project.everyMonday', value: '0 9 * * 1' },
+  { labelKey: 'project.customCron', value: 'custom' }
 ];
 
 const DEFAULT_DEVICE_OPTIONS = getProjectDefaultDeviceOptions();
@@ -149,8 +152,8 @@ function formatCreatedLabel(value: string) {
   })}`;
 }
 
-function formatShortTimestamp(value: string) {
-  return new Date(value).toLocaleString(undefined, {
+function formatShortTimestamp(value: string, locale?: string) {
+  return new Date(value).toLocaleString(locale, {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -158,22 +161,22 @@ function formatShortTimestamp(value: string) {
   });
 }
 
-function formatRelativeTime(value: string | null) {
-  if (!value) return 'Never';
+function formatRelativeTime(value: string | null, t: TFunction, locale: string) {
+  if (!value) return t('common.never');
 
   const diffMs = Date.now() - new Date(value).getTime();
-  if (diffMs < 60_000) return 'just now';
+  if (diffMs < 60_000) return t('time.justNow');
 
   const diffMinutes = Math.round(diffMs / 60000);
-  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffMinutes < 60) return t('time.minutesAgo', { count: diffMinutes });
 
   const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  if (diffHours < 24) return t('time.hoursAgo', { count: diffHours });
 
   const diffDays = Math.round(diffHours / 24);
-  if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+  if (diffDays < 30) return t('time.daysAgo', { count: diffDays });
 
-  return new Date(value).toLocaleDateString();
+  return new Date(value).toLocaleDateString(locale);
 }
 
 function formatDuration(ms?: number | null) {
@@ -187,9 +190,9 @@ function formatDurationLabel(ms?: number | null) {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-function formatCompactDateTime(value: string | null | undefined) {
+function formatCompactDateTime(value: string | null | undefined, locale?: string) {
   if (!value) return '—';
-  return new Date(value).toLocaleString(undefined, {
+  return new Date(value).toLocaleString(locale, {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -197,18 +200,18 @@ function formatCompactDateTime(value: string | null | undefined) {
   });
 }
 
-function formatDateOnly(value: string | null | undefined) {
+function formatDateOnly(value: string | null | undefined, locale?: string) {
   if (!value) return '—';
-  return new Date(value).toLocaleDateString(undefined, {
+  return new Date(value).toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric'
   });
 }
 
-function formatDateTime(value: string | null | undefined) {
+function formatDateTime(value: string | null | undefined, locale?: string) {
   if (!value) return '—';
-  return new Date(value).toLocaleString(undefined, {
+  return new Date(value).toLocaleString(locale, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -255,8 +258,8 @@ function envRecordFromRows(rows: EnvironmentRowState[]) {
   );
 }
 
-function validateEnvironmentRows(name: string, rows: EnvironmentRowState[]) {
-  if (!name.trim()) return 'Environment name is required';
+function validateEnvironmentRows(name: string, rows: EnvironmentRowState[], t: TFunction) {
+  if (!name.trim()) return t('environments.nameRequired');
 
   const seen = new Set<string>();
   for (const row of rows) {
@@ -264,10 +267,10 @@ function validateEnvironmentRows(name: string, rows: EnvironmentRowState[]) {
 
     const key = row.key.trim();
     const value = row.value.trim();
-    if (!key) return 'Variable name is required';
-    if (!value) return 'Variable value is required';
-    if (!/^[A-Z0-9_]+$/.test(key)) return 'Variable names should use uppercase letters, numbers, and underscores';
-    if (seen.has(key)) return `Variable name "${key}" must be unique`;
+    if (!key) return t('environments.variableNameRequired');
+    if (!value) return t('environments.variableValueRequired');
+    if (!/^[A-Z0-9_]+$/.test(key)) return t('environments.variableNameFormat');
+    if (seen.has(key)) return t('environments.variableNameUnique', { name: key });
     seen.add(key);
   }
 
@@ -305,31 +308,31 @@ function countEnvironmentUsage(environment: Environment, checks: ProjectCheck[])
   }).length;
 }
 
-function formatAlertRules(channel: NotificationChannel) {
+function formatAlertRules(channel: NotificationChannel, t: (key: string) => string) {
   const rules: string[] = [];
-  if (channel.onFailed) rules.push('Failed');
-  if (channel.onRecovered) rules.push('Recovered');
-  if (channel.onPassed) rules.push('Passed');
-  if (rules.length === 0) rules.push('No rules');
+  if (channel.onFailed) rules.push(t('alerts.failed'));
+  if (channel.onRecovered) rules.push(t('alerts.recovered'));
+  if (channel.onPassed) rules.push(t('alerts.passed'));
+  if (rules.length === 0) rules.push(t('alerts.noRules'));
   return rules;
 }
 
-function channelRuleDescriptions() {
+function channelRuleDescriptions(t: TFunction) {
   return [
     {
       key: 'onFailed' as ChannelRuleKey,
-      label: 'Failed runs',
-      helper: 'Send a notification when a check fails.'
+      label: t('alerts.failedRuns'),
+      helper: t('alerts.failedRunsHelp')
     },
     {
       key: 'onRecovered' as ChannelRuleKey,
-      label: 'Recovered runs',
-      helper: 'Send a notification when a previously failing check passes again.'
+      label: t('alerts.recoveredRuns'),
+      helper: t('alerts.recoveredRunsHelp')
     },
     {
       key: 'onPassed' as ChannelRuleKey,
-      label: 'Passed runs',
-      helper: 'Send a notification on every successful run.'
+      label: t('alerts.passedRuns'),
+      helper: t('alerts.passedRunsHelp')
     }
   ];
 }
@@ -462,7 +465,7 @@ function renderCheckCell(check: ProjectCheck, navigateToCheck: (id: string) => v
   );
 }
 
-const RECENT_RESULTS_GRID_COLUMNS = 'minmax(220px, 1.4fr) 160px minmax(180px, 1fr) 120px';
+const RECENT_RESULTS_GRID_COLUMNS = 'minmax(0, 1.4fr) minmax(85px, 0.9fr) minmax(0, 1.2fr) 76px';
 
 function renderRecentResultCell(check: ProjectCheck, onOpenCheck: (id: string) => void) {
   return (
@@ -528,6 +531,8 @@ function resolveTabFromPathname(pathname: string): ProjectTabKey {
 }
 
 export default function ProjectPage() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? 'en';
   const { projectId } = useParams<{ projectId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -614,6 +619,7 @@ export default function ProjectPage() {
     role: 'VIEWER'
   });
   const settingsHydratedRef = useRef(false);
+  const projectLoadRef = useRef<{ projectId: string; promise: Promise<void> } | null>(null);
 
   const summary = project?.summary;
   const hasRunHistory = Boolean(summary?.lastRunAt || summary?.totalRuns30d);
@@ -632,29 +638,41 @@ export default function ProjectPage() {
     return result.status === 'fulfilled' ? result.value : fallback;
   }
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const projectData = shellProject.id === projectId ? shellProject : await getProject(projectId!);
-      const [suiteDataResult, environmentDataResult, scheduleDataResult, channelDataResult, memberDataResult, authProfilesResult] = await Promise.allSettled([
-        getSuites(projectId!),
-        getEnvironments(projectId!),
-        getSchedules(projectId!),
-        getChannels(projectId!),
-        projectData.currentUserRole === 'OWNER' ? getProjectMembers(projectId!) : Promise.resolve([]),
-        getProjectAuthProfiles(projectId!)
-      ]);
-      setProject(projectData);
-      setProjectName(projectData.name);
-      setSuites(settledValue(suiteDataResult, []));
-      setEnvironments(settledValue(environmentDataResult, []));
-      setSchedules(settledValue(scheduleDataResult, []));
-      setChannels(settledValue(channelDataResult, []));
-      setProjectMembers(settledValue(memberDataResult, []));
-      setAuthProfiles(settledValue(authProfilesResult, []));
-    } finally {
-      setLoading(false);
-    }
+  const load = () => {
+    if (!projectId) return Promise.resolve();
+    if (projectLoadRef.current?.projectId === projectId) return projectLoadRef.current.promise;
+
+    const promise = (async () => {
+      setLoading(true);
+      try {
+        const projectData = shellProject.id === projectId ? shellProject : await getProject(projectId);
+        const [suiteDataResult, environmentDataResult, scheduleDataResult, channelDataResult, memberDataResult, authProfilesResult] = await Promise.allSettled([
+          getSuites(projectId),
+          getEnvironments(projectId),
+          getSchedules(projectId),
+          getChannels(projectId),
+          projectData.currentUserRole === 'OWNER' ? getProjectMembers(projectId) : Promise.resolve([]),
+          getProjectAuthProfiles(projectId)
+        ]);
+        setProject(projectData);
+        setProjectName(projectData.name);
+        setSuites(settledValue(suiteDataResult, []));
+        setEnvironments(settledValue(environmentDataResult, []));
+        setSchedules(settledValue(scheduleDataResult, []));
+        setChannels(settledValue(channelDataResult, []));
+        setProjectMembers(settledValue(memberDataResult, []));
+        setAuthProfiles(settledValue(authProfilesResult, []));
+      } finally {
+        setLoading(false);
+      }
+    })();
+
+    projectLoadRef.current = { projectId, promise };
+    void promise.then(
+      () => { if (projectLoadRef.current?.promise === promise) projectLoadRef.current = null; },
+      () => { if (projectLoadRef.current?.promise === promise) projectLoadRef.current = null; }
+    );
+    return promise;
   };
 
   useEffect(() => {
@@ -699,16 +717,16 @@ export default function ProjectPage() {
   }, [environments, project]);
 
   const sectionDescriptions: Record<ProjectTabKey, string> = {
-    overview: 'Monitor browser checks, schedules, and recent results.',
-    checks: 'Create, organize, and run browser checks.',
-    suites: 'Group checks into reusable suites.',
-    runs: 'Review runs for this project.',
-    schedules: 'Automate checks with project schedules.',
-    environments: 'Manage variables used by checks in this project.',
-    authentication: 'Configure reusable sign-in state for project environments.',
-    alerts: 'Configure notifications for check results.',
-    settings: 'Manage project details and defaults.',
-    members: 'Manage who can access this project.'
+    overview: t('projectDescription.overview'),
+    checks: t('projectDescription.checks'),
+    suites: t('projectDescription.suites'),
+    runs: t('projectDescription.runs'),
+    schedules: t('projectDescription.schedules'),
+    environments: t('projectDescription.environments'),
+    authentication: t('projectDescription.authentication'),
+    alerts: t('projectDescription.alerts'),
+    settings: t('projectDescription.settings'),
+    members: t('projectDescription.members')
   };
   const projectHeaderDescription = savedProjectDescription || sectionDescriptions[activeTab];
 
@@ -791,12 +809,12 @@ export default function ProjectPage() {
 
   const projectSetupItems = useMemo(
     () => [
-      { label: 'Checks created', done: (projectChecks.length ?? 0) > 0 },
-      { label: 'Environment configured', done: environments.length > 0 },
-      { label: 'Schedule configured', done: schedules.some((schedule) => schedule.enabled) },
-      { label: 'Alert channel configured', done: channels.length > 0 }
+      { label: t('project.setupChecksCreated'), done: (projectChecks.length ?? 0) > 0 },
+      { label: t('project.setupEnvironmentConfigured'), done: environments.length > 0 },
+      { label: t('project.setupScheduleConfigured'), done: schedules.some((schedule) => schedule.enabled) },
+      { label: t('project.setupAlertConfigured'), done: channels.length > 0 }
     ],
-    [channels.length, environments.length, projectChecks.length, schedules]
+    [channels.length, environments.length, projectChecks.length, schedules, t]
   );
 
   const scheduleFormCron = scheduleForm.cronPreset === 'custom' ? scheduleForm.customCron.trim() : scheduleForm.cronPreset;
@@ -819,7 +837,7 @@ export default function ProjectPage() {
 
   const openEnvironmentCreate = () => {
     if (!canManageEnvironments) {
-      message.info('Read-only access');
+    message.info(t('common.readOnly'));
       return;
     }
     setEnvironmentMode('create');
@@ -831,7 +849,7 @@ export default function ProjectPage() {
 
   const openEnvironmentEdit = (environment: Environment) => {
     if (!canManageEnvironments) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     setEnvironmentMode('edit');
@@ -843,10 +861,10 @@ export default function ProjectPage() {
 
   const saveEnvironment = async () => {
     if (!canManageEnvironments) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
-    const validationError = validateEnvironmentRows(environmentName, environmentRows);
+    const validationError = validateEnvironmentRows(environmentName, environmentRows, t);
     if (validationError) {
       message.error(validationError);
       return;
@@ -860,15 +878,15 @@ export default function ProjectPage() {
       };
       if (environmentMode === 'edit' && editingEnvironment) {
         await updateEnvironment(editingEnvironment.id, payload);
-        message.success('Environment updated');
+        message.success(t('environments.updatedToast'));
       } else {
         await createEnvironment(projectId!, payload);
-        message.success('Environment created');
+        message.success(t('environments.createdToast'));
       }
       setEnvironmentModalOpen(false);
       await load();
     } catch {
-      message.error('Failed to save environment');
+      message.error(t('environments.saveFailed'));
     } finally {
       setEnvironmentSaving(false);
     }
@@ -876,7 +894,7 @@ export default function ProjectPage() {
 
   const duplicateEnvironment = async (environment: Environment) => {
     if (!canManageEnvironments) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     try {
@@ -884,16 +902,16 @@ export default function ProjectPage() {
         name: `${environment.name} Copy`,
         variables: environment.variables
       });
-      message.success('Environment duplicated');
+      message.success(t('environments.duplicatedToast'));
       await load();
     } catch {
-      message.error('Failed to duplicate environment');
+      message.error(t('environments.duplicateFailed'));
     }
   };
 
   const openChannelCreate = (type: 'telegram' | 'slack') => {
     if (!canWriteProject) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     setChannelMode('create');
@@ -915,7 +933,7 @@ export default function ProjectPage() {
 
   const openChannelEdit = (channel: NotificationChannel) => {
     if (!canWriteProject) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     setChannelMode('edit');
@@ -937,28 +955,28 @@ export default function ProjectPage() {
 
   const saveChannel = async () => {
     if (!canWriteProject) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     if (!channelForm.name.trim()) {
-      message.error('Alert name is required');
+      message.error(t('alerts.nameRequired'));
       return;
     }
 
     if (channelType === 'telegram') {
       if (!channelForm.botToken.trim()) {
-        message.error('Bot token is required');
+        message.error(t('alerts.botTokenRequired'));
         return;
       }
       if (!channelForm.chatId.trim()) {
-        message.error('Chat ID is required');
+        message.error(t('alerts.chatIdRequired'));
         return;
       }
     } else if (!channelForm.webhookUrl.trim()) {
-      message.error('Webhook URL is required');
+      message.error(t('alerts.webhookRequired'));
       return;
     } else if (!channelForm.webhookUrl.trim().startsWith('https://hooks.slack.com/services/')) {
-      message.error('Webhook URL must start with https://hooks.slack.com/services/');
+      message.error(t('alerts.webhookInvalid'));
       return;
     }
 
@@ -1006,16 +1024,16 @@ export default function ProjectPage() {
           onPassed: payload.onPassed,
           enabled: payload.enabled
         });
-        message.success('Channel updated');
+        message.success(t('alerts.updated'));
       } else {
         await createChannel(projectId!, payload);
-        message.success('Channel created');
+        message.success(t('alerts.created'));
       }
 
       setChannelModalOpen(false);
       await load();
     } catch {
-      message.error('Failed to save channel');
+      message.error(t('alerts.saveError'));
     } finally {
       setChannelSaving(false);
     }
@@ -1023,26 +1041,26 @@ export default function ProjectPage() {
 
   const sendChannelDraftTest = async () => {
     if (!canWriteProject) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     setChannelTestFeedback(null);
 
     if (!channelForm.name.trim()) {
-      setChannelTestFeedback({ type: 'error', text: 'Alert name is required' });
+      setChannelTestFeedback({ type: 'error', text: t('alerts.nameRequired') });
       return;
     }
 
     if (channelType === 'telegram') {
       if (!channelForm.botToken.trim() || !channelForm.chatId.trim()) {
-        setChannelTestFeedback({ type: 'error', text: 'Bot token and Chat ID are required' });
+        setChannelTestFeedback({ type: 'error', text: t('alerts.telegramFieldsRequired') });
         return;
       }
     } else if (!channelForm.webhookUrl.trim()) {
-      setChannelTestFeedback({ type: 'error', text: 'Webhook URL is required' });
+      setChannelTestFeedback({ type: 'error', text: t('alerts.webhookRequired') });
       return;
     } else if (!channelForm.webhookUrl.trim().startsWith('https://hooks.slack.com/services/')) {
-      setChannelTestFeedback({ type: 'error', text: 'Webhook URL must start with https://hooks.slack.com/services/' });
+      setChannelTestFeedback({ type: 'error', text: t('alerts.webhookInvalid') });
       return;
     }
 
@@ -1061,12 +1079,12 @@ export default function ProjectPage() {
                 webhookUrl: channelForm.webhookUrl.trim()
               }
         });
-      setChannelTestFeedback({ type: 'success', text: 'Test notification sent.' });
+      setChannelTestFeedback({ type: 'success', text: t('alerts.testSent') });
     } catch (error) {
       const apiError = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setChannelTestFeedback({
         type: 'error',
-        text: typeof apiError === 'string' && apiError.trim().length > 0 ? apiError : 'Failed to send test notification'
+        text: typeof apiError === 'string' && apiError.trim().length > 0 ? apiError : t('alerts.testError')
       });
     } finally {
       setChannelTesting(false);
@@ -1075,39 +1093,39 @@ export default function ProjectPage() {
 
   const testExistingChannel = async (channel: NotificationChannel) => {
     if (!canWriteProject) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     try {
       await testChannel(channel.id);
-      message.success('Test notification sent');
+      message.success(t('alerts.testSent'));
       await load();
     } catch {
-      message.error('Failed to send test notification');
+      message.error(t('alerts.testError'));
     }
   };
 
   const deleteExistingChannel = async (channelId: string) => {
     if (!canWriteProject) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     await deleteChannel(channelId);
-    message.success('Channel deleted');
+    message.success(t('alerts.deleted'));
     await load();
   };
 
   const toggleChannelEnabled = async (channel: NotificationChannel) => {
     if (!canWriteProject) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     try {
       await updateChannel(channel.id, { enabled: !channel.enabled });
-      message.success(channel.enabled ? 'Alert paused' : 'Alert activated');
+    message.success(channel.enabled ? t('alerts.paused') : t('alerts.activated'));
       await load();
     } catch {
-      message.error('Failed to update alert status');
+    message.error(t('alerts.statusError'));
     }
   };
 
@@ -1121,7 +1139,7 @@ export default function ProjectPage() {
 
   const openScheduleCreate = () => {
     if (!canManageSchedules) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     setScheduleMode('create');
@@ -1141,7 +1159,7 @@ export default function ProjectPage() {
 
   const openScheduleEdit = (schedule: Schedule) => {
     if (!canManageSchedules) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     const targetType: ScheduleTargetType = schedule.suiteId ? 'suite' : 'test';
@@ -1163,17 +1181,17 @@ export default function ProjectPage() {
 
   const saveSchedule = async () => {
     if (!canManageSchedules) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     if (!scheduleForm.name.trim()) {
-      message.error('Schedule name is required');
+      message.error(t('project.scheduleNameRequired'));
       return;
     }
 
     const cronValue = scheduleForm.cronPreset === 'custom' ? scheduleForm.customCron.trim() : scheduleForm.cronPreset;
     if (!cronValue) {
-      message.error('Cron is required');
+      message.error(t('project.cronRequired'));
       return;
     }
 
@@ -1181,12 +1199,12 @@ export default function ProjectPage() {
     const targetTestId = scheduleForm.targetType === 'test' ? scheduleForm.testId : undefined;
 
     if (!targetSuiteId && !targetTestId) {
-      message.error('Select a suite or a check');
+      message.error(t('project.selectScheduleTarget'));
       return;
     }
 
     if (scheduleFormNeedsEnvironment) {
-      message.error('Select an environment for checks that use variables');
+      message.error(t('project.environmentRequiredForVariables'));
       return;
     }
 
@@ -1203,7 +1221,7 @@ export default function ProjectPage() {
 
       if (scheduleMode === 'edit' && editingSchedule) {
         await updateSchedule(editingSchedule.id, payload);
-        message.success('Schedule updated');
+        message.success(t('project.scheduleUpdated'));
       } else {
         await createSchedule(projectId!, {
           name: payload.name,
@@ -1213,13 +1231,13 @@ export default function ProjectPage() {
           environmentId: payload.environmentId ?? undefined,
           enabled: payload.enabled
         });
-        message.success('Schedule created');
+        message.success(t('project.scheduleCreated'));
       }
 
       setScheduleModalOpen(false);
       await load();
     } catch {
-      message.error('Failed to save schedule');
+      message.error(t('project.scheduleSaveFailed'));
     } finally {
       setScheduleSaving(false);
     }
@@ -1227,7 +1245,7 @@ export default function ProjectPage() {
 
   const runScheduleNow = async (schedule: Schedule) => {
     if (!canManageSchedules) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     try {
@@ -1240,33 +1258,33 @@ export default function ProjectPage() {
         const result = await runTestWithEnvironment(schedule.testId, schedule.environmentId ?? undefined);
         navigate(`/runs/${result.testRunId}`);
       }
-      message.success('Schedule run started');
+      message.success(t('project.scheduleRunStarted'));
     } catch {
-      message.error('Failed to run schedule');
+      message.error(t('project.scheduleRunFailed'));
     }
   };
 
   const toggleSchedule = async (schedule: Schedule) => {
     if (!canManageSchedules) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     try {
       await updateSchedule(schedule.id, { enabled: !schedule.enabled });
-      message.success(schedule.enabled ? 'Schedule paused' : 'Schedule resumed');
+      message.success(schedule.enabled ? t('project.schedulePaused') : t('project.scheduleResumed'));
       await load();
     } catch {
-      message.error('Failed to update schedule');
+      message.error(t('project.scheduleUpdateFailed'));
     }
   };
 
   const deleteExistingSchedule = async (scheduleId: string) => {
     if (!canManageSchedules) {
-      message.info('Read-only access');
+      message.info(t('common.readOnly'));
       return;
     }
     await deleteSchedule(scheduleId);
-    message.success('Schedule deleted');
+    message.success(t('project.scheduleDeleted'));
     await load();
   };
 
@@ -1282,20 +1300,20 @@ export default function ProjectPage() {
       const check = project?.tests.find((test) => test.id === testId);
       const dataCaseIndex = getFirstEnabledDataCaseIndex(check);
       if (dataCaseIndex === null) {
-        message.error('No enabled test data cases');
+        message.error(t('editor.noEnabledCases'));
         return;
       }
       const enabledDataCaseCount = getEnabledDataCaseCount(check);
       if (enabledDataCaseCount > 1 && environments.length === 0) {
         const result = await runAllEnabledTestCases(testId);
-        message.success(`${result.queued} test cases queued.`);
+        message.success(t('project.testCasesQueued', { count: result.queued }));
         navigate(`/run-batches/${result.batchId}`);
         return;
       }
 
       if (environments.length === 0) {
         const { testRunId } = await runTestWithEnvironment(testId, undefined, dataCaseIndex);
-        message.success('Check started');
+        message.success(t('project.checkStarted'));
         navigate(`/runs/${testRunId}`);
         return;
       }
@@ -1304,7 +1322,7 @@ export default function ProjectPage() {
       setSelectedEnvironmentId(undefined);
       setRunCheckModalOpen(true);
     } catch {
-      message.error('Failed to start check');
+      message.error(t('project.checkStartFailed'));
     }
   };
 
@@ -1316,24 +1334,24 @@ export default function ProjectPage() {
       const check = project?.tests.find((test) => test.id === runCheckId);
       const dataCaseIndex = getFirstEnabledDataCaseIndex(check);
       if (dataCaseIndex === null) {
-        message.error('No enabled test data cases');
+        message.error(t('editor.noEnabledCases'));
         return;
       }
       const enabledDataCaseCount = getEnabledDataCaseCount(check);
       if (enabledDataCaseCount > 1) {
         const result = await runAllEnabledTestCases(runCheckId, selectedEnvironmentId);
         setRunCheckModalOpen(false);
-        message.success(`${result.queued} test cases queued.`);
+        message.success(t('project.testCasesQueued', { count: result.queued }));
         navigate(`/run-batches/${result.batchId}`);
         return;
       }
 
       const { testRunId } = await runTestWithEnvironment(runCheckId, selectedEnvironmentId, dataCaseIndex);
       setRunCheckModalOpen(false);
-      message.success('Check started');
+      message.success(t('project.checkStarted'));
       navigate(`/runs/${testRunId}`);
     } catch {
-      message.error('Failed to start check');
+      message.error(t('project.checkStartFailed'));
     } finally {
       setCheckRunLoading(false);
     }
@@ -1341,7 +1359,7 @@ export default function ProjectPage() {
 
   const handleDeleteCheck = async (testId: string) => {
     await deleteTest(testId);
-    message.success('Check deleted');
+    message.success(t('project.checkDeleted'));
     await load();
   };
 
@@ -1353,10 +1371,10 @@ export default function ProjectPage() {
         device: check.device ?? undefined,
         steps: check.steps
       });
-      message.success('Check duplicated');
+      message.success(t('project.checkDuplicated'));
       navigate(`/tests/${created.id}/edit`);
     } catch {
-      message.error('Failed to duplicate check');
+      message.error(t('project.checkDuplicateFailed'));
     }
   };
 
@@ -1372,9 +1390,9 @@ export default function ProjectPage() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      message.success('Check exported');
+      message.success(t('project.checkExported'));
     } catch {
-      message.error('Failed to export check');
+      message.error(t('project.checkExportFailed'));
     }
   };
 
@@ -1399,7 +1417,7 @@ export default function ProjectPage() {
 
   const openRunSuiteModal = () => {
     if (!canWriteProject) {
-      message.warning('Read-only access cannot run suites');
+      message.warning(t('project.readOnlyCannotRunSuites'));
       return;
     }
     setSelectedSuiteId(suites[0]?.id);
@@ -1409,7 +1427,7 @@ export default function ProjectPage() {
 
   const handleRunSuite = async () => {
     if (!selectedSuiteId) {
-      message.warning('Create a suite first to run multiple checks together');
+      message.warning(t('project.createSuiteBeforeRun'));
       return;
     }
 
@@ -1423,7 +1441,7 @@ export default function ProjectPage() {
         navigate('/dashboard');
       }
     } catch {
-      message.error('Failed to run suite');
+      message.error(t('project.runSuiteFailed'));
     } finally {
       setRunningSuite(false);
     }
@@ -1438,11 +1456,11 @@ export default function ProjectPage() {
 
   const handleSaveAuthentication = async () => {
     if (!project || !authEnvironmentId || !authCheckId) {
-      message.error('Select an environment and authentication check');
+      message.error(t('authSettings.selectEnvironmentAndCheck'));
       return;
     }
     if (!canWriteProject) {
-      message.warning('Read-only access');
+      message.warning(t('common.readOnly'));
       return;
     }
 
@@ -1453,9 +1471,9 @@ export default function ProjectPage() {
         enabled: authEnabled
       });
       replaceAuthProfile(profile);
-      message.success('Authentication settings saved');
+        message.success(t('authSettings.savedToast'));
     } catch {
-      message.error('Failed to save authentication settings');
+      message.error(t('authSettings.saveFailed'));
     } finally {
       setAuthSaving(false);
     }
@@ -1463,11 +1481,11 @@ export default function ProjectPage() {
 
   const handleRefreshAuthentication = async () => {
     if (!project || !authEnvironmentId || !selectedAuthProfile || !authDraftIsSaved) {
-      message.warning('Save the authentication settings before refreshing');
+      message.warning(t('authSettings.saveBeforeRefresh'));
       return;
     }
     if (!selectedAuthCheckHasAssertions) {
-      message.warning('Add an assertion to the authentication check before refreshing');
+      message.warning(t('authSettings.addAssertionFirst'));
       return;
     }
 
@@ -1480,11 +1498,11 @@ export default function ProjectPage() {
         lastError: null,
         updatedAt: new Date().toISOString()
       });
-      message.success(`Authentication refresh started (run ${result.testRunId})`);
+      message.success(t('authSettings.refreshStarted', { runId: result.testRunId }));
     } catch (error) {
       const responseError = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
       message.error(
-        typeof responseError === 'string' ? responseError : 'Failed to start authentication refresh'
+        typeof responseError === 'string' ? responseError : t('authSettings.refreshStartFailed')
       );
     } finally {
       setAuthRefreshing(false);
@@ -1499,9 +1517,9 @@ export default function ProjectPage() {
       setAuthProfiles((current) => current.filter((profile) => profile.id !== selectedAuthProfile.id));
       setAuthCheckId(undefined);
       setAuthEnabled(false);
-      message.success('Authentication configuration removed');
+      message.success(t('authSettings.removedToast'));
     } catch {
-      message.error('Failed to remove authentication configuration');
+      message.error(t('authSettings.removeFailed'));
     }
   };
 
@@ -1516,14 +1534,14 @@ export default function ProjectPage() {
     setProjectDescriptionError(null);
 
     if (!nextName) {
-      setProjectNameError('Project name is required');
-      message.error('Project name is required');
+      setProjectNameError(t('projectSettings.nameRequired'));
+      message.error(t('projectSettings.nameRequired'));
       return;
     }
 
     if (nextDescription.length > 500) {
-      setProjectDescriptionError('Description must be 500 characters or fewer');
-      message.error('Description must be 500 characters or fewer');
+      setProjectDescriptionError(t('projectSettings.descriptionTooLong'));
+      message.error(t('projectSettings.descriptionTooLong'));
       return;
     }
 
@@ -1541,7 +1559,7 @@ export default function ProjectPage() {
       setProjectDescription(nextDescription);
       setSavedProjectDescription(nextDescription);
       setProjectDefaultEnvironmentId(nextDefaultEnvironmentId);
-      message.success('Project settings saved');
+      message.success(t('projectSettings.savedToast'));
       await load();
     } finally {
       setSavingProject(false);
@@ -1558,12 +1576,12 @@ export default function ProjectPage() {
     setProjectDefaultDevice(DEFAULT_DEVICE_OPTIONS[0]);
     setProjectNameError(null);
     setProjectDescriptionError(null);
-    message.info('Project settings reset');
+    message.info(t('projectSettings.resetToast'));
   };
 
   const openDeleteProjectModal = () => {
     if (!isOwner) {
-      message.warning('Only the project owner can delete the project');
+      message.warning(t('projectSettings.ownerOnly'));
       return;
     }
     setDeleteProjectConfirmText('');
@@ -1577,11 +1595,11 @@ export default function ProjectPage() {
     try {
       clearProjectSettingsDraft(project.id);
       await deleteProject(project.id);
-      message.success('Project deleted');
+      message.success(t('projectSettings.deletedToast'));
       setDeleteProjectModalOpen(false);
       navigate('/projects');
     } catch {
-      message.error('Failed to delete project');
+      message.error(t('projectSettings.deleteFailed'));
     } finally {
       setDeletingProject(false);
     }
@@ -1639,13 +1657,13 @@ export default function ProjectPage() {
   const handleCreateUserAccess = async () => {
     if (!project) return;
     if (!memberForm.email.trim()) {
-      message.error('Email is required');
+      message.error(t('members.emailRequired'));
       return;
     }
 
     const email = memberForm.email.trim().toLowerCase();
     if (!isPotentialEmail(email)) {
-      message.error('Enter a valid email address');
+      message.error(t('members.emailInvalid'));
       return;
     }
 
@@ -1665,7 +1683,7 @@ export default function ProjectPage() {
 
     const password = memberForm.password.trim();
     if (userExists === false && !password) {
-      message.error('Password is required for a new user');
+      message.error(t('members.passwordRequired'));
       return;
     }
 
@@ -1676,7 +1694,7 @@ export default function ProjectPage() {
         password: userExists === true ? undefined : password,
         role: memberForm.role
       });
-      message.success('User access created');
+      message.success(t('members.createdToast'));
       setMemberModalOpen(false);
       await load();
     } catch (error) {
@@ -1687,7 +1705,7 @@ export default function ProjectPage() {
       const errorText =
         typeof responseError === 'string'
           ? responseError
-          : 'Failed to create user access';
+          : t('members.createFailed');
       message.error(errorText);
     } finally {
       setMemberSaving(false);
@@ -1698,10 +1716,10 @@ export default function ProjectPage() {
     if (!project) return;
     try {
       await updateProjectMember(project.id, member.id, { role });
-      message.success('Member role updated');
+      message.success(t('members.roleUpdatedToast'));
       await load();
     } catch {
-      message.error('Failed to update member');
+      message.error(t('members.roleUpdateFailed'));
     }
   };
 
@@ -1709,14 +1727,14 @@ export default function ProjectPage() {
     if (!project) return;
     try {
       await deleteProjectMember(project.id, member.id);
-      message.success('Member removed');
+      message.success(t('members.removedToast'));
       await load();
     } catch (error) {
       const responseError =
         error && typeof error === 'object' && 'response' in error
           ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
           : null;
-      message.error(typeof responseError === 'string' ? responseError : 'Failed to remove member');
+      message.error(typeof responseError === 'string' ? responseError : t('members.removeFailed'));
     }
   };
 
@@ -1726,34 +1744,80 @@ export default function ProjectPage() {
   const authStatus = selectedAuthProfile?.status ?? 'UNAVAILABLE';
   const authStatusPresentation = selectedAuthProfile
     ? {
-        UNAVAILABLE: { label: 'Unavailable', color: 'default' },
-        REFRESHING: { label: 'Refreshing', color: 'processing' },
-        AVAILABLE: { label: 'Available', color: 'success' },
-        REFRESH_FAILED: { label: 'Refresh failed', color: 'error' }
+        UNAVAILABLE: { label: t('authSettings.unavailable'), color: 'default' },
+        REFRESHING: { label: t('authSettings.refreshing'), color: 'processing' },
+        AVAILABLE: { label: t('authSettings.available'), color: 'success' },
+        REFRESH_FAILED: { label: t('authSettings.refreshFailed'), color: 'error' }
       }[authStatus]
-    : { label: 'Not configured', color: 'default' };
+    : { label: t('authSettings.notConfigured'), color: 'default' };
 
   const runSuiteItems = suites.map((suite) => ({
     value: suite.id,
     label: `${suite.name}${Array.isArray(suite.testIds) ? ` • ${suite.testIds.length} checks` : ''}`
   }));
 
-  const sectionTitle = {
-    overview: 'Overview',
-    checks: 'Checks',
-    suites: 'Suites',
-    runs: 'Runs',
-    schedules: 'Schedules',
-    environments: 'Environments',
-    authentication: 'Authentication',
-    alerts: 'Alerts',
-    settings: 'Settings',
-    members: 'Members'
-  }[activeTab];
+  const sectionTitle = t(`project.${activeTab}`);
+  const projectHeaderActions = (() => {
+    if (!canWriteProject) return null;
+
+    switch (activeTab) {
+      case 'checks':
+        return (
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/projects/${projectId}/tests/new`)}>
+              {t('project.newCheck')}
+            </Button>
+            <Upload
+              accept=".ts,.js"
+              showUploadList={false}
+              disabled={!canWriteProject}
+              beforeUpload={(file) => {
+                void handleImport(file);
+                return false;
+              }}
+            >
+              <Button icon={<UploadOutlined />} loading={importing}>{t('project.importSpec')}</Button>
+            </Upload>
+            <Button icon={<PlayCircleOutlined />} onClick={openRunSuiteModal}>{t('project.runSuite')}</Button>
+          </Space>
+        );
+      case 'runs':
+        return <Button type="primary" icon={<PlayCircleOutlined />} onClick={openRunSuiteModal}>{t('project.runSuite')}</Button>;
+      case 'schedules':
+        return canManageSchedules ? (
+          <Button type="primary" icon={<PlusOutlined />} onClick={openScheduleCreate}>{t('project.newSchedule')}</Button>
+        ) : null;
+      case 'environments':
+        return canManageEnvironments ? (
+          <Button type="primary" icon={<PlusOutlined />} onClick={openEnvironmentCreate}>{t('environments.new')}</Button>
+        ) : null;
+      case 'alerts':
+        return (
+          <Dropdown
+            trigger={['click']}
+            menu={{
+              items: [
+                { key: 'telegram', label: t('alerts.addTelegram') },
+                { key: 'slack', label: t('alerts.addSlack') }
+              ],
+              onClick: ({ key }) => openChannelCreate(key === 'slack' ? 'slack' : 'telegram')
+            }}
+          >
+            <Button type="primary" icon={<PlusOutlined />}>{t('alerts.addChannel')} <DownOutlined /></Button>
+          </Dropdown>
+        );
+      case 'members':
+        return canManageMembers ? (
+          <Button type="primary" icon={<PlusOutlined />} onClick={openMemberInvite}>{t('members.createAccess')}</Button>
+        ) : null;
+      default:
+        return null;
+    }
+  })();
 
   const checkColumns = [
     {
-      title: 'Check',
+      title: t('project.check'),
       dataIndex: 'name',
       width: 280,
       render: (_: string, row: ProjectCheck) => (
@@ -1776,41 +1840,41 @@ export default function ProjectPage() {
             type="secondary"
             style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: 'normal', overflowWrap: 'anywhere', textAlign: 'left' }}
           >
-            {row.url} · {row.steps.length} steps · {row.runCount} runs
+            {row.url} · {t('project.stepCount', { count: row.steps.length })} · {t('project.runCount', { count: row.runCount })}
           </Text>
         </div>
       )
     },
     {
-      title: 'Status',
+      title: t('project.status'),
       width: 110,
       render: (_: unknown, row: ProjectCheck) =>
-        row.lastRunStatus ? <RunStatusBadge status={row.lastRunStatus} /> : <Tag color="default">Never run</Tag>
+        row.lastRunStatus ? <RunStatusBadge status={row.lastRunStatus} /> : <Tag color="default">{t('project.neverRun')}</Tag>
     },
     {
-      title: 'Last run',
+      title: t('project.lastRun'),
       width: 160,
       responsive: ['lg'] as const,
       render: (_: unknown, row: ProjectCheck) =>
         row.lastRunAt ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            <Text>{formatRelativeTime(row.lastRunAt)}</Text>
+            <Text>{formatRelativeTime(row.lastRunAt, t, locale)}</Text>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {formatDurationLabel(row.lastRunDurationMs)} · {formatShortTimestamp(row.lastRunAt)}
+              {formatDurationLabel(row.lastRunDurationMs)} · {formatShortTimestamp(row.lastRunAt, locale)}
             </Text>
           </div>
         ) : (
-          <Text type="secondary">Never</Text>
+          <Text type="secondary">{t('project.never')}</Text>
         )
     },
     {
-      title: 'Schedule',
+      title: t('project.schedule'),
       width: 130,
       responsive: ['xl'] as const,
       render: (_: unknown, row: ProjectCheck) => <Tag color="purple">{formatScheduleSummary(row, schedules)}</Tag>
     },
     {
-      title: 'Device',
+      title: t('project.device'),
       width: 120,
       responsive: ['xl'] as const,
       render: (_: unknown, row: ProjectCheck) =>
@@ -1819,39 +1883,39 @@ export default function ProjectPage() {
             {row.device}
           </Tag>
         ) : (
-          <Tag>Desktop</Tag>
+          <Tag>{t('project.desktop')}</Tag>
         )
     },
     {
-      title: 'Runs',
+      title: t('project.runsCount'),
       width: 70,
       responsive: ['xl'] as const,
       render: (_: unknown, row: ProjectCheck) => <Tag>{row.runCount}</Tag>
     },
     {
-      title: 'Actions',
+      title: t('project.actions'),
       width: 170,
       fixed: 'right' as const,
       render: (_: unknown, row: ProjectCheck) => (
         <Space onClick={(event) => event.stopPropagation()} size={8}>
           {canWriteProject ? (
             <Button size="small" type="primary" onClick={(event) => void handleRunCheck(row.id, event)}>
-              Run
+              {t('project.run')}
             </Button>
           ) : null}
           <Button size="small" onClick={() => openCheck(row.id)}>
-            Open
+            {t('project.open')}
           </Button>
           {canWriteProject ? (
             <Dropdown
               trigger={['click']}
               menu={{
                 items: [
-                  { key: 'edit', icon: <EditOutlined />, label: 'Edit' },
-                  { key: 'duplicate', icon: <CopyOutlined />, label: 'Duplicate' },
-                  { key: 'export', icon: <ExportOutlined />, label: 'Export .spec.ts' },
+                  { key: 'edit', icon: <EditOutlined />, label: t('project.edit') },
+                  { key: 'duplicate', icon: <CopyOutlined />, label: t('project.duplicate') },
+                  { key: 'export', icon: <ExportOutlined />, label: t('project.exportSpec') },
                   { type: 'divider' },
-                  { key: 'delete', icon: <DeleteOutlined />, label: 'Delete', danger: true }
+                  { key: 'delete', icon: <DeleteOutlined />, label: t('project.delete'), danger: true }
                 ],
                 onClick: ({ key, domEvent }) => {
                   domEvent.stopPropagation();
@@ -1870,9 +1934,9 @@ export default function ProjectPage() {
 
                   if (key === 'delete') {
                     confirmModal.confirm({
-                      title: 'Delete check?',
-                      content: `This will remove "${row.name}" and its run history.`,
-                      okText: 'Delete',
+                      title: t('project.deleteCheckTitle'),
+                      content: t('project.deleteCheckDescription', { name: row.name }),
+                      okText: t('project.delete'),
                       okButtonProps: { danger: true },
                       centered: true,
                       onOk: async () => {
@@ -1895,72 +1959,50 @@ export default function ProjectPage() {
     <Layout style={{ minHeight: 'auto', background: 'transparent' }}>
       {confirmModalContextHolder}
       <AppHeader />
-      <Content style={{ width: '100%', minWidth: 0 }}>
+      <Content className="wt-surface-page" style={{ width: '100%', minWidth: 0 }}>
         <Row gutter={[24, 24]}>
           <Col span={24}>
             <PageHeader
               title={sectionTitle}
               description={projectHeaderDescription}
               breadcrumbs={[
-                { key: 'projects', label: 'Projects', href: '/projects' },
+                { key: 'projects', label: t('nav.projects'), href: '/projects' },
                 { key: 'project', label: project?.name ?? shellProject.name, href: `/projects/${projectId}/checks` },
                 { key: 'section', label: sectionTitle }
               ]}
-              actions={canWriteProject ? (
-                <Space wrap>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/projects/${projectId}/tests/new`)} disabled={!canWriteProject}>
-                      New Check
-                    </Button>
-                    <Upload
-                      accept=".ts,.js"
-                      showUploadList={false}
-                      disabled={!canWriteProject}
-                      beforeUpload={(file) => {
-                        void handleImport(file);
-                        return false;
-                      }}
-                    >
-                      <Button icon={<UploadOutlined />} loading={importing} disabled={!canWriteProject}>
-                        Import .spec.ts
-                      </Button>
-                    </Upload>
-                    <Button icon={<PlayCircleOutlined />} onClick={openRunSuiteModal} disabled={!canWriteProject}>
-                      Run suite
-                    </Button>
-                </Space>
-              ) : undefined}
+              actions={projectHeaderActions}
             />
             {isViewer ? (
               <Alert
                 type="info"
                 showIcon
-                message="Read-only access"
-                description="You can view this project, but you cannot make changes."
+                message={t('common.readOnly')}
+                description={t('projectDescription.readOnly')}
                 style={{ marginTop: 16 }}
               />
             ) : null}
-            {project ? <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>{formatCreatedLabel(project.createdAt)}</Text> : null}
+            {project && activeTab === 'overview' ? <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>{t('projects.projectCreatedDate', { date: new Date(project.createdAt).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) })}</Text> : null}
           </Col>
 
           {activeTab === 'overview' && <Col span={24}>
             <Row gutter={[16, 16]}>
-              <Col xs={24} sm={12} lg={8}><StatCard title="Checks" value={summary?.checksCount ?? 0} description="Browser checks in this project" /></Col>
-              <Col xs={24} sm={12} lg={8}><StatCard title="Last result" value={summary?.lastResult ? <RunStatusBadge status={summary.lastResult} /> : 'No runs'} description={summary?.lastRunAt ? formatRelativeTime(summary.lastRunAt) : 'Not evaluated'} /></Col>
-              <Col xs={24} sm={12} lg={8}><StatCard title="Pass rate" value={summary?.passRate30d == null ? '—' : `${summary.passRate30d}%`} description={summary?.totalRuns30d ? `${summary.passedRuns30d} of ${summary.totalRuns30d} runs · Last 30 days` : 'No runs yet'} /></Col>
-              <Col xs={24} sm={12} lg={8}><StatCard title="Active schedules" value={summary?.activeSchedulesCount ?? 0} description="Project-level schedules" /></Col>
-              <Col xs={24} sm={12} lg={8}><StatCard title="Alert channels" value={summary?.alertChannelsCount ?? 0} description="Telegram and Slack" /></Col>
-              <Col xs={24} sm={12} lg={8}><StatCard title="Avg duration" value={summary?.avgDurationMs != null ? formatDuration(summary.avgDurationMs) : '—'} description={!hasRunHistory ? 'Not evaluated' : summary?.failedChecks ? `${summary.failedChecks} failing checks` : 'Across recent runs'} /></Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title={t('project.checksTitle')} value={summary?.checksCount ?? 0} description={t('project.checksCount')} /></Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title={t('project.lastResult')} value={summary?.lastResult ? <RunStatusBadge status={summary.lastResult} /> : t('common.noRunsYet')} description={summary?.lastRunAt ? formatRelativeTime(summary.lastRunAt, t, locale) : t('projects.notEvaluated')} /></Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title={t('project.passRate')} value={summary?.passRate30d == null ? '—' : `${summary.passRate30d}%`} description={summary?.totalRuns30d ? t('project.passRateDetail', { passed: summary.passedRuns30d, total: summary.totalRuns30d }) : summary?.lastRunAt ? t('dashboard.noRecentRunsInPeriod') : t('project.noRunsYet')} /></Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title={t('project.activeSchedules')} value={summary?.activeSchedulesCount ?? 0} description={t('project.projectSchedules')} /></Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title={t('project.alertChannels')} value={summary?.alertChannelsCount ?? 0} description={t('project.telegramSlack')} /></Col>
+              <Col xs={24} sm={12} lg={8}><StatCard title={t('project.avgDuration')} value={summary?.avgDurationMs != null ? formatDuration(summary.avgDurationMs) : '—'} description={!hasRunHistory ? t('project.notEvaluated') : summary?.failedChecks ? t('project.failingChecks', { count: summary.failedChecks }) : t('project.acrossRecentRuns')} /></Col>
             </Row>
           </Col>}
 
           {activeTab === 'overview' && (
             <Col span={24}>
               <Row gutter={[24, 24]}>
-                <Col xs={24} xl={14}>
+                <Col xs={24} xxl={14}>
                   <Card
                     style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
-                    title="Recent results"
-                    extra={summary?.totalRuns30d ? <Tag color="blue">{summary.totalRuns30d} runs in 30 days</Tag> : <Tag color="default">No runs yet</Tag>}
+                    title={t('project.recentResults')}
+                    extra={summary?.totalRuns30d ? <Tag color="blue">{t('project.runsInDays', { count: summary.totalRuns30d })}</Tag> : <Tag color="default">{summary?.lastRunAt ? t('dashboard.noRecentRunsInPeriod') : t('project.noRunsYet')}</Tag>}
                   >
                     {overviewChecks.length > 0 ? (
                       <div style={{ width: '100%', minWidth: 0 }}>
@@ -1976,10 +2018,10 @@ export default function ProjectPage() {
                             fontWeight: 500
                           }}
                         >
-                          <div style={{ minWidth: 0 }}>Check</div>
-                          <div style={{ minWidth: 0 }}>Status</div>
-                          <div style={{ minWidth: 0 }}>Last run</div>
-                          <div style={{ minWidth: 0 }}>Open</div>
+                          <div style={{ minWidth: 0 }}>{t('project.check')}</div>
+                          <div style={{ minWidth: 0 }}>{t('project.status')}</div>
+                          <div style={{ minWidth: 0 }}>{t('project.lastRun')}</div>
+                          <div style={{ minWidth: 0 }}>{t('project.open')}</div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {overviewChecks.map((row) => (
@@ -1998,23 +2040,23 @@ export default function ProjectPage() {
                             >
                               {renderRecentResultCell(row, openCheck)}
                               <div style={{ minWidth: 0 }}>
-                                {row.lastRunStatus ? <RunStatusBadge status={row.lastRunStatus} /> : <Tag>Never run</Tag>}
+                                {row.lastRunStatus ? <RunStatusBadge status={row.lastRunStatus} /> : <Tag>{t('project.neverRun')}</Tag>}
                               </div>
                               <div style={{ minWidth: 0 }}>
                                 {row.lastRunAt ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                                    <Text>{formatRelativeTime(row.lastRunAt)}</Text>
+                                    <Text>{formatRelativeTime(row.lastRunAt, t, locale)}</Text>
                                     <Text type="secondary" style={{ fontSize: 12 }}>
-                                      {formatDurationLabel(row.lastRunDurationMs)} · {formatShortTimestamp(row.lastRunAt)}
+                                      {formatDurationLabel(row.lastRunDurationMs)} · {formatShortTimestamp(row.lastRunAt, locale)}
                                     </Text>
                                   </div>
                                 ) : (
-                                  <Text type="secondary">Never</Text>
+                                  <Text type="secondary">{t('project.never')}</Text>
                                 )}
                               </div>
                               <div style={{ minWidth: 0 }}>
                                 <Button size="small" onClick={() => openCheck(row.id)}>
-                                  Open
+                                  {t('project.open')}
                                 </Button>
                               </div>
                             </div>
@@ -2022,37 +2064,32 @@ export default function ProjectPage() {
                         </div>
                       </div>
                     ) : (
-                      <Empty
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description={
-                          <Space direction="vertical" size={4}>
-                            <Text strong>No runs yet</Text>
-                            <Text type="secondary">
-                              Run a check manually or create a schedule to start collecting results.
-                            </Text>
-                          </Space>
-                        }
-                      >
-                        <Space wrap>
+                      <EmptyState
+                        className="wt-empty-state--contained"
+                        title={t('project.noRunsYet')}
+                        description={t('project.runScheduleForResults')}
+                        action={(
+                          <Space wrap>
                           <Button type="primary" onClick={openRunSuiteModal} disabled={!canWriteProject}>
-                            Run suite
+                            {t('project.runSuite')}
                           </Button>
-                          <Button onClick={() => navigate(`/projects/${projectId}/checks`)}>Go to Checks</Button>
-                        </Space>
-                      </Empty>
+                          <Button onClick={() => navigate(`/projects/${projectId}/checks`)}>{t('project.goToChecks')}</Button>
+                          </Space>
+                        )}
+                      />
                     )}
                   </Card>
                 </Col>
-                <Col xs={24} xl={10}>
+                <Col xs={24} xxl={10}>
                   <Card
                     style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
-                    title="Needs attention"
+                    title={t('project.needsAttention')}
                     extra={
                       !hasRunHistory
-                        ? <Tag>Not evaluated</Tag>
+                        ? <Tag>{t('project.notEvaluated')}</Tag>
                         : summary?.flakyChecks
-                          ? <Tag color="gold">{summary.flakyChecks} flaky</Tag>
-                          : <Tag color="green">All clear</Tag>
+                          ? <Tag color="gold">{t('project.flakyCount', { count: summary.flakyChecks })}</Tag>
+                          : <Tag color="green">{t('project.allClear')}</Tag>
                     }
                   >
                     {attentionChecks.filter((check) => check.lastRunStatus === 'FAILED').length > 0 ? (
@@ -2062,7 +2099,7 @@ export default function ProjectPage() {
                         pagination={false}
                         columns={[
                           {
-                            title: 'Check',
+                            title: t('project.check'),
                             dataIndex: 'name',
                             render: (value: string, row: ProjectCheck) => (
                               <Button type="link" style={{ padding: 0, textAlign: 'left', fontWeight: 600 }} onClick={() => openCheck(row.id)}>
@@ -2071,32 +2108,32 @@ export default function ProjectPage() {
                             )
                           },
                           {
-                            title: 'Status',
+                            title: t('project.status'),
                             render: (_: unknown, row: ProjectCheck) =>
-                              row.lastRunStatus ? <RunStatusBadge status={row.lastRunStatus} /> : <Tag>Never run</Tag>
+                              row.lastRunStatus ? <RunStatusBadge status={row.lastRunStatus} /> : <Tag>{t('project.neverRun')}</Tag>
                           },
                           {
-                            title: 'Last failure',
+                            title: t('project.lastFailure'),
                             render: (_: unknown, row: ProjectCheck) =>
-                              row.lastRunAt ? <Text>{formatCompactDateTime(row.lastRunAt)}</Text> : <Text type="secondary">—</Text>
+                              row.lastRunAt ? <Text>{formatCompactDateTime(row.lastRunAt, locale)}</Text> : <Text type="secondary">—</Text>
                           },
                           {
-                            title: 'Error summary',
+                            title: t('project.errorSummary'),
                             render: (_: unknown, row: ProjectCheck) => (
-                              <Text type="secondary" ellipsis={{ tooltip: row.latestRun?.error ?? 'No error summary' }} style={{ maxWidth: 220, display: 'inline-block' }}>
-                                {row.latestRun?.error ?? 'No error summary'}
+                              <Text type="secondary" ellipsis={{ tooltip: row.latestRun?.error ?? t('project.noErrorSummary') }} style={{ maxWidth: 220, display: 'inline-block' }}>
+                                {row.latestRun?.error ?? t('project.noErrorSummary')}
                               </Text>
                             )
                           },
                           {
-                            title: 'Actions',
+                            title: t('project.actions'),
                             render: (_: unknown, row: ProjectCheck) => (
                               <Space>
                                 <Button size="small" onClick={() => openCheck(row.id)}>
-                                  Open result
+                                  {t('project.openResultAction')}
                                 </Button>
                                 <Button size="small" onClick={() => void handleRunCheck(row.id)}>
-                                  Rerun
+                                  {t('project.rerun')}
                                 </Button>
                               </Space>
                             )
@@ -2105,15 +2142,15 @@ export default function ProjectPage() {
                       />
                     ) : !hasRunHistory ? (
                       <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                        <Title level={5} style={{ margin: 0 }}>No runs yet</Title>
-                        <Text type="secondary">Run a check to evaluate project health and surface failures here.</Text>
+                        <Title level={5} style={{ margin: 0 }}>{t('project.noRunsYet')}</Title>
+                        <Text type="secondary">{t('project.noRunsHealthDescription')}</Text>
                       </Space>
                     ) : (
                       <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                        <Title level={5} style={{ margin: 0 }}>No active failures</Title>
-                        <Text type="secondary">All browser checks in this project are currently passing.</Text>
+                        <Title level={5} style={{ margin: 0 }}>{t('project.noActiveFailures')}</Title>
+                        <Text type="secondary">{t('project.allChecksPassing')}</Text>
                         {summary?.flakyChecks ? (
-                          <Text type="secondary">{summary.flakyChecks} flaky checks were detected in recent runs.</Text>
+                          <Text type="secondary">{t('project.flakyRecent', { count: summary.flakyChecks })}</Text>
                         ) : null}
                       </Space>
                     )}
@@ -2121,7 +2158,7 @@ export default function ProjectPage() {
                 </Col>
                 <Col span={24}>
                   <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}>
-                    <Title level={4}>Project setup</Title>
+                    <Title level={4}>{t('project.projectSetup')}</Title>
                     <Row gutter={[16, 16]}>
                       {projectSetupItems.map((item) => (
                         <Col key={item.label} xs={24} sm={12} xl={6}>
@@ -2130,7 +2167,7 @@ export default function ProjectPage() {
                             <div>
                               <Text strong>{item.label}</Text>
                               <br />
-                              <Text type="secondary">{item.done ? 'Configured' : 'Not configured'}</Text>
+                              <Text type="secondary">{item.done ? t('project.configured') : t('project.notConfigured')}</Text>
                             </div>
                           </Space>
                         </Col>
@@ -2146,7 +2183,6 @@ export default function ProjectPage() {
             <Col span={24}>
               <Card
                 style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
-                title="Checks"
               >
                 {loading ? (
                   <Table
@@ -2166,32 +2202,11 @@ export default function ProjectPage() {
                     columns={checkColumns as never}
                   />
                 ) : (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={
-                      <Space direction="vertical" size={4}>
-                        <Text strong>No browser checks yet</Text>
-                        <Text type="secondary">Create your first check or import an existing Playwright .spec.ts file.</Text>
-                      </Space>
-                    }
-                  >
-                    <Space wrap>
-                        <Button type="primary" onClick={() => navigate(`/projects/${projectId}/tests/new`)} disabled={!canWriteProject}>
-                          New Check
-                        </Button>
-                        <Upload
-                          accept=".ts,.js"
-                          showUploadList={false}
-                          disabled={!canWriteProject}
-                          beforeUpload={(file) => {
-                            void handleImport(file);
-                            return false;
-                          }}
-                        >
-                          <Button disabled={!canWriteProject}>Import .spec.ts</Button>
-                        </Upload>
-                      </Space>
-                    </Empty>
+                  <EmptyState
+                    className="wt-empty-state--contained"
+                    title={t('project.noBrowserChecks')}
+                    description={t('project.noBrowserChecksDescription')}
+                  />
                 )}
               </Card>
             </Col>
@@ -2199,7 +2214,7 @@ export default function ProjectPage() {
 
           {activeTab === 'runs' && (
             <Col span={24}>
-              <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }} title="Recent results">
+              <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }} title={t('project.recentResults')}>
                 {latestChecks.some((check) => check.lastRunAt) ? (
                   <Table<ProjectCheck>
                     dataSource={latestChecks.filter((check) => check.lastRunAt)}
@@ -2207,7 +2222,7 @@ export default function ProjectPage() {
                     pagination={false}
                     columns={[
                       {
-                        title: 'Check',
+                        title: t('project.check'),
                         dataIndex: 'name',
                         render: (_: string, row: ProjectCheck) => (
                           <Space direction="vertical" size={0}>
@@ -2221,43 +2236,40 @@ export default function ProjectPage() {
                         )
                       },
                       {
-                        title: 'Status',
+                        title: t('project.status'),
                         render: (_: unknown, row: ProjectCheck) =>
-                          row.lastRunStatus ? <RunStatusBadge status={row.lastRunStatus} /> : <Tag>Never run</Tag>
+                          row.lastRunStatus ? <RunStatusBadge status={row.lastRunStatus} /> : <Tag>{t('project.neverRun')}</Tag>
                       },
                       {
-                        title: 'Last run',
+                        title: t('project.lastRun'),
                         render: (_: unknown, row: ProjectCheck) =>
                           row.lastRunAt ? (
                             <Space direction="vertical" size={0}>
-                              <Text>{formatRelativeTime(row.lastRunAt)}</Text>
+                              <Text>{formatRelativeTime(row.lastRunAt, t, locale)}</Text>
                               <Text type="secondary" style={{ fontSize: 12 }}>
-                                {formatDurationLabel(row.lastRunDurationMs)} · {formatShortTimestamp(row.lastRunAt)}
+                                {formatDurationLabel(row.lastRunDurationMs)} · {formatShortTimestamp(row.lastRunAt, locale)}
                               </Text>
                             </Space>
                           ) : (
-                            <Text type="secondary">Never</Text>
+                            <Text type="secondary">{t('project.never')}</Text>
                           )
                       },
                       {
-                        title: 'Open',
+                        title: t('project.open'),
                         render: (_: unknown, row: ProjectCheck) => (
                           <Button size="small" onClick={() => openCheck(row.id)}>
-                            Open
+                            {t('project.open')}
                           </Button>
                         )
                       }
                     ]}
                   />
                 ) : (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="Run history will appear here once checks have been executed."
-                  >
-                    <Button type="primary" onClick={openRunSuiteModal} disabled={!canWriteProject}>
-                      Run suite
-                    </Button>
-                  </Empty>
+                  <EmptyState
+                    className="wt-empty-state--contained"
+                    title={t('project.noRunsYet')}
+                    description={t('project.runHistoryEmpty')}
+                  />
                 )}
               </Card>
             </Col>
@@ -2267,36 +2279,17 @@ export default function ProjectPage() {
             <Col span={24}>
               <Card
                 style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
-                title="Schedules"
-                extra={
-                  <Button
-                    type={canManageSchedules ? 'primary' : 'default'}
-                    icon={<PlusOutlined />}
-                    onClick={openScheduleCreate}
-                    disabled={!canManageSchedules}
-                  >
-                    New Schedule
-                  </Button>
-                }
               >
                 <Space direction="vertical" size={8} style={{ width: '100%', marginBottom: 16 }}>
-                  <Text type="secondary">Run browser checks or suites automatically on a cron expression.</Text>
+                  <Text type="secondary">{t('project.schedulesDescription')}</Text>
                 </Space>
 
                 {schedules.length === 0 ? (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={
-                      <Space direction="vertical" size={4}>
-                        <Text strong>No schedules yet</Text>
-                        <Text type="secondary">Create a schedule to run checks automatically.</Text>
-                      </Space>
-                    }
-                  >
-                    <Button type={canManageSchedules ? 'primary' : 'default'} onClick={openScheduleCreate} disabled={!canManageSchedules}>
-                      New Schedule
-                    </Button>
-                  </Empty>
+                  <EmptyState
+                    className="wt-empty-state--contained"
+                    title={t('project.noSchedules')}
+                    description={t('project.noSchedulesDescription')}
+                  />
                 ) : (
                   <Table<Schedule>
                     dataSource={schedules}
@@ -2307,7 +2300,7 @@ export default function ProjectPage() {
                     onRow={(row) => (canManageSchedules ? { onClick: () => openScheduleEdit(row) } : {})}
                     columns={[
                       {
-                        title: 'Schedule',
+                        title: t('project.schedule'),
                         dataIndex: 'name',
                         render: (value: string, row: Schedule) => (
                           <Space direction="vertical" size={0}>
@@ -2325,48 +2318,48 @@ export default function ProjectPage() {
                         )
                       },
                       {
-                        title: 'Target',
+                        title: t('project.target'),
                         render: (_: unknown, row) => (
                           <Space direction="vertical" size={0}>
                             <Text strong>{row.suite?.name ?? row.test?.name ?? '—'}</Text>
                             <Text type="secondary" style={{ fontSize: 12 }}>
-                              {row.environment?.name ?? 'No environment'}
+                              {row.environment?.name ?? t('project.noEnvironment')}
                             </Text>
                           </Space>
                         )
                       },
                       {
-                        title: 'Cron',
+                        title: t('project.cron'),
                         dataIndex: 'cron',
                         render: (value: string) => <Tag color="blue"><code>{value}</code></Tag>
                       },
                       {
-                        title: 'Status',
-                        render: (_: unknown, row) => (row.enabled ? <Tag color="green">Active</Tag> : <Tag>Paused</Tag>)
+                        title: t('project.status'),
+                        render: (_: unknown, row) => (row.enabled ? <Tag color="green">{t('project.active')}</Tag> : <Tag>{t('project.paused')}</Tag>)
                       },
                       {
-                        title: 'Last run',
+                        title: t('project.lastRun'),
                         render: (_: unknown, row) =>
                           row.lastRunAt ? (
                             <Space direction="vertical" size={0}>
-                              <Text>{formatRelativeTime(row.lastRunAt)}</Text>
+                              <Text>{formatRelativeTime(row.lastRunAt, t, locale)}</Text>
                               <Text type="secondary" style={{ fontSize: 12 }}>
-                                {formatCompactDateTime(row.lastRunAt)}
+                                {formatCompactDateTime(row.lastRunAt, locale)}
                               </Text>
                             </Space>
                           ) : (
-                            <Text type="secondary">Never</Text>
+                            <Text type="secondary">{t('project.never')}</Text>
                           )
                       },
                       {
-                        title: 'Next run',
+                        title: t('project.nextRun'),
                         render: (_: unknown, row) =>
                           row.enabled ? (
                             formatScheduleNextRun(row).overdue ? (
                               <Space direction="vertical" size={0}>
                                 <Text>{formatScheduleNextRun(row).primary}</Text>
                                 <Tag color="orange" style={{ width: 'fit-content', marginTop: 2 }}>
-                                  Overdue
+                                  {t('project.overdue')}
                                 </Tag>
                               </Space>
                             ) : (
@@ -2378,31 +2371,31 @@ export default function ProjectPage() {
                               </Space>
                             )
                           ) : (
-                            <Text type="secondary">Paused</Text>
+                            <Text type="secondary">{t('project.paused')}</Text>
                           )
                       },
                       {
-                        title: 'Actions',
+                        title: t('project.actions'),
                         render: (_: unknown, row) => (
                           <Space onClick={(event) => event.stopPropagation()} size={8}>
                             <Button size="small" onClick={() => navigate(`/schedules/${row.id}/history`)}>
-                              History
+                              {t('project.history')}
                             </Button>
                             {canManageSchedules ? (
                               <>
                                 <Button size="small" onClick={() => void runScheduleNow(row)}>
-                                  Run now
+                                  {t('project.runNow')}
                                 </Button>
                                 <Button size="small" onClick={() => openScheduleEdit(row)}>
-                                  Edit
+                                  {t('project.edit')}
                                 </Button>
                                 <Dropdown
                                   trigger={['click']}
                                   menu={{
                                     items: [
-                                      { key: 'toggle', label: row.enabled ? 'Pause' : 'Resume' },
+                                      { key: 'toggle', label: row.enabled ? t('common.pause') : t('project.resume') },
                                       { type: 'divider' },
-                                      { key: 'delete', label: 'Delete', danger: true }
+                                      { key: 'delete', label: t('project.delete'), danger: true }
                                     ],
                                     onClick: ({ key, domEvent }) => {
                                       domEvent.stopPropagation();
@@ -2411,9 +2404,9 @@ export default function ProjectPage() {
                                       }
                                       if (key === 'delete') {
                                         confirmModal.confirm({
-                                          title: 'Delete schedule?',
-                                          content: `This will remove "${row.name}" and stop automatic runs.`,
-                                          okText: 'Delete',
+                                          title: t('project.deleteScheduleTitle'),
+                                          content: t('project.deleteScheduleDescription', { name: row.name }),
+                                          okText: t('project.delete'),
                                           okButtonProps: { danger: true },
                                           centered: true,
                                           onOk: async () => {
@@ -2428,7 +2421,7 @@ export default function ProjectPage() {
                                 </Dropdown>
                               </>
                             ) : (
-                              <Text type="secondary">Read-only</Text>
+                              <Text type="secondary">{t('environments.readOnly')}</Text>
                             )}
                           </Space>
                         )
@@ -2444,37 +2437,18 @@ export default function ProjectPage() {
             <Col span={24}>
               <Card
                 style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
-                title="Environments"
-                extra={
-                  <Button
-                    type={canManageEnvironments ? 'primary' : 'default'}
-                    icon={<PlusOutlined />}
-                    onClick={openEnvironmentCreate}
-                    disabled={!canManageEnvironments}
-                  >
-                    New Environment
-                  </Button>
-                }
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', marginBottom: 16 }}>
-                  <Text type="secondary">Manage variable sets used in check URLs and steps.</Text>
-                  <Text type="secondary">Use variables in checks as {'{{BASE_URL}}'}, {'{{USERNAME}}'}, or {'{{PASSWORD}}'}.</Text>
+                  <Text type="secondary">{t('environments.description')}</Text>
+                  <Text type="secondary">{t('environments.variableUsage')}</Text>
                 </div>
 
                 {environments.length === 0 ? (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <Text strong>No environments yet</Text>
-                        <Text type="secondary">Create an environment to reuse variables like {'{{BASE_URL}}'} across checks.</Text>
-                      </div>
-                    }
-                  >
-                    <Button type={canManageEnvironments ? 'primary' : 'default'} onClick={openEnvironmentCreate} disabled={!canManageEnvironments}>
-                      New Environment
-                    </Button>
-                  </Empty>
+                  <EmptyState
+                    className="wt-empty-state--contained"
+                    title={t('environments.emptyTitle')}
+                    description={t('environments.emptyDescription')}
+                  />
                 ) : (
                   <Table<Environment & { usedByChecks: number }>
                     dataSource={environmentUsage}
@@ -2485,7 +2459,7 @@ export default function ProjectPage() {
                     onRow={(row) => (canManageEnvironments ? { onClick: () => openEnvironmentEdit(row) } : {})}
                     columns={[
                       {
-                        title: 'Environment',
+                        title: t('environments.name'),
                         dataIndex: 'name',
                         render: (value: string, row) => (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 0, alignItems: 'flex-start' }}>
@@ -2511,40 +2485,40 @@ export default function ProjectPage() {
                               </Text>
                             )}
                             <Text type="secondary" style={{ fontSize: 12 }}>
-                              {Object.keys(row.variables).length} variables
+                              {t('environments.variableCount', { count: Object.keys(row.variables).length })}
                             </Text>
                           </div>
                         )
                       },
                       {
-                        title: 'Variables',
+                        title: t('environments.variables'),
                         render: (_: unknown, row) => <Tag color="purple">{Object.keys(row.variables).length}</Tag>
                       },
                       {
-                        title: 'Used by checks',
+                        title: t('environments.usedByChecks'),
                         render: (_: unknown, row) => <Tag color={row.usedByChecks > 0 ? 'blue' : 'default'}>{row.usedByChecks}</Tag>
                       },
                       {
-                        title: 'Created',
+                        title: t('environments.created'),
                         dataIndex: 'createdAt',
-                        render: (value: string) => formatDateOnly(value)
+                        render: (value: string) => formatDateOnly(value, locale)
                       },
                       {
-                        title: 'Actions',
+                        title: t('environments.actions'),
                         render: (_: unknown, row) => (
                           <Space onClick={(event) => event.stopPropagation()} size={8}>
                             {canManageEnvironments ? (
                               <>
                                 <Button size="small" onClick={() => openEnvironmentEdit(row)}>
-                                  Edit
+                                  {t('environments.edit')}
                                 </Button>
                                 <Dropdown
                                   trigger={['click']}
                                   menu={{
                                     items: [
-                                      { key: 'duplicate', icon: <CopyOutlined />, label: 'Duplicate' },
+                                      { key: 'duplicate', icon: <CopyOutlined />, label: t('environments.duplicate') },
                                       { type: 'divider' },
-                                      { key: 'delete', icon: <DeleteOutlined />, label: 'Delete', danger: true }
+                                      { key: 'delete', icon: <DeleteOutlined />, label: t('environments.delete'), danger: true }
                                     ],
                                     onClick: ({ key, domEvent }) => {
                                       domEvent.stopPropagation();
@@ -2553,14 +2527,14 @@ export default function ProjectPage() {
                                       }
                                       if (key === 'delete') {
                                         confirmModal.confirm({
-                                          title: 'Delete environment?',
-                                          content: `This will remove "${row.name}" and stop variable reuse.`,
-                                          okText: 'Delete',
+                                          title: t('environments.deleteConfirm'),
+                                          content: t('environments.deleteDescription', { name: row.name }),
+                                          okText: t('environments.delete'),
                                           okButtonProps: { danger: true },
                                           centered: true,
                                           onOk: async () => {
                                             await deleteEnvironment(row.id);
-                                            message.success('Environment deleted');
+                                            message.success(t('environments.deletedToast'));
                                             await load();
                                           }
                                         });
@@ -2572,7 +2546,7 @@ export default function ProjectPage() {
                                 </Dropdown>
                               </>
                             ) : (
-                              <Text type="secondary">Read-only</Text>
+                              <Text type="secondary">{t('environments.readOnly')}</Text>
                             )}
                           </Space>
                         )
@@ -2588,39 +2562,17 @@ export default function ProjectPage() {
             <Col span={24}>
               <Card
                 style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
-                title="Alerts"
-                extra={
-                  <Space>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => openChannelCreate('telegram')} disabled={!canWriteProject}>
-                      Add Telegram
-                    </Button>
-                    <Button icon={<PlusOutlined />} onClick={() => openChannelCreate('slack')} disabled={!canWriteProject}>
-                      Add Slack
-                    </Button>
-                  </Space>
-                }
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', marginBottom: 16 }}>
-                  <Text type="secondary">Send failed and recovered check notifications to Telegram or Slack.</Text>
+                  <Text type="secondary">{t('alerts.description')}</Text>
                 </div>
 
                 {channels.length === 0 ? (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <Text strong>No alert channels configured</Text>
-                        <Text type="secondary">Send failed and recovered browser check notifications to Telegram or Slack.</Text>
-                      </div>
-                    }
-                  >
-                    <Space wrap>
-                      <Button type="primary" onClick={() => openChannelCreate('telegram')} disabled={!canWriteProject}>
-                        Add Telegram
-                      </Button>
-                      <Button onClick={() => openChannelCreate('slack')} disabled={!canWriteProject}>Add Slack</Button>
-                    </Space>
-                  </Empty>
+                  <EmptyState
+                    className="wt-empty-state--contained"
+                    title={t('alerts.emptyTitle')}
+                    description={t('alerts.emptyDescription')}
+                  />
                 ) : (
                   <Table<NotificationChannel>
                     dataSource={channels}
@@ -2631,7 +2583,7 @@ export default function ProjectPage() {
                     onRow={(row) => (canWriteProject ? { onClick: () => openChannelEdit(row) } : {})}
                     columns={[
                       {
-                        title: 'Alert',
+                        title: t('alerts.alert'),
                         dataIndex: 'name',
                         render: (value: string, row) => (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 0, alignItems: 'flex-start' }}>
@@ -2660,15 +2612,15 @@ export default function ProjectPage() {
                         )
                       },
                       {
-                        title: 'Type',
+                        title: t('alerts.type'),
                         dataIndex: 'type',
-                        render: (value: string) => <Tag color={value === 'telegram' ? 'blue' : 'gold'}>{value}</Tag>
+                        render: (value: string) => <Tag color={value === 'telegram' ? 'blue' : 'gold'}>{value === 'telegram' ? 'Telegram' : 'Slack'}</Tag>
                       },
                       {
-                        title: 'Rules',
+                        title: t('alerts.rules'),
                         render: (_: unknown, row) => (
                           <Space wrap>
-                            {formatAlertRules(row).map((rule) => (
+                            {formatAlertRules(row, t).map((rule) => (
                               <Tag key={rule} color="purple">
                                 {rule}
                               </Tag>
@@ -2677,41 +2629,41 @@ export default function ProjectPage() {
                         )
                       },
                       {
-                        title: 'Status',
-                        render: (_: unknown, row) => (row.enabled ? <Tag color="green">Active</Tag> : <Tag color="default">Paused</Tag>)
+                        title: t('common.status'),
+                        render: (_: unknown, row) => (row.enabled ? <Tag color="green">{t('common.active')}</Tag> : <Tag color="default">{t('common.paused')}</Tag>)
                       },
                       {
-                        title: 'Last test',
+                        title: t('alerts.lastTest'),
                         render: (_: unknown, row) =>
                           row.lastTestAt ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                              <Text>{formatRelativeTime(row.lastTestAt)}</Text>
+                              <Text>{formatRelativeTime(row.lastTestAt, t, locale)}</Text>
                               <Text type="secondary" style={{ fontSize: 12 }}>
-                                {formatCompactDateTime(row.lastTestAt)}
+                              {formatCompactDateTime(row.lastTestAt, locale)}
                               </Text>
                             </div>
                         ) : (
-                          <Text type="secondary">Never</Text>
+                          <Text type="secondary">{t('common.never')}</Text>
                         )
                       },
                       {
-                        title: 'Actions',
+                        title: t('common.actions'),
                         render: (_: unknown, row) => (
                           <Space onClick={(event) => event.stopPropagation()} size={8}>
                             {canWriteProject ? (
                               <>
                                 <Button size="small" onClick={() => openChannelEdit(row)}>
-                                  Edit
+                                  {t('common.edit')}
                                 </Button>
                                 <Button size="small" onClick={() => void testExistingChannel(row)}>
-                                  Send test
+                                  {t('alerts.sendTest')}
                                 </Button>
                                 <Dropdown
                                   trigger={['click']}
                                   menu={{
                                     items: [
-                                      { key: 'toggle', label: row.enabled ? 'Pause' : 'Activate' },
-                                      { key: 'delete', label: 'Delete', danger: true }
+                                      { key: 'toggle', label: row.enabled ? t('common.pause') : t('common.activate') },
+                                      { key: 'delete', label: t('common.delete'), danger: true }
                                     ],
                                     onClick: ({ key, domEvent }) => {
                                       domEvent.stopPropagation();
@@ -2720,9 +2672,9 @@ export default function ProjectPage() {
                                       }
                                       if (key === 'delete') {
                                         confirmModal.confirm({
-                                          title: 'Delete alert channel?',
-                                          content: `This will remove "${row.name}".`,
-                                          okText: 'Delete',
+                                          title: t('alerts.deleteTitle'),
+                                          content: t('alerts.deleteDescription', { name: row.name }),
+                                          okText: t('common.delete'),
                                           okButtonProps: { danger: true },
                                           centered: true,
                                           onOk: async () => {
@@ -2737,7 +2689,7 @@ export default function ProjectPage() {
                                 </Dropdown>
                               </>
                             ) : (
-                              <Text type="secondary">Read-only</Text>
+                              <Text type="secondary">{t('common.readOnly')}</Text>
                             )}
                           </Space>
                         )
@@ -2754,12 +2706,12 @@ export default function ProjectPage() {
               <Space direction="vertical" size={24} style={{ width: '100%' }}>
                 {activeTab === 'settings' && <Row gutter={[24, 24]}>
                   <Col xs={24} xl={14}>
-                    <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }} title="Project settings">
+                    <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }} title={t('projectSettings.title')}>
                       <Space direction="vertical" size={16} style={{ width: '100%' }}>
                         <Row gutter={[16, 16]}>
                           <Col xs={24} md={12}>
                             <div>
-                              <Text type="secondary">Project name</Text>
+                              <Text type="secondary">{t('projectSettings.name')}</Text>
                               <Input
                                 value={projectName}
                                 disabled={isViewer}
@@ -2767,7 +2719,7 @@ export default function ProjectPage() {
                                   setProjectName(event.target.value);
                                   if (event.target.value.trim()) setProjectNameError(null);
                                 }}
-                                placeholder="Project name"
+                                placeholder={t('projectSettings.projectNamePlaceholder')}
                                 style={{ marginTop: 8 }}
                                 status={projectNameError ? 'error' : undefined}
                               />
@@ -2780,15 +2732,15 @@ export default function ProjectPage() {
                           </Col>
                           <Col xs={24} md={12}>
                             <div>
-                              <Text type="secondary">Default environment</Text>
+                              <Text type="secondary">{t('projectSettings.defaultEnvironment')}</Text>
                               <Select
                                 value={environments.length === 0 ? '' : projectDefaultEnvironmentId}
                                 disabled={isViewer || environments.length === 0}
                                 onChange={(value) => setProjectDefaultEnvironmentId(value)}
-                                placeholder="No default environment"
+                                placeholder={t('projectSettings.noDefaultEnvironment')}
                                 style={{ marginTop: 8, width: '100%' }}
                                 options={[
-                                  { label: 'No default environment', value: '' },
+                                  { label: t('projectSettings.noDefaultEnvironment'), value: '' },
                                   ...environments.map((environment) => ({ label: environment.name, value: environment.id }))
                                 ]}
                               />
@@ -2796,7 +2748,7 @@ export default function ProjectPage() {
                           </Col>
                           <Col xs={24} md={12}>
                             <div>
-                              <Text type="secondary">Description</Text>
+                              <Text type="secondary">{t('projectSettings.description')}</Text>
                               <Input.TextArea
                                 value={projectDescription}
                                 disabled={isViewer}
@@ -2804,7 +2756,7 @@ export default function ProjectPage() {
                                   setProjectDescription(event.target.value);
                                   if (event.target.value.length <= 500) setProjectDescriptionError(null);
                                 }}
-                                placeholder="Describe what this project monitors"
+                                placeholder={t('projectSettings.descriptionPlaceholder')}
                                 autoSize={{ minRows: 3, maxRows: 4 }}
                                 maxLength={500}
                                 style={{ marginTop: 8 }}
@@ -2812,7 +2764,7 @@ export default function ProjectPage() {
                               />
                               <Space direction="vertical" size={4} style={{ width: '100%', marginTop: 6 }}>
                                 <Text type="secondary" style={{ fontSize: 12 }}>
-                                  Optional. Up to 500 characters.
+                                  {t('projectSettings.optionalLimit')}
                                 </Text>
                                 {projectDescriptionError ? (
                                   <Text type="danger" style={{ fontSize: 12 }}>
@@ -2824,7 +2776,7 @@ export default function ProjectPage() {
                           </Col>
                           <Col xs={24} md={12}>
                             <div>
-                              <Text type="secondary">Default device</Text>
+                              <Text type="secondary">{t('projectSettings.defaultDevice')}</Text>
                               <Select
                                 value={projectDefaultDevice}
                                 disabled={isViewer}
@@ -2837,17 +2789,17 @@ export default function ProjectPage() {
                         </Row>
                         <Space wrap>
                         <Button type="primary" loading={savingProject} onClick={() => void handleSaveProject()} disabled={isViewer}>
-                          Save changes
+                          {t('projectSettings.save')}
                         </Button>
                         <Button onClick={handleResetProjectSettings} disabled={!project || isViewer}>
-                          Reset
+                          {t('projectSettings.reset')}
                         </Button>
                         </Space>
                       </Space>
                     </Card>
                   </Col>
                   <Col xs={24} xl={10}>
-                    <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }} title="Metadata">
+                    <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }} title={t('projectSettings.metadata')}>
                       <Row gutter={[12, 12]}>
                         <Col span={24}>
                           <div
@@ -2858,7 +2810,7 @@ export default function ProjectPage() {
                               background: '#fafcff'
                             }}
                           >
-                            <Text type="secondary">Project ID</Text>
+                            <Text type="secondary">{t('projectSettings.projectId')}</Text>
                             <Text code style={{ display: 'block', marginTop: 4, wordBreak: 'break-all' }}>
                               {project?.id ?? '—'}
                             </Text>
@@ -2866,21 +2818,21 @@ export default function ProjectPage() {
                         </Col>
                         <Col xs={24} sm={12}>
                           <div style={{ padding: '12px 14px', border: '1px solid #f1f5f9', borderRadius: 14 }}>
-                            <Text type="secondary">Created</Text>
+                            <Text type="secondary">{t('projectSettings.created')}</Text>
                             <Text style={{ display: 'block', marginTop: 4 }}>
-                              {project ? formatDateTime(project.createdAt) : '—'}
+                              {project ? formatDateTime(project.createdAt, locale) : '—'}
                             </Text>
                           </div>
                         </Col>
                         <Col xs={24} sm={12}>
                           <div style={{ padding: '12px 14px', border: '1px solid #f1f5f9', borderRadius: 14 }}>
-                            <Text type="secondary">Checks</Text>
+                            <Text type="secondary">{t('projectSettings.checks')}</Text>
                             <Text style={{ display: 'block', marginTop: 4 }}>{summary?.checksCount ?? 0}</Text>
                           </div>
                         </Col>
                         <Col xs={24} sm={12}>
                           <div style={{ padding: '12px 14px', border: '1px solid #f1f5f9', borderRadius: 14 }}>
-                            <Text type="secondary">Runs</Text>
+                            <Text type="secondary">{t('projectSettings.runs')}</Text>
                             <Text style={{ display: 'block', marginTop: 4 }}>
                               {summary?.totalRuns30d ?? projectChecks.reduce((count, check) => count + check.runCount, 0) ?? 0}
                             </Text>
@@ -2888,40 +2840,40 @@ export default function ProjectPage() {
                         </Col>
                         <Col xs={24} sm={12}>
                           <div style={{ padding: '12px 14px', border: '1px solid #f1f5f9', borderRadius: 14 }}>
-                            <Text type="secondary">Schedules</Text>
+                            <Text type="secondary">{t('projectSettings.schedules')}</Text>
                             <Text style={{ display: 'block', marginTop: 4 }}>{summary?.activeSchedulesCount ?? 0}</Text>
                           </div>
                         </Col>
                         <Col xs={24} sm={12}>
                           <div style={{ padding: '12px 14px', border: '1px solid #f1f5f9', borderRadius: 14 }}>
-                            <Text type="secondary">Environments</Text>
+                            <Text type="secondary">{t('projectSettings.environments')}</Text>
                             <Text style={{ display: 'block', marginTop: 4 }}>{environments.length}</Text>
                           </div>
                         </Col>
                         <Col xs={24} sm={12}>
                           <div style={{ padding: '12px 14px', border: '1px solid #f1f5f9', borderRadius: 14 }}>
-                            <Text type="secondary">Alert channels</Text>
+                            <Text type="secondary">{t('projectSettings.alertChannels')}</Text>
                             <Text style={{ display: 'block', marginTop: 4 }}>{channels.length}</Text>
                           </div>
                         </Col>
                         <Col xs={24} sm={12}>
                           <div style={{ padding: '12px 14px', border: '1px solid #f1f5f9', borderRadius: 14 }}>
-                            <Text type="secondary">Last run</Text>
+                            <Text type="secondary">{t('projectSettings.lastRun')}</Text>
                             <Text style={{ display: 'block', marginTop: 4 }}>
-                              {summary?.lastRunAt ? formatCompactDateTime(summary.lastRunAt) : '—'}
+                              {summary?.lastRunAt ? formatCompactDateTime(summary.lastRunAt, locale) : '—'}
                             </Text>
                           </div>
                         </Col>
                         <Col xs={24} sm={12}>
                           <div style={{ padding: '12px 14px', border: '1px solid #f1f5f9', borderRadius: 14 }}>
-                            <Text type="secondary">Last result</Text>
+                            <Text type="secondary">{t('projectSettings.lastResult')}</Text>
                             <div style={{ marginTop: 4 }}>
                               {summary?.lastResult === 'PASSED' ? (
-                                <Tag color="green">Passed</Tag>
+                                <Tag color="green">{t('projectSettings.passed')}</Tag>
                               ) : summary?.lastResult === 'FAILED' ? (
-                                <Tag color="red">Failed</Tag>
+                                <Tag color="red">{t('projectSettings.failed')}</Tag>
                               ) : (
-                                <Tag color="default">No runs</Tag>
+                                <Tag color="default">{t('projectSettings.noRuns')}</Tag>
                               )}
                             </div>
                           </div>
@@ -2932,24 +2884,24 @@ export default function ProjectPage() {
                 </Row>}
                 {activeTab === 'authentication' && <Card
                   style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
-                  title="Authentication"
+                  title={t('authSettings.title')}
                 >
                   <Space direction="vertical" size={18} style={{ width: '100%' }}>
                     <Text type="secondary">
-                      Reuse an authenticated browser session for checks in each environment. Authentication state is stored privately and is never returned to the browser.
+                      {t('authSettings.description')}
                     </Text>
 
                     {environments.length === 0 ? (
                       <Alert
                         type="warning"
                         showIcon
-                        message="Create an environment before configuring reusable authentication."
+                        message={t('authSettings.environmentRequired')}
                       />
                     ) : (
                       <>
                         <Row gutter={[16, 16]}>
                           <Col xs={24} md={12}>
-                            <Text type="secondary">Environment</Text>
+                            <Text type="secondary">{t('authSettings.environment')}</Text>
                             <Select
                               value={authEnvironmentId}
                               onChange={setAuthEnvironmentId}
@@ -2961,12 +2913,12 @@ export default function ProjectPage() {
                             />
                           </Col>
                           <Col xs={24} md={12}>
-                            <Text type="secondary">Authentication check</Text>
+                            <Text type="secondary">{t('authSettings.check')}</Text>
                             <Select
                               value={authCheckId}
                               disabled={isViewer}
                               onChange={setAuthCheckId}
-                              placeholder="Select the login check"
+                              placeholder={t('authSettings.selectLoginCheck')}
                               style={{ width: '100%', marginTop: 8 }}
                               options={projectChecks.map((check) => ({
                                 value: check.id,
@@ -2981,16 +2933,16 @@ export default function ProjectPage() {
                           disabled={isViewer}
                           onChange={(event) => setAuthEnabled(event.target.checked)}
                         >
-                          Use authentication state for checks in this environment
+                          {t('authSettings.useForEnvironment')}
                         </Checkbox>
 
                         {selectedAuthCheck && !selectedAuthCheckHasAssertions ? (
                           <Alert
                             type="warning"
                             showIcon
-                            message="Authentication check needs an assertion"
-                            description="Add Assert URL or Assert visible after the login action so WrightTest can confirm authentication completed before saving the reusable session."
-                            action={<Link to={`/tests/${selectedAuthCheck.id}/edit`}>Edit check</Link>}
+                            message={t('authSettings.assertionRequired')}
+                            description={t('authSettings.assertionHelp')}
+                            action={<Link to={`/tests/${selectedAuthCheck.id}/edit`}>{t('authSettings.editCheck')}</Link>}
                           />
                         ) : null}
 
@@ -3004,23 +2956,23 @@ export default function ProjectPage() {
                         >
                           <Space direction="vertical" size={6}>
                             <Space>
-                              <Text strong>Status</Text>
+                              <Text strong>{t('authSettings.status')}</Text>
                               <Tag color={authStatusPresentation.color}>{authStatusPresentation.label}</Tag>
                               {selectedAuthProfile && !selectedAuthProfile.enabled ? (
-                                <Tag>Disabled</Tag>
+                                <Tag>{t('authSettings.disabled')}</Tag>
                               ) : null}
                               {selectedAuthProfile?.hasUsableState && authStatus === 'REFRESH_FAILED' ? (
-                                <Tag color="blue">Previous state active</Tag>
+                                <Tag color="blue">{t('authSettings.previousStateActive')}</Tag>
                               ) : null}
                             </Space>
                             <Text type="secondary">
-                              Last refreshed:{' '}
+                              {t('authSettings.lastRefreshed')}{' '}
                               {selectedAuthProfile?.refreshedAt
                                 ? formatDateTime(selectedAuthProfile.refreshedAt)
-                                : 'Never'}
+                                : t('project.never')}
                             </Text>
                             {selectedAuthProfile?.refreshedRunId ? (
-                              <Link to={`/runs/${selectedAuthProfile.refreshedRunId}`}>Open successful refresh run</Link>
+                              <Link to={`/runs/${selectedAuthProfile.refreshedRunId}`}>{t('authSettings.openRefreshRun')}</Link>
                             ) : null}
                           </Space>
                         </div>
@@ -3029,11 +2981,11 @@ export default function ProjectPage() {
                           <Alert
                             type="error"
                             showIcon
-                            message="Authentication refresh failed"
+                            message={t('authSettings.refreshFailedTitle')}
                             description={`${selectedAuthProfile.lastError}${
                               selectedAuthProfile.hasUsableState
-                                ? ' Previous authentication remains active.'
-                                : ' No reusable authentication state is available.'
+                                ? t('authSettings.previousStatePreserved')
+                                : t('authSettings.noStateAvailable')
                             }`}
                           />
                         ) : null}
@@ -3045,7 +2997,7 @@ export default function ProjectPage() {
                             disabled={isViewer || !authEnvironmentId || !authCheckId}
                             onClick={() => void handleSaveAuthentication()}
                           >
-                            Save authentication settings
+                            {t('authSettings.save')}
                           </Button>
                           <Button
                             icon={<PlayCircleOutlined />}
@@ -3059,7 +3011,7 @@ export default function ProjectPage() {
                             }
                             onClick={() => void handleRefreshAuthentication()}
                           >
-                            Refresh authentication
+                            {t('authSettings.refresh')}
                           </Button>
                           {selectedAuthProfile ? (
                             <Button
@@ -3067,21 +3019,21 @@ export default function ProjectPage() {
                               disabled={isViewer || authStatus === 'REFRESHING'}
                               onClick={() => {
                                 confirmModal.confirm({
-                                  title: 'Remove authentication configuration?',
-                                  content: 'The saved browser authentication state for this environment will be deleted.',
-                                  okText: 'Remove',
+                                  title: t('authSettings.removeTitle'),
+                                  content: t('authSettings.removeDescription'),
+                                  okText: t('environments.remove'),
                                   okButtonProps: { danger: true },
                                   onOk: handleDeleteAuthentication
                                 });
                               }}
                             >
-                              Remove configuration
+                              {t('authSettings.remove')}
                             </Button>
                           ) : null}
                         </Space>
 
                         {!authDraftIsSaved && selectedAuthProfile ? (
-                          <Text type="warning">Save the changed configuration before refreshing authentication.</Text>
+                          <Text type="warning">{t('authSettings.saveBeforeRefresh')}</Text>
                         ) : null}
                       </>
                     )}
@@ -3089,17 +3041,17 @@ export default function ProjectPage() {
                 </Card>}
                 {activeTab === 'settings' && <Card
                   style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)', borderColor: '#fecaca' }}
-                  title="Danger zone"
+                  title={t('projectSettings.dangerZone')}
                 >
                   <Space direction="vertical" size={12} style={{ width: '100%' }}>
                     <div>
-                      <Text strong>Delete project</Text>
+                      <Text strong>{t('projectSettings.deleteProject')}</Text>
                       <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
-                        Permanently delete this project, checks, schedules, environments, alerts, run history, screenshots, and traces.
+                        {t('projectSettings.deleteDescription')}
                       </Text>
                     </div>
                     <Button danger ghost onClick={openDeleteProjectModal} disabled={!isOwner}>
-                      Delete project
+                      {t('projectSettings.deleteProject')}
                     </Button>
                   </Space>
                 </Card>}
@@ -3111,11 +3063,10 @@ export default function ProjectPage() {
             <Col span={24}>
               <Card
                 style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}
-                title="Project members"
-                extra={<Button type="primary" icon={<PlusOutlined />} onClick={openMemberInvite}>Create user access</Button>}
+                title={t('members.title')}
               >
                 <Space direction="vertical" size={8} style={{ width: '100%', marginBottom: 16 }}>
-                  <Text type="secondary">Create user access by email, password, and role.</Text>
+                  <Text type="secondary">{t('members.description')}</Text>
                 </Space>
 
                 <Table<ProjectMember>
@@ -3124,27 +3075,29 @@ export default function ProjectPage() {
                   pagination={false}
                   columns={[
                     {
-                      title: 'Name / Email',
+                      title: t('members.nameEmail'),
                       render: (_: unknown, row) => (
-                        <Space direction="vertical" size={0}>
-                          <Space size={6} align="center">
-                            <Text strong>{row.user?.email ?? row.email}</Text>
-                            {isProtectedAdminMember(row) && <Tag color="red">System admin</Tag>}
-                          </Space>
-                          <Text type="secondary" style={{ fontSize: 12 }}>{row.status === 'PENDING' ? 'Pending' : 'Active'}</Text>
+                        <Space direction="vertical" size={2}>
+                          <Text strong>{row.user?.email ?? row.email}</Text>
+                          {isProtectedAdminMember(row) && (
+                            <Tag color="red" style={{ width: 'fit-content', marginInlineEnd: 0 }}>
+                              {t('members.systemAdmin')}
+                            </Tag>
+                          )}
+                          <Text type="secondary" style={{ fontSize: 12 }}>{row.status === 'PENDING' ? t('members.pending') : t('members.active')}</Text>
                         </Space>
                       )
                     },
                     {
-                      title: 'Role',
+                      title: t('members.role'),
                       render: (_: unknown, row) => (
                           <Select
                           value={row.role}
                           style={{ width: 150 }}
                           options={[
-                            { label: 'Owner', value: 'OWNER' },
-                            { label: 'Editor', value: 'EDITOR' },
-                            { label: 'Viewer', value: 'VIEWER' }
+                            { label: t('role.owner'), value: 'OWNER' },
+                            { label: t('role.editor'), value: 'EDITOR' },
+                            { label: t('role.viewer'), value: 'VIEWER' }
                           ]}
                           onChange={(value) => void handleChangeMemberRole(row, value)}
                           disabled={isProtectedAdminMember(row) || (row.role === 'OWNER' && projectMembers.filter((member) => member.role === 'OWNER').length <= 1)}
@@ -3152,18 +3105,18 @@ export default function ProjectPage() {
                       )
                     },
                     {
-                      title: 'Status',
+                      title: t('members.status'),
                       render: (_: unknown, row) =>
                         row.status === 'PENDING' ? (
-                          <Tooltip title="User has not signed in with this email yet.">
-                            <Tag color="gold">Pending</Tag>
+                          <Tooltip title={t('members.pendingHelp')}>
+                            <Tag color="gold">{t('members.pending')}</Tag>
                           </Tooltip>
                         ) : (
-                          <Tag color="green">Active</Tag>
+                          <Tag color="green">{t('members.active')}</Tag>
                         )
                     },
                     {
-                      title: 'Actions',
+                      title: t('members.actions'),
                       render: (_: unknown, row) => (
                         <Space>
                           <Button
@@ -3172,7 +3125,7 @@ export default function ProjectPage() {
                             onClick={() => void handleRemoveMember(row)}
                             disabled={isProtectedAdminMember(row) || (row.role === 'OWNER' && projectMembers.filter((member) => member.role === 'OWNER').length <= 1)}
                           >
-                            Remove
+                            {t('members.remove')}
                           </Button>
                         </Space>
                       )
@@ -3186,8 +3139,8 @@ export default function ProjectPage() {
           {activeTab === 'members' && !canManageMembers && (
             <Col span={24}>
               <ErrorState
-                title="Owner access required"
-                description="Only project owners can view and manage project members."
+                title={t('members.ownerAccessRequired')}
+                description={t('members.ownerAccessDescription')}
               />
             </Col>
           )}
@@ -3195,7 +3148,7 @@ export default function ProjectPage() {
       </Content>
 
       <Modal
-        title="Select Environment"
+        title={t('authSettings.environment')}
         open={runCheckModalOpen}
         onOk={() => void handleConfirmCheckRun()}
         onCancel={() => setRunCheckModalOpen(false)}
@@ -3206,18 +3159,18 @@ export default function ProjectPage() {
           value={selectedEnvironmentId ?? ''}
           onChange={(event) => setSelectedEnvironmentId(event.target.value || undefined)}
         >
-          <Radio value="">No environment (use values as-is)</Radio>
+          <Radio value="">{t('suites.noEnvironmentUseAsIs')}</Radio>
           {environments.map((environment) => (
             <Radio key={environment.id} value={environment.id}>
               {environment.name}
-              <Tag style={{ marginLeft: 8 }}>{Object.keys(environment.variables).length} variables</Tag>
+              <Tag style={{ marginLeft: 8 }}>{t('environments.variableCount', { count: Object.keys(environment.variables).length })}</Tag>
             </Radio>
           ))}
         </Radio.Group>
       </Modal>
 
       <Modal
-        title="Run Suite"
+        title={t('suites.runTitle')}
         open={runSuiteModalOpen}
         onOk={() => void handleRunSuite()}
         onCancel={() => setRunSuiteModalOpen(false)}
@@ -3229,19 +3182,19 @@ export default function ProjectPage() {
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
               <Space direction="vertical" size={4}>
-                <Text strong>No suites yet</Text>
-                <Text type="secondary">Create a suite to run multiple browser checks together.</Text>
+                <Text strong>{t('suites.emptyTitle')}</Text>
+                <Text type="secondary">{t('suites.emptyRunDescription')}</Text>
               </Space>
             }
           >
             <Button type="primary" onClick={() => navigate(`/projects/${projectId}/suites`)}>
-              Create suite
+              {t('suites.create')}
             </Button>
           </Empty>
         ) : (
           <Space direction="vertical" style={{ width: '100%' }} size={16}>
             <div>
-              <Text type="secondary">Suite</Text>
+              <Text type="secondary">{t('suites.title')}</Text>
               <Radio.Group
                 style={{ display: 'grid', gap: 12, width: '100%', marginTop: 8 }}
                 value={selectedSuiteId}
@@ -3255,17 +3208,17 @@ export default function ProjectPage() {
               </Radio.Group>
             </div>
             <div>
-              <Text type="secondary">Environment</Text>
+              <Text type="secondary">{t('authSettings.environment')}</Text>
               <Radio.Group
                 style={{ display: 'grid', gap: 12, width: '100%', marginTop: 8 }}
                 value={selectedEnvironmentId ?? ''}
                 onChange={(event) => setSelectedEnvironmentId(event.target.value || undefined)}
               >
-                <Radio value="">No environment (use values as-is)</Radio>
+                <Radio value="">{t('suites.noEnvironmentUseAsIs')}</Radio>
                 {environments.map((environment) => (
                   <Radio key={environment.id} value={environment.id}>
                     {environment.name}
-                    <Tag style={{ marginLeft: 8 }}>{Object.keys(environment.variables).length} variables</Tag>
+                    <Tag style={{ marginLeft: 8 }}>{t('environments.variableCount', { count: Object.keys(environment.variables).length })}</Tag>
                   </Radio>
                 ))}
               </Radio.Group>
@@ -3275,7 +3228,7 @@ export default function ProjectPage() {
       </Modal>
 
       <Modal
-        title={environmentMode === 'edit' ? `Edit Environment: ${editingEnvironment?.name ?? ''}` : 'New Environment'}
+        title={environmentMode === 'edit' ? t('environments.modalEdit', { name: editingEnvironment?.name ?? '' }) : t('environments.modalCreate')}
         open={environmentModalOpen}
         onOk={() => void saveEnvironment()}
         onCancel={() => setEnvironmentModalOpen(false)}
@@ -3286,15 +3239,15 @@ export default function ProjectPage() {
         styles={{
           body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }
         }}
-        okText={environmentMode === 'edit' ? 'Save changes' : 'Create environment'}
+        okText={environmentMode === 'edit' ? t('projectSettings.save') : t('environments.create')}
       >
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <div>
-            <Text type="secondary">Environment name</Text>
+            <Text type="secondary">{t('environments.nameLabel')}</Text>
             <Input
               value={environmentName}
               onChange={(event) => setEnvironmentName(event.target.value)}
-              placeholder="Dev"
+              placeholder={t('environments.namePlaceholder')}
               disabled={!canManageEnvironments}
               style={{ marginTop: 8 }}
             />
@@ -3311,13 +3264,13 @@ export default function ProjectPage() {
               }}
             >
               <Text type="secondary" style={{ fontSize: 12 }}>
-                Variable name
+                {t('environments.variableName')}
               </Text>
               <Text type="secondary" style={{ fontSize: 12 }}>
-                Value
+                {t('environments.value')}
               </Text>
               <Text type="secondary" style={{ fontSize: 12, textAlign: 'right' }}>
-                Actions
+                {t('environments.actions')}
               </Text>
             </div>
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
@@ -3378,19 +3331,19 @@ export default function ProjectPage() {
                     disabled={!canManageEnvironments || environmentRows.length === 1}
                     style={{ justifySelf: 'end' }}
                   >
-                    Remove
+                    {t('environments.remove')}
                   </Button>
                 </div>
               ))}
               <div style={{ display: 'grid', gap: 8 }}>
                 <Button type="dashed" block onClick={() => setEnvironmentRows((current) => [...current, createEnvRow()])} disabled={!canManageEnvironments}>
-                  Add variable
+                  {t('environments.addVariable')}
                 </Button>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  Use variables in checks as {'{{BASE_URL}}'}, {'{{USERNAME}}'}, or {'{{PASSWORD}}'}.
+                  {t('environments.variableUsage')}
                 </Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  Variable names should use uppercase letters, numbers, and underscores.
+                  {t('environments.variableNameHelp')}
                 </Text>
               </div>
             </Space>
@@ -3401,12 +3354,8 @@ export default function ProjectPage() {
       <Modal
         title={
           channelMode === 'edit'
-            ? channelType === 'telegram'
-              ? 'Edit Telegram alert'
-              : 'Edit Slack alert'
-            : channelType === 'telegram'
-              ? 'Add Telegram alert'
-              : 'Add Slack alert'
+            ? t(channelType === 'telegram' ? 'alerts.editTelegram' : 'alerts.editSlack')
+            : t(channelType === 'telegram' ? 'alerts.addTelegram' : 'alerts.addSlack')
         }
         open={channelModalOpen}
         onCancel={() => setChannelModalOpen(false)}
@@ -3419,23 +3368,23 @@ export default function ProjectPage() {
         }}
         footer={
           <Space wrap style={{ width: '100%', justifyContent: 'flex-end' }}>
-            <Button onClick={() => setChannelModalOpen(false)}>Cancel</Button>
+            <Button onClick={() => setChannelModalOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={() => void sendChannelDraftTest()} loading={channelTesting} disabled={!channelDraftReadyForTest || channelTesting}>
-              Send test notification
+              {t('alerts.sendTestNotification')}
             </Button>
             <Button type="primary" onClick={() => void saveChannel()} loading={channelSaving}>
-              {channelMode === 'edit' ? 'Save changes' : 'Create alert'}
+              {channelMode === 'edit' ? t('common.saveChanges') : t('alerts.create')}
             </Button>
           </Space>
         }
       >
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <div>
-            <Text type="secondary">Alert name</Text>
+            <Text type="secondary">{t('alerts.name')}</Text>
             <Input
               value={channelForm.name}
               onChange={(event) => setChannelForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder={channelType === 'telegram' ? 'Dev alerts' : 'Production alerts'}
+              placeholder={channelType === 'telegram' ? t('alerts.devPlaceholder') : t('alerts.productionPlaceholder')}
               style={{ marginTop: 8 }}
             />
           </div>
@@ -3444,7 +3393,7 @@ export default function ProjectPage() {
             <Row gutter={16}>
               <Col span={12}>
                 <div>
-                  <Text type="secondary">Bot token</Text>
+                  <Text type="secondary">{t('alerts.botToken')}</Text>
                   <Input.Password
                     value={channelForm.botToken}
                     onChange={(event) => setChannelForm((current) => ({ ...current, botToken: event.target.value }))}
@@ -3456,7 +3405,7 @@ export default function ProjectPage() {
               </Col>
               <Col span={12}>
                 <div>
-                  <Text type="secondary">Chat ID</Text>
+                  <Text type="secondary">{t('alerts.chatId')}</Text>
                   <Input
                     value={channelForm.chatId}
                     onChange={(event) => setChannelForm((current) => ({ ...current, chatId: event.target.value }))}
@@ -3464,19 +3413,19 @@ export default function ProjectPage() {
                     style={{ marginTop: 8 }}
                   />
                   <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-                    Add the bot to your Telegram chat or channel, then paste the chat ID here.
+                    {t('alerts.telegramHelp')}
                   </Text>
                 </div>
               </Col>
             </Row>
           ) : (
             <div>
-              <Text type="secondary">Webhook URL</Text>
+              <Text type="secondary">{t('alerts.webhookUrl')}</Text>
               {channelMode === 'edit' ? (
                 <Input.Password
                   value={channelForm.webhookUrl}
                   onChange={(event) => setChannelForm((current) => ({ ...current, webhookUrl: event.target.value }))}
-                  placeholder="Replace webhook URL"
+                  placeholder={t('alerts.replaceWebhook')}
                   autoComplete="new-password"
                   style={{ marginTop: 8 }}
                 />
@@ -3490,14 +3439,14 @@ export default function ProjectPage() {
                 />
               )}
               <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-                Paste an incoming webhook URL from your Slack workspace.
+                {t('alerts.slackHelp')}
               </Text>
             </div>
           )}
 
           <div style={{ display: 'grid', gap: 12 }}>
-            <Text strong>Notification rules</Text>
-            {channelRuleDescriptions().map((rule) => {
+            <Text strong>{t('alerts.notificationRules')}</Text>
+            {channelRuleDescriptions(t).map((rule) => {
               const key = rule.key;
               return (
                 <div key={rule.key} style={{ display: 'grid', gap: 4 }}>
@@ -3526,7 +3475,9 @@ export default function ProjectPage() {
       </Modal>
 
       <Modal
-        title={scheduleMode === 'edit' ? `Edit Schedule: ${editingSchedule?.name ?? ''}` : 'New Schedule'}
+        title={scheduleMode === 'edit'
+          ? t('project.editScheduleTitle', { name: editingSchedule?.name ?? '' })
+          : t('project.newScheduleTitle')}
         open={scheduleModalOpen}
         onOk={() => void saveSchedule()}
         onCancel={() => setScheduleModalOpen(false)}
@@ -3537,21 +3488,21 @@ export default function ProjectPage() {
         styles={{
           body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }
         }}
-        okText={scheduleMode === 'edit' ? 'Save changes' : 'Create schedule'}
+        okText={scheduleMode === 'edit' ? t('project.saveChanges') : t('project.createSchedule')}
       >
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <div>
-            <Text type="secondary">Schedule name</Text>
+            <Text type="secondary">{t('project.scheduleName')}</Text>
             <Input
               value={scheduleForm.name}
               onChange={(event) => setScheduleForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Nightly smoke"
+              placeholder={t('project.nightlySmoke')}
               style={{ marginTop: 8 }}
             />
           </div>
 
           <div>
-            <Text type="secondary">Cron preset</Text>
+            <Text type="secondary">{t('project.cronPreset')}</Text>
             <Select
               value={scheduleForm.cronPreset}
               onChange={(value) =>
@@ -3562,17 +3513,17 @@ export default function ProjectPage() {
                 }))
               }
               style={{ width: '100%', marginTop: 8 }}
-              options={CRON_PRESETS}
+              options={CRON_PRESETS.map(({ labelKey, value }) => ({ label: t(labelKey), value }))}
             />
             <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: '#fafafa', border: '1px solid #f0f0f0' }}>
               <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
-                Cron expression
+                {t('project.cronExpression')}
               </Text>
               <Text strong style={{ display: 'block', fontFamily: 'monospace' }}>
                 {scheduleFormCron || '—'}
               </Text>
               <Text type="secondary" style={{ display: 'block', fontSize: 12, marginTop: 4 }}>
-                Schedule preview
+                {t('project.schedulePreview')}
               </Text>
               <Text style={{ display: 'block', marginTop: 2 }}>
                 {describeCron(scheduleFormCron)} {scheduleFormCron ? APP_TIMEZONE : ''}
@@ -3580,7 +3531,7 @@ export default function ProjectPage() {
             </div>
             <div style={{ marginTop: 8 }}>
               <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
-                Timezone
+                {t('project.timezone')}
               </Text>
               <Text style={{ display: 'block', marginTop: 2 }}>{APP_TIMEZONE}</Text>
             </div>
@@ -3595,7 +3546,7 @@ export default function ProjectPage() {
           </div>
 
           <div>
-            <Text type="secondary">Target</Text>
+          <Text type="secondary">{t('project.target')}</Text>
             <Radio.Group
               style={{ display: 'flex', gap: 12, marginTop: 8 }}
               value={scheduleForm.targetType}
@@ -3608,43 +3559,43 @@ export default function ProjectPage() {
                 }))
               }
             >
-              <Radio value="suite">Suite</Radio>
-              <Radio value="test">Check</Radio>
+              <Radio value="suite">{t('project.suite')}</Radio>
+              <Radio value="test">{t('project.check')}</Radio>
             </Radio.Group>
           </div>
 
           {scheduleForm.targetType === 'suite' ? (
             <div>
-              <Text type="secondary">Suite</Text>
+              <Text type="secondary">{t('project.suite')}</Text>
               <Select
                 value={scheduleForm.suiteId}
                 onChange={(value) => setScheduleForm((current) => ({ ...current, suiteId: value }))}
                 style={{ width: '100%', marginTop: 8 }}
-                placeholder="Select a suite"
+                placeholder={t('project.selectSuite')}
                 options={suites.map((suite) => ({ value: suite.id, label: `${suite.name} • ${suite.testIds.length} checks` }))}
               />
             </div>
           ) : (
             <div>
-              <Text type="secondary">Check</Text>
+              <Text type="secondary">{t('project.check')}</Text>
               <Select
                 value={scheduleForm.testId}
                 onChange={(value) => setScheduleForm((current) => ({ ...current, testId: value }))}
                 style={{ width: '100%', marginTop: 8 }}
-                placeholder="Select a check"
+                placeholder={t('project.selectCheck')}
                 options={projectChecks.map((check) => ({ value: check.id, label: check.name }))}
               />
             </div>
           )}
 
           <div>
-            <Text type="secondary">Environment</Text>
+            <Text type="secondary">{t('project.environment')}</Text>
             <Select
               allowClear
               value={scheduleForm.environmentId}
               onChange={(value) => setScheduleForm((current) => ({ ...current, environmentId: value }))}
               style={{ width: '100%', marginTop: 8 }}
-              placeholder="No environment"
+              placeholder={t('project.noEnvironment')}
               options={environments.map((environment) => ({
                 value: environment.id,
                 label: `${environment.name} • ${Object.keys(environment.variables).length} variables`
@@ -3655,14 +3606,14 @@ export default function ProjectPage() {
                 style={{ marginTop: 12 }}
                 type="warning"
                 showIcon
-                message="No environment selected"
-                description="Checks using variables like {{BASE_URL}} may fail."
+                message={t('project.noEnvironmentSelected')}
+                description={t('project.environmentVariablesWarning')}
               />
             )}
           </div>
 
           <div>
-            <Text type="secondary">Status</Text>
+            <Text type="secondary">{t('project.status')}</Text>
               <Radio.Group
                 style={{ display: 'flex', gap: 12, marginTop: 8 }}
                 value={scheduleForm.enabled ? 'active' : 'paused'}
@@ -3670,15 +3621,15 @@ export default function ProjectPage() {
                   setScheduleForm((current) => ({ ...current, enabled: event.target.value === 'active' }))
                 }
               >
-                <Radio value="active">Active</Radio>
-                <Radio value="paused">Paused</Radio>
+                <Radio value="active">{t('project.active')}</Radio>
+                <Radio value="paused">{t('project.paused')}</Radio>
               </Radio.Group>
             </div>
         </Space>
       </Modal>
 
       <Modal
-        title="Delete project?"
+        title={t('projectSettings.deleteTitle')}
         open={deleteProjectModalOpen}
         onCancel={() => setDeleteProjectModalOpen(false)}
         centered
@@ -3686,7 +3637,7 @@ export default function ProjectPage() {
         footer={
           <Space wrap style={{ width: '100%', justifyContent: 'flex-end' }}>
             <Button onClick={() => setDeleteProjectModalOpen(false)} disabled={deletingProject}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               danger
@@ -3694,82 +3645,80 @@ export default function ProjectPage() {
               loading={deletingProject}
               disabled={!deleteProjectReady || deletingProject}
             >
-              Delete project
+              {t('projectSettings.deleteConfirmed')}
             </Button>
           </Space>
         }
       >
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Text type="secondary">
-            This action cannot be undone. It will permanently delete this project and all related data:
-            {' '}
-            checks, schedules, environments, alert channels, run history, screenshots, and traces.
+            {t('projectSettings.deleteWarning')}
           </Text>
           <div>
-            <Text type="secondary">Type project name to confirm</Text>
+            <Text type="secondary">{t('projectSettings.typeName')}</Text>
             <Input
               value={deleteProjectConfirmText}
               onChange={(event) => setDeleteProjectConfirmText(event.target.value)}
-              placeholder={project?.name ?? 'Project name'}
+              placeholder={project?.name ?? t('projectSettings.projectNamePlaceholder')}
               style={{ marginTop: 8 }}
             />
             <Text type="secondary" style={{ display: 'block', marginTop: 6, fontSize: 12 }}>
-              Type &quot;{project?.name ?? 'project'}&quot; to enable deletion.
+              {t('projectSettings.typeNameHint', { name: project?.name ?? 'project' })}
             </Text>
           </div>
         </Space>
       </Modal>
 
       <Modal
-        title="Create user access"
+        title={t('members.modalTitle')}
         open={memberModalOpen}
         onCancel={() => setMemberModalOpen(false)}
         confirmLoading={memberSaving}
         onOk={() => void handleCreateUserAccess()}
-        okText="Create access"
+        okText={t('members.createAccessButton')}
       >
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <div>
-            <Text type="secondary">Email</Text>
+            <Text type="secondary">{t('members.email')}</Text>
             <Input
               value={memberForm.email}
               onChange={(event) => setMemberForm((current) => ({ ...current, email: event.target.value }))}
-              placeholder="teammate@company.com"
+              placeholder={t('members.emailPlaceholder')}
               style={{ marginTop: 8 }}
             />
             <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-              If this email does not exist yet, a new login account will be created with this password.
+              {t('members.createAccountHelp')}
             </Text>
           </div>
           <div>
-            <Text type="secondary">Password</Text>
+            <Text type="secondary">{t('members.password')}</Text>
             <Input.Password
               value={memberForm.password}
               onChange={(event) => setMemberForm((current) => ({ ...current, password: event.target.value }))}
-              placeholder={memberUserExists === true ? 'Not required for existing users' : 'Create a login password'}
+              placeholder={memberUserExists === true ? t('members.passwordExistingPlaceholder') : t('members.passwordNewPlaceholder')}
               disabled={memberUserExists === true}
               style={{ marginTop: 8 }}
             />
             <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
               {memberLookupLoading
-                ? 'Checking whether this user already exists...'
+                ? t('members.checkingUser')
                 : memberUserExists === true
-                  ? 'This user already exists. The password will be ignored.'
+                  ? t('members.existingPasswordIgnored')
                   : memberUserExists === false
-                    ? 'This password will be used to create a new login account.'
-                    : 'If the user already exists, the password will be ignored.'}
+                    ? t('members.newPasswordHelp')
+                    : t('members.passwordIgnored')}
             </Text>
           </div>
           <div>
-            <Text type="secondary">Role</Text>
+            <Text type="secondary">{t('members.roleLabel')}</Text>
             <Select
               value={memberForm.role}
               onChange={(value) => setMemberForm((current) => ({ ...current, role: value as ProjectRole }))}
               style={{ width: '100%', marginTop: 8 }}
               options={[
-                { label: 'Owner — full project control', value: 'OWNER' },
-                { label: 'Editor — can edit and run checks', value: 'EDITOR' },
-                { label: 'Viewer — read-only access', value: 'VIEWER' }
+                { label: t('members.ownerRoleDescription'), value: 'OWNER' },
+                { label: t('members.editorRoleDescription'), value: 'EDITOR' },
+                { label: t('members.viewerRoleDescription'), value: 'VIEWER' }
               ]}
             />
           </div>

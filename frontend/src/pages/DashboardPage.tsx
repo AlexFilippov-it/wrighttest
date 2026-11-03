@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button, Card, Col, Layout, Row, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
 import RunStatusBadge from '../components/RunStatusBadge';
-import { StatCard } from '../design-system';
+import { EmptyState as DesignEmptyState, StatCard } from '../design-system';
 import { getDashboard, getProjects, runTest, runTestWithEnvironment } from '../api/client';
 import type {
   DashboardChartPoint,
@@ -30,32 +32,27 @@ import {
 const { Content } = Layout;
 const { Title, Text } = Typography;
 
-const TIME_RANGE_OPTIONS = [
-  { value: 7, label: 'Last 7 days' },
-  { value: 30, label: 'Last 30 days' },
-  { value: 90, label: 'Last 90 days' }
-];
-
-function formatRelativeTime(value: string) {
+function formatRelativeTime(value: string, t: TFunction) {
   const diffMs = Date.now() - new Date(value).getTime();
   const abs = Math.max(0, diffMs);
   const minute = 60 * 1000;
   const hour = 60 * minute;
   const day = 24 * hour;
 
-  if (abs < minute) return 'just now';
-  if (abs < hour) return `${Math.round(abs / minute)} min ago`;
-  if (abs < day) return `${Math.round(abs / hour)} hour${Math.round(abs / hour) === 1 ? '' : 's'} ago`;
-  return `${Math.round(abs / day)} day${Math.round(abs / day) === 1 ? '' : 's'} ago`;
+  if (abs < minute) return t('time.justNow');
+  if (abs < hour) return t('time.minutesAgo', { count: Math.round(abs / minute) });
+  if (abs < day) return t('time.hoursAgo', { count: Math.round(abs / hour) });
+  return t('time.daysAgo', { count: Math.round(abs / day) });
 }
 
-function formatDuration(ms?: number | null) {
+function formatDuration(ms: number | null | undefined, locale: string) {
   if (ms === null || ms === undefined) return '—';
-  return `${(ms / 1000).toFixed(ms >= 10000 ? 1 : 2)}s`;
+  const digits = ms >= 10000 ? 1 : 2;
+  return `${new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(ms / 1000)}s`;
 }
 
-function formatShortDate(value: string) {
-  return new Date(value).toLocaleString([], {
+function formatShortDate(value: string, locale: string) {
+  return new Date(value).toLocaleString(locale, {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -63,28 +60,21 @@ function formatShortDate(value: string) {
   });
 }
 
-function EmptyState({
-  title,
-  description,
-  actions
-}: {
-  title: string;
-  description: string;
-  actions?: ReactNode;
-}) {
+function EmptyState({ title, description, actions }: { title: string; description: string; actions?: ReactNode }) {
   return (
-    <div style={{ padding: '28px 0', textAlign: 'center' }}>
-      <Title level={4} style={{ marginBottom: 8 }}>
-        {title}
-      </Title>
-      <Text type="secondary">{description}</Text>
-      {actions ? <div style={{ marginTop: 16 }}>{actions}</div> : null}
-    </div>
+    <DesignEmptyState
+      className="wt-empty-state--contained"
+      title={title}
+      description={description}
+      action={actions}
+    />
   );
 }
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? 'en';
   const [days, setDays] = useState(30);
   const [projectId, setProjectId] = useState<string | undefined>(undefined);
   const [reloadTick, setReloadTick] = useState(0);
@@ -105,10 +95,10 @@ export default function DashboardPage() {
 
   const projectOptions = useMemo(
     () => [
-      { value: 'all', label: 'All projects' },
+      { value: 'all', label: t('common.allProjects') },
       ...projects.map((project) => ({ value: project.id, label: project.name }))
     ],
-    [projects]
+    [projects, t]
   );
 
   const handleOpenRun = (runId: string) => navigate(`/runs/${runId}`);
@@ -140,11 +130,11 @@ export default function DashboardPage() {
   return (
     <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f7f3ff 0%, #eef4ff 55%, #ffffff 100%)' }}>
       <AppHeader actions={[<UserMenu key="menu" />]} />
-      <Content style={{ padding: 32, maxWidth: 1440, width: '100%', margin: '0 auto' }}>
+      <Content className="wt-surface-page" style={{ padding: 32, maxWidth: 1440, width: '100%', margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24, marginBottom: 24 }}>
           <div>
-            <Title level={2} style={{ margin: 0 }}>Dashboard</Title>
-            <Text type="secondary">Global health across projects, browser checks, schedules, and runs.</Text>
+            <Title level={2} style={{ margin: 0 }}>{t('dashboard.title')}</Title>
+            <Text type="secondary">{t('dashboard.description')}</Text>
           </div>
           <Space wrap align="start">
             <Select
@@ -157,61 +147,64 @@ export default function DashboardPage() {
               value={days}
               onChange={setDays}
               style={{ width: 150 }}
-              options={TIME_RANGE_OPTIONS}
+              options={[7, 30, 90].map((value) => ({
+                value,
+                label: t(value === 7 ? 'common.last7Days' : value === 30 ? 'common.last30Days' : 'common.last90Days')
+              }))}
             />
           </Space>
         </div>
 
         {loading || !data ? (
           <Card style={{ borderRadius: 20 }}>
-            <Text type="secondary">Loading dashboard...</Text>
+            <Text type="secondary">{t('dashboard.loading')}</Text>
           </Card>
         ) : (
           <>
             <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
               <Col xs={24} sm={12} lg={8}>
                 <StatCard
-                  title="Total runs"
+                  title={t('dashboard.totalRuns')}
                   value={data.summary.total}
-                  description="Selected period"
+                  description={t('dashboard.selectedPeriod')}
                 />
               </Col>
               <Col xs={24} sm={12} lg={8}>
                 <StatCard
-                  title="Pass rate"
+                  title={t('dashboard.passRate')}
                   value={data.summary.total ? `${data.summary.passRate}%` : '—'}
-                  description={data.summary.total ? `${data.summary.passed} of ${data.summary.total} runs · Last ${days} days` : 'No runs yet'}
+                  description={data.summary.total ? t('dashboard.passRateDetail', { passed: data.summary.passed, total: data.summary.total, days }) : t('dashboard.noRunsYet')}
                 />
               </Col>
               <Col xs={24} sm={12} lg={8}>
                 <StatCard
-                  title="Active failures"
+                  title={t('dashboard.activeFailures')}
                   value={data.summary.activeFailures}
-                  description={data.summary.activeFailures > 0 ? 'Checks whose latest run failed' : hasRuns ? 'No active failures' : 'Not evaluated'}
-                  status={data.summary.activeFailures > 0 ? <Tag color="red">Action needed</Tag> : undefined}
+                  description={data.summary.activeFailures > 0 ? t('dashboard.latestRunFailed') : hasRuns ? t('dashboard.noActiveFailures') : t('dashboard.notEvaluated')}
+                  status={data.summary.activeFailures > 0 ? <Tag color="red">{t('dashboard.actionNeeded')}</Tag> : undefined}
                 />
               </Col>
               <Col xs={24} sm={12} lg={8}>
                 <StatCard
-                  title="Failed runs"
+                  title={t('dashboard.failedRuns')}
                   value={data.summary.failed}
-                  description="Failed in selected period"
-                  status={data.summary.failed > 0 ? <Tag color="red">Failed</Tag> : undefined}
+                  description={t('dashboard.failedInPeriod')}
+                  status={data.summary.failed > 0 ? <Tag color="red">{t('common.failed')}</Tag> : undefined}
                 />
               </Col>
               <Col xs={24} sm={12} lg={8}>
                 <StatCard
-                  title="Flaky checks"
+                  title={t('dashboard.flakyChecks')}
                   value={data.summary.flakyChecks}
-                  description={data.summary.flakyChecks > 0 ? 'Passed and failed in this period' : 'No flaky checks detected'}
-                  status={data.summary.flakyChecks > 0 ? <Tag color="gold">Flaky</Tag> : undefined}
+                  description={data.summary.flakyChecks > 0 ? t('dashboard.passedAndFailed') : t('dashboard.noFlaky')}
+                  status={data.summary.flakyChecks > 0 ? <Tag color="gold">{t('common.flaky')}</Tag> : undefined}
                 />
               </Col>
               <Col xs={24} sm={12} lg={8}>
                 <StatCard
-                  title="Avg duration"
-                  value={data.summary.avgDurationMs ? formatDuration(data.summary.avgDurationMs) : '—'}
-                  description={data.summary.avgDurationMs ? 'Average run duration' : 'Not evaluated'}
+                  title={t('dashboard.avgDuration')}
+                  value={data.summary.avgDurationMs ? formatDuration(data.summary.avgDurationMs, locale) : '—'}
+                  description={data.summary.avgDurationMs ? t('dashboard.averageRunDuration') : t('dashboard.notEvaluated')}
                 />
               </Col>
             </Row>
@@ -219,19 +212,19 @@ export default function DashboardPage() {
             <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
               <Col xs={24} xl={12}>
                 <Card
-                  title="Needs attention"
+                  title={t('dashboard.needsAttention')}
                   style={{ borderRadius: 20, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)' }}
                 >
                   {activeFailures.length === 0 && flakyChecks.length === 0 ? (
                     <div style={{ padding: '28px 0' }}>
                       <EmptyState
-                        title="No active failures"
-                        description="All browser checks are currently passing."
+                        title={t('dashboard.noActiveFailures')}
+                        description={t('dashboard.allChecksPassing')}
                       />
                       {data.summary.failed > 0 && (
                         <div style={{ marginTop: 12, textAlign: 'center' }}>
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            Some runs failed earlier in this period. Review Recent runs for details.
+                            {t('dashboard.earlierFailures')}
                           </Text>
                         </div>
                       )}
@@ -245,7 +238,7 @@ export default function DashboardPage() {
                         size="small"
                         columns={[
                         {
-                          title: 'Check',
+                          title: t('common.check'),
                           dataIndex: 'checkName',
                           render: (value: string, row: DashboardIssue) => (
                             <Space direction="vertical" size={0}>
@@ -259,36 +252,36 @@ export default function DashboardPage() {
                           )
                         },
                         {
-                          title: 'Status',
+                          title: t('common.status'),
                           dataIndex: 'status',
                           render: (value: DashboardIssue['status']) => {
                             const color = value === 'Flaky' ? 'gold' : 'red';
-                            return <Tag color={color}>{value}</Tag>;
+                            return <Tag color={color}>{value === 'Flaky' ? t('common.flaky') : t('common.failed')}</Tag>;
                           }
                         },
                         {
-                          title: 'Last failure / Last run',
+                          title: t('dashboard.lastFailureOrRun'),
                           render: (_: unknown, row: DashboardIssue) => (
                             <Space direction="vertical" size={0}>
-                              <Text>{row.errorSummary ?? 'Failure detected'}</Text>
+                              <Text>{row.errorSummary ?? t('dashboard.latestRunFailed')}</Text>
                               <Text type="secondary" style={{ fontSize: 12 }}>
-                                {formatRelativeTime(row.latestRunAt)}
+                                {formatRelativeTime(row.latestRunAt, t)}
                               </Text>
                             </Space>
                           )
                         },
                         {
-                          title: 'Actions',
+                          title: t('common.actions'),
                           render: (_: unknown, row: DashboardIssue) => (
                             <Space wrap>
                               <Button size="small" onClick={() => handleOpenRun(row.latestFailedRunId)}>
-                                Open result
+                                {t('common.openResult')}
                               </Button>
                               <Button size="small" onClick={() => void handleRerun(row)} loading={rerunning === row.testId}>
-                                Rerun
+                                {t('dashboard.rerun')}
                               </Button>
                               <Button size="small" onClick={() => handleOpenCheck(row.testId)}>
-                                Edit check
+                                {t('dashboard.editCheck')}
                               </Button>
                             </Space>
                           )
@@ -297,7 +290,7 @@ export default function DashboardPage() {
                       />
                     {hasMoreIssues && (
                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-                        <Button onClick={handleOpenRuns}>View all issues</Button>
+                        <Button onClick={handleOpenRuns}>{t('dashboard.viewAllIssues')}</Button>
                       </div>
                     )}
                     </>
@@ -307,37 +300,37 @@ export default function DashboardPage() {
 
               <Col xs={24} xl={12}>
                 <Card
-                  title="Recent runs"
+                  title={t('dashboard.recentRuns')}
                   style={{ borderRadius: 20, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)' }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      Latest 5 runs
+                      {t('dashboard.latestRuns', { count: 5 })}
                     </Text>
                   </div>
                   {recentRunsMissing ? (
                     <EmptyState
-                      title="Recent runs could not be loaded"
-                      description="The dashboard has run data, but the recent runs list is temporarily unavailable."
+                      title={t('dashboard.recentRunsLoadError')}
+                      description={t('dashboard.recentRunsUnavailable')}
                       actions={
                         <Button onClick={() => setReloadTick((current) => current + 1)} type="primary">
-                          Refresh
+                          {t('dashboard.refresh')}
                         </Button>
                       }
                     />
                   ) : recentRuns.length === 0 ? (
                     <EmptyState
-                      title={hasRuns ? 'No recent runs found in this period' : 'No runs yet'}
+                      title={hasRuns ? t('dashboard.noRecentRunsInPeriod') : t('dashboard.noRunsYet')}
                       description={
                         hasRuns
-                          ? 'Run a check manually or create a schedule to start collecting recent run data.'
-                          : 'Run a check manually or create a schedule to start collecting dashboard data.'
+                          ? t('dashboard.runOrScheduleForRecent')
+                          : t('dashboard.runOrScheduleForDashboard')
                       }
                       actions={
                         <Space wrap>
-                          <Button onClick={() => navigate('/projects')}>Go to projects</Button>
+                          <Button onClick={() => navigate('/projects')}>{t('common.goProjects')}</Button>
                           <Button type="primary" onClick={() => navigate('/projects')}>
-                            Create check
+                            {t('dashboard.createCheck')}
                           </Button>
                         </Space>
                       }
@@ -351,7 +344,7 @@ export default function DashboardPage() {
                         size="small"
                         columns={[
                           {
-                            title: 'Check',
+                          title: t('common.check'),
                             dataIndex: 'checkName',
                             render: (value: string, row: DashboardRecentRun) => (
                               <Space direction="vertical" size={0}>
@@ -365,48 +358,48 @@ export default function DashboardPage() {
                             )
                           },
                           {
-                            title: 'Status',
+                            title: t('common.status'),
                             dataIndex: 'status',
                             render: (status: DashboardRecentRun['status']) => <RunStatusBadge status={status} />
                           },
                           {
-                            title: 'Duration',
+                            title: t('common.duration'),
                             dataIndex: 'durationMs',
-                            render: (value: number | null) => formatDuration(value)
+                            render: (value: number | null) => formatDuration(value, locale)
                           },
                           {
-                            title: 'Started',
+                            title: t('common.started'),
                             dataIndex: 'startedAt',
                             render: (value: string) => (
                               <Space direction="vertical" size={0}>
-                                <Text>{formatRelativeTime(value)}</Text>
+                                <Text>{formatRelativeTime(value, t)}</Text>
                                 <Text type="secondary" style={{ fontSize: 12 }}>
-                                  {formatShortDate(value)}
+                                  {formatShortDate(value, locale)}
                                 </Text>
                               </Space>
                             )
                           },
                           {
-                            title: 'Trigger',
+                            title: t('common.trigger'),
                             dataIndex: 'trigger',
                             render: (value: string, row: DashboardRecentRun) => (
                               <Tooltip title={row.scheduleName ?? undefined}>
-                                <Tag color={row.trigger === 'Schedule' ? 'blue' : 'default'}>{value}</Tag>
+                                <Tag color={row.trigger === 'Schedule' ? 'blue' : 'default'}>{row.trigger === 'Schedule' ? t('common.schedule') : t('common.manual')}</Tag>
                               </Tooltip>
                             )
                           },
                           {
-                            title: 'Actions',
+                            title: t('common.actions'),
                             render: (_: unknown, row: DashboardRecentRun) => (
                               <Button size="small" onClick={() => handleOpenRun(row.runId)}>
-                                Open
+                                {t('common.open')}
                               </Button>
                             )
                           }
                         ]}
                       />
                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-                        <Button onClick={handleOpenRuns}>View all runs</Button>
+                        <Button onClick={handleOpenRuns}>{t('dashboard.viewAllRuns')}</Button>
                       </div>
                     </>
                   )}
@@ -417,14 +410,14 @@ export default function DashboardPage() {
             <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
               <Col xs={24} xl={12}>
                 <Card
-                  title="Pass rate over time"
-                  extra={<Text type="secondary">Daily pass rate for selected runs.</Text>}
+                  title={t('dashboard.passRateOverTime')}
+                  extra={<Text type="secondary">{t('dashboard.dailyPassRate')}</Text>}
                   style={{ borderRadius: 20, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)' }}
                 >
                   {chart.length === 0 ? (
                     <EmptyState
-                      title="No runs in selected period"
-                      description="Choose a wider time range or run a check to populate the dashboard."
+                      title={t('dashboard.noRunsSelectedPeriod')}
+                      description={t('dashboard.widerRangeHint')}
                     />
                   ) : (
                     <ResponsiveContainer width="100%" height={320}>
@@ -433,7 +426,7 @@ export default function DashboardPage() {
                         <XAxis dataKey="date" />
                         <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
                         <RechartsTooltip formatter={(value) => `${value}%`} />
-                        <Line type="linear" dataKey="passRate" name="Pass rate" stroke="#52c41a" strokeWidth={2} dot={false} />
+                        <Line type="linear" dataKey="passRate" name={t('dashboard.passRate')} stroke="#52c41a" strokeWidth={2} dot={false} />
                       </LineChart>
                     </ResponsiveContainer>
                   )}
@@ -442,14 +435,14 @@ export default function DashboardPage() {
 
               <Col xs={24} xl={12}>
                 <Card
-                  title="Runs per day"
-                  extra={<Text type="secondary">Passed and failed runs grouped by day.</Text>}
+                  title={t('dashboard.runsPerDay')}
+                  extra={<Text type="secondary">{t('dashboard.passedFailedByDay')}</Text>}
                   style={{ borderRadius: 20, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)' }}
                 >
                   {chart.length === 0 ? (
                     <EmptyState
-                      title="No runs in selected period"
-                      description="Choose a wider time range or run a check to populate the dashboard."
+                      title={t('dashboard.noRunsSelectedPeriod')}
+                      description={t('dashboard.widerRangeHint')}
                     />
                   ) : (
                     <ResponsiveContainer width="100%" height={300}>
@@ -458,8 +451,8 @@ export default function DashboardPage() {
                         <XAxis dataKey="date" />
                         <YAxis />
                         <RechartsTooltip />
-                        <Area type="linear" dataKey="passed" name="Passed" stroke="#52c41a" fill="#e6f7e6" />
-                        <Area type="linear" dataKey="failed" name="Failed" stroke="#ff4d4f" fill="#fff1f0" />
+                        <Area type="linear" dataKey="passed" name={t('common.passed')} stroke="#52c41a" fill="#e6f7e6" />
+                        <Area type="linear" dataKey="failed" name={t('common.failed')} stroke="#ff4d4f" fill="#fff1f0" />
                       </AreaChart>
                     </ResponsiveContainer>
                   )}
@@ -468,13 +461,13 @@ export default function DashboardPage() {
             </Row>
 
             <Card
-              title="Flaky checks"
+              title={t('dashboard.flakyChecks')}
               style={{ borderRadius: 20, boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)' }}
             >
               {flakyChecks.length === 0 ? (
                 <EmptyState
-                  title="No flaky checks detected"
-                  description="No checks had both passed and failed runs in the selected period."
+                  title={t('dashboard.noFlaky')}
+                  description={t('dashboard.noFlakyInRange')}
                 />
               ) : (
                 <Table
@@ -484,7 +477,7 @@ export default function DashboardPage() {
                   size="small"
                   columns={[
                     {
-                      title: 'Check',
+                      title: t('common.check'),
                       dataIndex: 'checkName',
                       render: (value: string, row: DashboardFlakyCheck) => (
                         <Space direction="vertical" size={0}>
@@ -497,25 +490,25 @@ export default function DashboardPage() {
                         </Space>
                       )
                     },
-                    { title: 'Project', dataIndex: 'projectName' },
-                    { title: 'Total runs', dataIndex: 'totalRuns' },
-                    { title: 'Passed', dataIndex: 'passed' },
-                    { title: 'Failed', dataIndex: 'failed' },
-                    { title: 'Pass rate', dataIndex: 'passRate', render: (value: number) => `${value}%` },
+                    { title: t('common.project'), dataIndex: 'projectName' },
+                    { title: t('dashboard.totalRuns'), dataIndex: 'totalRuns' },
+                    { title: t('common.passed'), dataIndex: 'passed' },
+                    { title: t('common.failed'), dataIndex: 'failed' },
+                    { title: t('dashboard.passRate'), dataIndex: 'passRate', render: (value: number) => `${value}%` },
                     {
-                      title: 'Last failure',
+                      title: t('dashboard.lastFailure'),
                       dataIndex: 'lastFailure',
-                      render: (value: string | null) => (value ? formatRelativeTime(value) : '—')
+                      render: (value: string | null) => (value ? formatRelativeTime(value, t) : '—')
                     },
                     {
-                      title: 'Actions',
+                      title: t('common.actions'),
                       render: (_: unknown, row: DashboardFlakyCheck) => (
                         <Space wrap>
                           <Button size="small" onClick={() => handleOpenCheck(row.testId)}>
-                            Open check
+                            {t('dashboard.openCheck')}
                           </Button>
                           <Button size="small" onClick={() => handleOpenRun(row.latestFailedRunId)}>
-                            Open latest failed result
+                            {t('dashboard.openLatestFailedResult')}
                           </Button>
                         </Space>
                       )

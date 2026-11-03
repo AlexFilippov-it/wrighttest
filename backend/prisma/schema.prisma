@@ -29,6 +29,21 @@ model User {
   memberships  ProjectMember[]
 }
 
+model InstanceSettings {
+  id           Int      @id @default(1)
+  activeLocale String   @default("en")
+  updatedAt    DateTime @updatedAt
+}
+
+model LanguagePack {
+  locale        String   @id
+  displayName   String
+  translations  Json     @default("{}")
+  sourceHashes  Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 model Test {
   id                       String             @id @default(cuid())
   name                     String
