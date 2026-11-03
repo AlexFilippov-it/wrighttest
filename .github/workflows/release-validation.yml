@@ -33,7 +33,8 @@ jobs:
           REDIS_PORT=6379
           VNC_PORT=5900
           NOVNC_PORT=6080
-          FRONTEND_HOST_PORT=5173
+          # Keep the production container separate from Playwright's Vite dev server on 5173.
+          FRONTEND_HOST_PORT=5180
           BACKEND_HOST_PORT=3000
           POSTGRES_HOST_PORT=55432
           REDIS_HOST_PORT=56379
