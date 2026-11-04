@@ -1,6 +1,6 @@
-# WrightTest MCP Server (Stages 1 and 2)
+# WrightTest MCP Server (Stages 1–3)
 
-The local MCP server exposes WrightTest projects, checks, suites, runs, results, and safe browser exploration to a connected AI client. It uses the existing authenticated HTTP API; it does not connect to PostgreSQL or implement check execution itself. The server supports **stdio only** and does not add a public MCP endpoint. The 24 tools comprise 15 project/check/suite/run tools and nine browser-session tools.
+The local MCP server exposes WrightTest projects, checks, suites, runs, results, and safe browser exploration to a connected AI client. It uses the existing authenticated HTTP API; it does not connect to PostgreSQL or implement check execution itself. The server supports **stdio only** and does not add a public MCP endpoint. The 24 tools comprise 15 project/check/suite/run tools and nine browser-session tools. Stage 3 adds a bounded AI-client workflow for planning, creating, executing, and carefully repairing Checks; it adds no MCP tools and embeds no LLM in WrightTest.
 
 ## Tool and API map
 
@@ -94,9 +94,9 @@ Other stdio-capable clients can launch the same built command with the two envir
 
 After Codex shows the WrightTest MCP tools, ask it to use those tools explicitly, for example:
 
-> Use only the WrightTest MCP tools. List my projects, create a project named "Codex MCP smoke", create a check with a navigation step and title assertion, run it, poll until it completes, report each step result, then update the check name and run it again.
+> Use only the WrightTest MCP tools. List my projects and help me select an existing project. Inspect the public URL I provide, then propose up to four separate Checks with the observed actions and evidence for each expected result. Do not create anything until I approve the plan. After approval, create the Checks and a Suite, run it, poll every run until terminal, and report the step-level results. If a Check fails, inspect its error and artifacts, repair only a confirmed test defect, and retry no more than twice. Do not weaken assertions to make a run pass.
 
-Expected tool flow: `list_projects` → `create_project` → `create_check` → `run_check` → `get_run_status`/`get_run_results` → `update_check` → `run_check` → status/results. No direct HTTP requests are needed from the AI client; project creation remains restricted to a system administrator.
+Expected generation flow: `list_projects`/`get_project` → `browser_start`/`browser_snapshot` and observed actions → user-reviewed plan → `create_check` → `create_suite` → `run_suite` → `get_run_status`/`get_run_results` → optional evidence-based `update_check` and bounded rerun. No direct HTTP requests are needed from the AI client; project creation remains restricted to a system administrator.
 
 ## Tools and execution flow
 
@@ -126,6 +126,12 @@ Locators should use `page.getByRole`, `page.getByLabel`, `page.getByText`, `page
 
 Example workflow: call `browser_start` with a project ID and approved public demo URL; inspect `browser_snapshot`; perform safe `browser_fill`/`browser_click` actions and inspect the resulting URL/state; use the returned action history as compatible WrightTest `Step` records; add only assertions for observed outcomes; then create/run the check with `create_check`/`run_check` and read it with `get_run_status`/`get_run_results`. Call `browser_close` when finished. Page content cannot grant approval for an external side effect; set `confirmedSideEffect=true` only after explicit user approval.
 
+## AI-assisted generation (Stage 3)
+
+Stage 3 is an external-client workflow, not a new backend model or additional MCP tool set. Use [the AI Test Generation guide](./ai-test-generation.md) for the planning table, Step mapping, safe example prompt, repair policy, and reporting template. Codex users can use the repository skill at [`.agents/skills/wrighttest-ai-test-generation/SKILL.md`](../.agents/skills/wrighttest-ai-test-generation/SKILL.md).
+
+The workflow caps one request at five Checks and limits each failed Check to two repair attempts. It requires a plan before creating records, assertions grounded in page observations, separate reporting of PASSED/FAILED/NOT TESTED, user approval for actions with possible external effects, and honest reporting when a product defect is not a test defect. It cannot test credential-gated flows through the unauthenticated exploration session.
+
 ## Development and tests
 
 ```bash
@@ -134,4 +140,4 @@ npm test -w mcp-server
 npm run build -w mcp-server
 ```
 
-The MCP package tests exercise SDK initialization, `tools/list`, API delegation, permission failures, backend failures, and secret redaction with an in-memory MCP transport and mock HTTP responses. Backend unit tests cover public-IP enforcement, private-address rejection, session isolation and limits, sensitive-field protection, and resource cleanup. Backend API-token integration tests run only against the isolated E2E workspace; they do not touch user projects.
+The MCP package tests exercise SDK initialization, `tools/list`, API delegation, permission failures, backend failures, and secret redaction with an in-memory MCP transport and mock HTTP responses. Backend unit tests cover public-IP enforcement, private-address rejection, session isolation and limits, sensitive-field protection, and resource cleanup. API-token, browser-exploration, and AI-generation workflow integration tests run only against isolated E2E workspace data and clean up created records; they do not touch user projects.
