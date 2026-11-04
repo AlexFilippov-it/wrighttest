@@ -26,7 +26,7 @@
 - **Import and export** - import supported Playwright specs, export a single `.spec.ts`, or download a runnable Playwright project `.zip`
 - **Projects and roles** - organize checks, environments, schedules, alerts, and history; assign Owner, Editor, and read-only Viewer access
 - **Dashboard** - review run health, pass rates, recent failures, and flaky checks
-- **Interface languages** - English and Russian catalogs, instance-wide language selection, and administrator-managed JSON language packs
+- **[Interface languages](#-interface-languages)** - switch the instance-wide interface between English and Russian under **System → Language**, or install administrator-managed JSON language packs
 - **AI-assisted test generation through MCP** - connect Codex, Claude Desktop, or another stdio MCP client to explore public pages, plan evidence-based Checks, group them into Suites, run them, and inspect or carefully repair failures. Uses revocable user API tokens; no LLM is embedded in WrightTest.
 
 ## How WrightTest compares
