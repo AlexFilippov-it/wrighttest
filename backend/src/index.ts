@@ -24,6 +24,8 @@ import { webhookRoutes } from './routes/webhooks';
 import { testRoutes } from './routes/tests';
 import { projectAuthRoutes } from './routes/project-auth';
 import { localizationRoutes } from './routes/localization';
+import { createBrowserSessionRoutes } from './routes/browser-sessions';
+import { createHash } from 'node:crypto';
 import { schedulerService } from './services/scheduler';
 
 const envCandidates = [
@@ -71,7 +73,14 @@ fs.mkdirSync(screenshotsDir, { recursive: true });
 fs.mkdirSync(tracesDir, { recursive: true });
 
 async function start() {
-  const fastify = Fastify({ logger: true });
+  const fastify = Fastify({
+    logger: {
+      redact: {
+        paths: ['req.headers.authorization', 'req.headers.cookie'],
+        censor: '[REDACTED]'
+      }
+    }
+  });
   const port = Number(process.env.BACKEND_PORT) || 3000;
   const frontendOrigins = [
     process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -122,7 +131,34 @@ async function start() {
     if (isPublic) return;
 
     try {
-      await req.jwtVerify();
+      const authorization = req.headers.authorization;
+      const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+
+      if (bearer?.startsWith('wtm_')) {
+        const tokenHash = createHash('sha256').update(bearer).digest('hex');
+        const now = new Date();
+        const apiToken = await prisma.apiToken.findUnique({
+          where: { tokenHash },
+          include: { user: { select: { id: true, email: true } } }
+        });
+
+        if (!apiToken || apiToken.revokedAt || (apiToken.expiresAt && apiToken.expiresAt <= now)) {
+          return reply.status(401).send({ error: 'Unauthorized' });
+        }
+
+        const updated = await prisma.apiToken.updateMany({
+          where: {
+            id: apiToken.id,
+            revokedAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
+          },
+          data: { lastUsedAt: now }
+        });
+        if (updated.count !== 1) return reply.status(401).send({ error: 'Unauthorized' });
+        req.user = { userId: apiToken.user.id, email: apiToken.user.email, authMethod: 'apiToken' };
+      } else {
+        await req.jwtVerify();
+      }
       const payload = req.user as { userId?: string; email?: string } | undefined;
       if (!payload?.userId || !payload.email) {
         return reply.status(401).send({ error: 'Unauthorized' });
@@ -143,6 +179,7 @@ async function start() {
 
   await fastify.register(authRoutes);
   await fastify.register(localizationRoutes);
+  await fastify.register(createBrowserSessionRoutes().routes);
 
   await fastify.register(fastifyStatic, {
     root: screenshotsDir,

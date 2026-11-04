@@ -26,7 +26,8 @@
 - **Import and export** - import supported Playwright specs, export a single `.spec.ts`, or download a runnable Playwright project `.zip`
 - **Projects and roles** - organize checks, environments, schedules, alerts, and history; assign Owner, Editor, and read-only Viewer access
 - **Dashboard** - review run health, pass rates, recent failures, and flaky checks
-- **Interface languages** - English and Russian catalogs, instance-wide language selection, and administrator-managed JSON language packs
+- **[Interface languages](#-interface-languages)** - switch the instance-wide interface between English and Russian under **System → Language**, or install administrator-managed JSON language packs
+- **AI-assisted test generation through MCP** - connect Codex, Claude Desktop, or another stdio MCP client to explore public pages, plan evidence-based Checks, group them into Suites, run them, and inspect or carefully repair failures. Uses revocable user API tokens; no LLM is embedded in WrightTest.
 
 ## How WrightTest compares
 
@@ -123,19 +124,6 @@ Docker image metadata includes OCI labels pointing back to:
 
 - https://wrighttest.com
 - https://github.com/AlexFilippov-it/wrighttest
-
-## 🌐 Live Demo
-
-A public demo UI is available at:
-
-- https://demo.wrighttest.com
-
-Demo credentials:
-
-- Email: `demo@wrighttest.com`
-- Password: `demo`
-
-The demo account has read-only access only.
 
 ## 🖥 Server Prerequisites
 
@@ -318,7 +306,7 @@ Wrong password
 EMAIL=admin@test.com
 PASS=123456
 EXPECTED_MESSAGE=Invalid email or password
-EXPECTED_URL=https://demo.wrighttest.com/login
+EXPECTED_URL=https://example.com/login
 ```
 
 Example steps:
@@ -353,6 +341,12 @@ The instance administrator can select the shared interface language and manage J
 To add a language, download its template, translate the `translation` values, then upload and review the merge preview before applying it. Empty values and omitted keys preserve existing translations, while new English strings fall back automatically. Export the installed pack to continue translation after a WrightTest update. Run `npm run i18n:check` to validate the built-in catalogs.
 
 The built-in English and Russian catalogs are checked by `npm run i18n:check`. English is the fallback for newly added or untranslated keys. User-authored project names, check content, locator expressions, and diagnostic output are not translated.
+
+## 🔌 MCP Server
+
+WrightTest includes a local stdio MCP server for compatible AI clients. It delegates project, check, suite, run, and safe browser-exploration operations to the existing backend API, preserves project roles, and uses isolated unauthenticated browser sessions. An external AI client can follow the documented generation workflow to plan evidence-backed Checks, run a Suite, and diagnose or repair confirmed test defects. Remote MCP transport and an embedded LLM are not included.
+
+See [MCP Server setup and tool reference](./docs/mcp-server.md) for API token creation, Codex and Claude Desktop configuration, all 24 tools, permissions, browser safety constraints, and local tests. [AI-Assisted Test Generation](./docs/ai-test-generation.md) documents planning, execution, bounded repair, and honest reporting.
 
 ## 🖥 Devices
 
@@ -425,6 +419,26 @@ Viewers cannot:
 <p align="center"><em>Project-level roles keep Viewer accounts read-only while Editors can manage checks, schedules, environments, and exports.</em></p>
 
 ## 🏗 Architecture
+
+The existing manual editor and Playwright worker remain the core execution path. An optional external AI client can use the local MCP adapter to call the same authorized API and create or inspect the same Checks and Runs.
+
+```text
+External AI Client (Codex / Claude)
+              │ stdio MCP · user API token
+              ▼
+       WrightTest MCP Server
+              │ authenticated HTTP API
+              ▼
+         WrightTest API
+          ┌───┴───────────┐
+          ▼               ▼
+Isolated browser      BullMQ + Redis
+ exploration               │
+                          Worker
+                       Playwright
+```
+
+The MCP adapter does not query PostgreSQL directly or execute browser checks itself. Browser exploration sessions are separate from queued Check runs and use clean unauthenticated contexts.
 
 ```text
 ┌─────────────┐   POST /recordings/start   ┌──────────────────┐

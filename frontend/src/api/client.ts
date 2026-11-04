@@ -62,6 +62,27 @@ export type LanguageImportPreview = {
   invalidParameters: string[];
 };
 
+export type PersonalApiToken = {
+  id: string;
+  name: string;
+  tokenPrefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+};
+
+export type CreatedPersonalApiToken = PersonalApiToken & { token: string };
+
+export const getPersonalApiTokens = () =>
+  api.get<PersonalApiToken[]>('/auth/api-tokens').then((response) => response.data);
+
+export const createPersonalApiToken = (data: { name: string; expiresInDays?: number }) =>
+  api.post<CreatedPersonalApiToken>('/auth/api-tokens', data).then((response) => response.data);
+
+export const revokePersonalApiToken = (id: string) =>
+  api.delete(`/auth/api-tokens/${encodeURIComponent(id)}`);
+
 export const api = axios.create({
   baseURL: BACKEND_URL
 });

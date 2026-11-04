@@ -1,6 +1,7 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
+import { createHash, randomBytes } from 'node:crypto';
 import prisma from '../prisma';
 import { canCreateProject, isProtectedAdminEmail } from '../utils/project-access';
 
@@ -18,7 +19,76 @@ const UserLookupSchema = z.object({
   email: z.string().trim().toLowerCase().email()
 });
 
+const CreateApiTokenSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  expiresInDays: z.number().int().min(1).max(365).optional()
+});
+
+function isApiTokenRequest(request: FastifyRequest) {
+  const payload = request.user as { authMethod?: string } | undefined;
+  return payload?.authMethod === 'apiToken';
+}
+
 export async function authRoutes(fastify: FastifyInstance) {
+  fastify.get('/auth/api-tokens', async (req, reply) => {
+    if (isApiTokenRequest(req)) return reply.status(403).send({ error: 'API tokens cannot manage API tokens' });
+    const { userId } = req.user as { userId: string };
+    return prisma.apiToken.findMany({
+      where: { userId },
+        select: {
+          id: true,
+          name: true,
+          tokenPrefix: true,
+          createdAt: true,
+          lastUsedAt: true,
+          expiresAt: true,
+          revokedAt: true
+        },
+      orderBy: { createdAt: 'desc' }
+    });
+  });
+
+  fastify.post('/auth/api-tokens', {
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } }
+  }, async (req, reply) => {
+    if (isApiTokenRequest(req)) return reply.status(403).send({ error: 'API tokens cannot manage API tokens' });
+    const result = CreateApiTokenSchema.safeParse(req.body);
+    if (!result.success) return reply.status(400).send({ error: result.error.flatten() });
+
+    const { userId } = req.user as { userId: string };
+    const count = await prisma.apiToken.count({ where: { userId, revokedAt: null } });
+    if (count >= 25) return reply.status(409).send({ error: 'Maximum number of active API tokens reached' });
+
+    const token = `wtm_${randomBytes(32).toString('base64url')}`;
+    const tokenPrefix = token.slice(0, 12);
+    const expiresAt = result.data.expiresInDays
+      ? new Date(Date.now() + result.data.expiresInDays * 24 * 60 * 60 * 1000)
+      : null;
+    const saved = await prisma.apiToken.create({
+      data: {
+        userId,
+        name: result.data.name,
+        tokenPrefix,
+        tokenHash: createHash('sha256').update(token).digest('hex'),
+        expiresAt
+      },
+      select: { id: true, name: true, tokenPrefix: true, createdAt: true, expiresAt: true }
+    });
+
+    return reply.status(201).send({ ...saved, token });
+  });
+
+  fastify.delete<{ Params: { id: string } }>('/auth/api-tokens/:id', async (req, reply) => {
+    if (isApiTokenRequest(req)) return reply.status(403).send({ error: 'API tokens cannot manage API tokens' });
+    const { userId } = req.user as { userId: string };
+    const result = await prisma.apiToken.updateMany({
+      where: { id: req.params.id, userId, revokedAt: null },
+      data: { revokedAt: new Date() }
+    });
+    if (result.count === 0) return reply.status(404).send({ error: 'API token not found' });
+    return reply.status(204).send();
+  });
+
   fastify.post('/auth/login', {
     config: {
       rateLimit: {

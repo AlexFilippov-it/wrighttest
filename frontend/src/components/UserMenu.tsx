@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Button, Descriptions, Dropdown, Form, Input, Modal, Space, Tag, Typography, message } from 'antd';
-import { InfoCircleOutlined, LogoutOutlined, ProfileOutlined, UserOutlined } from '@ant-design/icons';
+import { Alert, Button, Descriptions, Dropdown, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { CopyOutlined, DeleteOutlined, InfoCircleOutlined, KeyOutlined, LogoutOutlined, ProfileOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api } from '../api/client';
+import {
+  api,
+  createPersonalApiToken,
+  getPersonalApiTokens,
+  revokePersonalApiToken,
+  type PersonalApiToken
+} from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import {
   APP_BUILD_DATE,
@@ -47,6 +53,14 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
   const [aboutOpen, setAboutOpen] = useState(false);
   const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
   const [changeOpen, setChangeOpen] = useState(false);
+  const [apiTokensOpen, setApiTokensOpen] = useState(false);
+  const [apiTokens, setApiTokens] = useState<PersonalApiToken[]>([]);
+  const [apiTokensLoading, setApiTokensLoading] = useState(false);
+  const [apiTokenSaving, setApiTokenSaving] = useState(false);
+  const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
+  const [apiTokenName, setApiTokenName] = useState('');
+  const [apiTokenExpiry, setApiTokenExpiry] = useState('90');
+  const [newlyCreatedToken, setNewlyCreatedToken] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [health, setHealth] = useState<AboutHealthState>({ api: 'checking', database: 'checking' });
   const [form] = Form.useForm<{ currentPassword: string; newPassword: string; confirmPassword: string }>();
@@ -87,6 +101,66 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
       cancelled = true;
     };
   }, [aboutOpen]);
+
+  useEffect(() => {
+    if (!apiTokensOpen) return;
+    let cancelled = false;
+    setApiTokensLoading(true);
+    void getPersonalApiTokens()
+      .then((tokens) => { if (!cancelled) setApiTokens(tokens); })
+      .catch((error) => { if (!cancelled) message.error(getApiErrorMessage(error, t('userMenu.apiTokensLoadFailed'))); })
+      .finally(() => { if (!cancelled) setApiTokensLoading(false); });
+    return () => { cancelled = true; };
+  }, [apiTokensOpen, t]);
+
+  const closeApiTokens = () => {
+    setApiTokensOpen(false);
+    setNewlyCreatedToken(null);
+    setApiTokenName('');
+  };
+
+  const handleCreateApiToken = async () => {
+    const name = apiTokenName.trim();
+    if (!name) return;
+    setApiTokenSaving(true);
+    try {
+      const created = await createPersonalApiToken({
+        name,
+        ...(apiTokenExpiry === 'never' ? {} : { expiresInDays: Number(apiTokenExpiry) })
+      });
+      setNewlyCreatedToken(created.token);
+      setApiTokenName('');
+      setApiTokens(await getPersonalApiTokens());
+      message.success(t('userMenu.apiTokenCreated'));
+    } catch (error) {
+      message.error(getApiErrorMessage(error, t('userMenu.apiTokenCreateFailed')));
+    } finally {
+      setApiTokenSaving(false);
+    }
+  };
+
+  const handleRevokeApiToken = async (tokenId: string) => {
+    setRevokingTokenId(tokenId);
+    try {
+      await revokePersonalApiToken(tokenId);
+      setApiTokens((tokens) => tokens.map((token) => token.id === tokenId ? { ...token, revokedAt: new Date().toISOString() } : token));
+      message.success(t('userMenu.apiTokenRevoked'));
+    } catch (error) {
+      message.error(getApiErrorMessage(error, t('userMenu.apiTokenRevokeFailed')));
+    } finally {
+      setRevokingTokenId(null);
+    }
+  };
+
+  const copyApiToken = async () => {
+    if (!newlyCreatedToken) return;
+    try {
+      await navigator.clipboard.writeText(newlyCreatedToken);
+      message.success(t('userMenu.apiTokenCopied'));
+    } catch {
+      message.error(t('userMenu.apiTokenCopyFailed'));
+    }
+  };
 
   const handleChangePassword = async () => {
     const values = await form.validateFields();
@@ -169,6 +243,7 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
             { key: 'about', icon: <InfoCircleOutlined />, label: t('userMenu.about') },
             { key: 'release-notes', icon: <ProfileOutlined />, label: t('userMenu.releaseNotes') },
             { key: 'change-password', icon: <UserOutlined />, label: t('userMenu.changePassword') },
+            { key: 'api-tokens', icon: <KeyOutlined />, label: t('userMenu.apiTokens') },
             { type: 'divider' },
             { key: 'logout', icon: <LogoutOutlined />, label: t('common.logout'), danger: true }
           ],
@@ -176,6 +251,7 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
             if (key === 'about') setAboutOpen(true);
             if (key === 'release-notes') setReleaseNotesOpen(true);
             if (key === 'change-password') setChangeOpen(true);
+            if (key === 'api-tokens') setApiTokensOpen(true);
             if (key === 'logout') handleLogout();
           }
         }}
@@ -215,6 +291,89 @@ export default function UserMenu({ tone = 'dark', compact = false }: UserMenuPro
             column={1}
             bordered
             items={aboutItems}
+          />
+        </Space>
+      </Modal>
+
+      <Modal
+        title={t('userMenu.apiTokens')}
+        open={apiTokensOpen}
+        onCancel={closeApiTokens}
+        footer={<Button type="primary" onClick={closeApiTokens}>{t('common.close')}</Button>}
+        width={680}
+        destroyOnHidden
+      >
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <Text type="secondary">{t('userMenu.apiTokensDescription')}</Text>
+          {newlyCreatedToken ? (
+            <Alert
+              type="success"
+              showIcon
+              message={t('userMenu.apiTokenOneTimeTitle')}
+              description={(
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text>{t('userMenu.apiTokenOneTimeHelp')}</Text>
+                  <Input.Group compact>
+                    <Input readOnly value={newlyCreatedToken} style={{ width: 'calc(100% - 112px)' }} />
+                    <Button icon={<CopyOutlined />} onClick={() => void copyApiToken()}>{t('userMenu.apiTokenCopy')}</Button>
+                  </Input.Group>
+                </Space>
+              )}
+            />
+          ) : null}
+
+          <Space wrap style={{ width: '100%' }}>
+            <Input
+              aria-label={t('userMenu.apiTokenName')}
+              placeholder={t('userMenu.apiTokenNamePlaceholder')}
+              maxLength={80}
+              value={apiTokenName}
+              style={{ flex: '1 1 220px', minWidth: 180 }}
+              onChange={(event) => setApiTokenName(event.target.value)}
+              onPressEnter={() => void handleCreateApiToken()}
+            />
+            <Select
+              aria-label={t('userMenu.apiTokenExpiry')}
+              value={apiTokenExpiry}
+              onChange={setApiTokenExpiry}
+              style={{ width: 150, flex: '0 0 150px' }}
+              options={[
+                { value: '30', label: t('userMenu.apiTokenExpires30') },
+                { value: '90', label: t('userMenu.apiTokenExpires90') },
+                { value: '365', label: t('userMenu.apiTokenExpires365') },
+                { value: 'never', label: t('userMenu.apiTokenNeverExpires') }
+              ]}
+            />
+            <Button type="primary" loading={apiTokenSaving} disabled={!apiTokenName.trim()} onClick={() => void handleCreateApiToken()}>
+              {t('userMenu.apiTokenCreate')}
+            </Button>
+          </Space>
+
+          <Table<PersonalApiToken>
+            rowKey="id"
+            size="small"
+            loading={apiTokensLoading}
+            pagination={false}
+            scroll={{ x: 560 }}
+            dataSource={apiTokens.filter((token) => !token.revokedAt && (!token.expiresAt || new Date(token.expiresAt).getTime() > Date.now()))}
+            locale={{ emptyText: t('userMenu.apiTokensEmpty') }}
+            columns={[
+              { title: t('userMenu.apiTokenName'), dataIndex: 'name', key: 'name' },
+              { title: t('userMenu.apiTokenPrefix'), dataIndex: 'tokenPrefix', key: 'prefix', render: (value: string) => <Text code>{value}…</Text> },
+              { title: t('userMenu.apiTokenExpiry'), dataIndex: 'expiresAt', key: 'expiresAt', render: (value: string | null) => value ? new Date(value).toLocaleDateString() : t('userMenu.apiTokenNeverExpires') },
+              {
+                title: t('common.actions'),
+                key: 'actions',
+                align: 'right',
+                render: (_value: unknown, token: PersonalApiToken) => (
+                  <Popconfirm title={t('userMenu.apiTokenRevokeConfirm')} onConfirm={() => void handleRevokeApiToken(token.id)}>
+                    <Button danger icon={<DeleteOutlined />} loading={revokingTokenId === token.id}>
+                      {t('userMenu.apiTokenRevoke')}
+                    </Button>
+                  </Popconfirm>
+                )
+              }
+            ]}
           />
         </Space>
       </Modal>

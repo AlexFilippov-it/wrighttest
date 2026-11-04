@@ -5,7 +5,6 @@ WrightTest is a low-code UI test automation platform powered by Playwright.
 - Website: https://wrighttest.com
 - GitHub repository: https://github.com/AlexFilippov-it/wrighttest
 - Documentation: https://github.com/AlexFilippov-it/wrighttest#readme
-- Live demo: https://demo.wrighttest.com
 
 WrightTest is published as a multi-container stack:
 

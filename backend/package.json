@@ -5,8 +5,10 @@
     "dev": "tsx watch src/index.ts",
     "prisma:migrate": "dotenv -e ../.env -- prisma migrate dev",
     "prisma:generate": "dotenv -e ../.env -- prisma generate",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "dotenv -e ../.env -- prisma studio",
     "test:trace": "dotenv -e ../.env -- tsx --test tests/failed-run-trace.test.ts",
+    "test:unit": "dotenv -e ../.env -- tsx --test tests/*.test.ts",
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "prisma": {
@@ -27,6 +29,7 @@
     "dotenv-expand": "^12.0.3",
     "fastify": "^5.12.8",
     "ioredis": "^5.10.1",
+    "ipaddr.js": "^2.5.0",
     "node-cron": "^4.2.1",
     "playwright": "1.61.0",
     "prisma": "^6.19.3",

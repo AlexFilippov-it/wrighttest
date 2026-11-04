@@ -10,7 +10,8 @@
   },
   "workspaces": [
     "frontend",
-    "backend"
+    "backend",
+    "mcp-server"
   ],
   "scripts": {
     "setup": "node scripts/setup-playwright.mjs",
@@ -20,7 +21,9 @@
     "i18n:check": "node scripts/check-locales.mjs",
     "test:e2e:typecheck": "tsc --noEmit -p e2e/tsconfig.json",
     "test:e2e": "dotenv -e .env -- playwright test --config=e2e/playwright.config.ts",
-    "test:e2e:integration": "E2E_INTEGRATION=1 npm run test:e2e"
+    "test:e2e:integration": "E2E_INTEGRATION=1 npm run test:e2e",
+    "test:e2e:isolated": "node scripts/run-isolated-e2e.mjs",
+    "test:e2e:isolated:integration": "E2E_INTEGRATION=1 node scripts/run-isolated-e2e.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
