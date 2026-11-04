@@ -27,6 +27,7 @@
 - **Projects and roles** - organize checks, environments, schedules, alerts, and history; assign Owner, Editor, and read-only Viewer access
 - **Dashboard** - review run health, pass rates, recent failures, and flaky checks
 - **Interface languages** - English and Russian catalogs, instance-wide language selection, and administrator-managed JSON language packs
+- **Local MCP server (Stages 1 and 2)** - connect stdio-compatible AI clients to project/run APIs and safe, isolated browser exploration using revocable user API tokens
 
 ## How WrightTest compares
 
@@ -353,6 +354,12 @@ The instance administrator can select the shared interface language and manage J
 To add a language, download its template, translate the `translation` values, then upload and review the merge preview before applying it. Empty values and omitted keys preserve existing translations, while new English strings fall back automatically. Export the installed pack to continue translation after a WrightTest update. Run `npm run i18n:check` to validate the built-in catalogs.
 
 The built-in English and Russian catalogs are checked by `npm run i18n:check`. English is the fallback for newly added or untranslated keys. User-authored project names, check content, locator expressions, and diagnostic output are not translated.
+
+## 🔌 MCP Server
+
+WrightTest includes a local stdio MCP server for compatible AI clients. It delegates project, check, suite, run, and browser-exploration operations to the existing backend API, preserves project roles, and uses isolated unauthenticated browser sessions. Remote MCP transport is not enabled.
+
+See [MCP Server setup and tool reference](./docs/mcp-server.md) for API token creation, Codex and Claude Desktop configuration, all 24 tools, permissions, browser safety constraints, and local tests.
 
 ## 🖥 Devices
 

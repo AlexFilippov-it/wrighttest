@@ -25,11 +25,13 @@ export const apiBaseUrl = (
   ?? `http://localhost:${process.env.BACKEND_PORT ?? '3000'}`
 ).replace(/\/$/, '');
 
-export const workspaceStatePath = path.resolve(process.cwd(), 'test-results/e2e-workspace.json');
-const authCachePath = path.resolve(process.cwd(), 'test-results/e2e-auth-sessions.json');
+const e2eStateDir = path.resolve(process.env.E2E_STATE_DIR ?? path.join(process.cwd(), 'test-results'));
+export const workspaceStatePath = path.join(e2eStateDir, 'e2e-workspace.json');
+const authCachePath = path.join(e2eStateDir, 'e2e-auth-sessions.json');
 
 const e2eApiRequestWindowMs = 60_000;
-const e2eApiRequestLimit = 80;
+// Keep browser/API smoke traffic below Fastify's unchanged 100 requests/minute limit.
+const e2eApiRequestLimit = 50;
 const e2eApiRequestTimestamps: number[] = [];
 let e2eApiRequestQueue: Promise<void> = Promise.resolve();
 

@@ -5,6 +5,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WrightTestApi } from '../src/api.js';
 import { registerWrightTestTools } from '../src/tools.js';
+import { registerBrowserTools } from '../src/browser-tools.js';
 
 function firstText(response: unknown) {
   if (!response || typeof response !== 'object' || !('content' in response)) return '';
@@ -18,6 +19,7 @@ async function connectedClient(fetchImpl: typeof fetch) {
   const api = new WrightTestApi('http://wrighttest.test', 'wtm_unit-test-token-not-real', fetchImpl);
   const server = new McpServer({ name: 'wrighttest-test', version: '0.0.0' });
   registerWrightTestTools(server, api);
+  registerBrowserTools(server, api);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'wrighttest-test-client', version: '0.0.0' });
   await server.connect(serverTransport);
@@ -25,16 +27,35 @@ async function connectedClient(fetchImpl: typeof fetch) {
   return { client, server };
 }
 
-test('MCP initializes and lists project, check, suite, and run tools', async () => {
+test('MCP initializes and lists project and browser exploration tools', async () => {
   const { client, server } = await connectedClient(async () => new Response('[]', { status: 200 }));
   const listed = await client.listTools();
-  assert.equal(listed.tools.length, 15);
+  assert.equal(listed.tools.length, 24);
   assert.deepEqual(new Set(listed.tools.map((tool) => tool.name)), new Set([
     'list_projects', 'get_project', 'create_project', 'update_project',
     'list_checks', 'get_check', 'create_check', 'update_check',
     'list_suites', 'create_suite', 'add_check_to_suite',
-    'run_check', 'run_suite', 'get_run_status', 'get_run_results'
+    'run_check', 'run_suite', 'get_run_status', 'get_run_results',
+    'browser_start', 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_select', 'browser_screenshot', 'browser_wait', 'browser_close'
   ]));
+  await client.close();
+  await server.close();
+});
+
+test('browser MCP calls are forwarded to the authenticated backend and preserve actual action records', async () => {
+  const calls: Array<{ path: string; method: string; body: unknown }> = [];
+  const { client, server } = await connectedClient(async (input, init) => {
+    const path = new URL(String(input)).pathname;
+    const body = init?.body ? JSON.parse(String(init.body)) : {};
+    calls.push({ path, method: init?.method ?? 'GET', body });
+    return Response.json({ id: 'session-1', url: 'https://example.test/', title: 'Example', actions: [{ action: 'click', selector: "page.getByRole('link', { name: 'More information' })" }], snapshot: 'page content', untrustedPageContent: true });
+  });
+  const response = await client.callTool({ name: 'browser_click', arguments: { projectId: 'project-1', sessionId: 'e8123a58-b00b-46cb-862f-e8bde37115a9', selector: "page.getByRole('link', { name: 'More information' })" } });
+  assert.equal(response.isError, undefined);
+  assert.equal(calls[0].path, '/browser-sessions/e8123a58-b00b-46cb-862f-e8bde37115a9/click');
+  assert.equal(calls[0].method, 'POST');
+  assert.equal((calls[0].body as Record<string, unknown>).projectId, 'project-1');
+  assert.match(firstText(response), /untrustedPageContent/);
   await client.close();
   await server.close();
 });

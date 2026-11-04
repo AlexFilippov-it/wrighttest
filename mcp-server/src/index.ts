@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { WrightTestApi } from './api.js';
 import { registerWrightTestTools } from './tools.js';
+import { registerBrowserTools } from './browser-tools.js';
 
 function requiredEnvironment(name: string) {
   const value = process.env[name]?.trim();
@@ -16,6 +17,7 @@ async function main() {
   );
   const server = new McpServer({ name: 'wrighttest', version: '0.1.0' }, { maxToolInputElements: 10_000 });
   registerWrightTestTools(server, api);
+  registerBrowserTools(server, api);
   await server.connect(new StdioServerTransport());
 }
 

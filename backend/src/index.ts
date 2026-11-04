@@ -24,6 +24,7 @@ import { webhookRoutes } from './routes/webhooks';
 import { testRoutes } from './routes/tests';
 import { projectAuthRoutes } from './routes/project-auth';
 import { localizationRoutes } from './routes/localization';
+import { createBrowserSessionRoutes } from './routes/browser-sessions';
 import { createHash } from 'node:crypto';
 import { schedulerService } from './services/scheduler';
 
@@ -178,6 +179,7 @@ async function start() {
 
   await fastify.register(authRoutes);
   await fastify.register(localizationRoutes);
+  await fastify.register(createBrowserSessionRoutes().routes);
 
   await fastify.register(fastifyStatic, {
     root: screenshotsDir,

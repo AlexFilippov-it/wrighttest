@@ -24,20 +24,20 @@ export function getBrowserName() {
   return resolveBrowserExecutablePath() ? 'system chromium' : 'playwright chromium';
 }
 
-export async function launchChromium() {
+export async function launchChromium(overrides: LaunchOptions = {}) {
   const executablePath = resolveBrowserExecutablePath();
   const candidates: Array<{ name: string; options: LaunchOptions }> = [];
 
   if (executablePath) {
     candidates.push({
       name: `system chromium (${executablePath})`,
-      options: { headless: true, executablePath }
+      options: { headless: true, executablePath, ...overrides }
     });
   }
 
   candidates.push({
     name: 'playwright chromium',
-    options: { headless: true }
+    options: { headless: true, ...overrides }
   });
 
   let lastError: unknown;

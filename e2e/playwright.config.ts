@@ -4,6 +4,8 @@ const frontendUrl = process.env.E2E_BASE_URL
   ?? process.env.FRONTEND_DEV_URL
   ?? `http://localhost:${process.env.FRONTEND_PORT ?? '5173'}`;
 const runIntegrationTests = process.env.E2E_INTEGRATION === '1';
+const outputDir = process.env.E2E_OUTPUT_DIR ?? '../test-results/e2e';
+const reportDir = process.env.E2E_REPORT_DIR ?? '../playwright-report/e2e';
 
 export default defineConfig({
   testDir: './tests',
@@ -17,10 +19,10 @@ export default defineConfig({
   expect: {
     timeout: 10_000
   },
-  outputDir: '../test-results/e2e',
+  outputDir,
   reporter: [
     ['line'],
-    ['html', { outputFolder: '../playwright-report/e2e', open: 'never' }]
+    ['html', { outputFolder: reportDir, open: 'never' }]
   ],
   use: {
     baseURL: frontendUrl,
@@ -31,7 +33,7 @@ export default defineConfig({
   // globalSetup verifies the API; /health is subject to the global rate limit and can trigger duplicate backend starts.
   webServer: [
     {
-      command: 'npm run dev -w frontend -- --host 127.0.0.1',
+      command: `npm run dev -w frontend -- --host 127.0.0.1 --port ${process.env.E2E_FRONTEND_PORT ?? process.env.FRONTEND_PORT ?? '5173'} --strictPort`,
       url: frontendUrl,
       reuseExistingServer: true,
       timeout: 120_000

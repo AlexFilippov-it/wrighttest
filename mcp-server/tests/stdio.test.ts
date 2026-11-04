@@ -61,7 +61,7 @@ test('stdio client lists projects, creates a check, queues it, and reads its res
   try {
     await client.connect(transport);
     const listedTools = await client.listTools();
-    assert.equal(listedTools.tools.length, 15);
+    assert.equal(listedTools.tools.length, 24);
 
     const projects = await client.callTool({ name: 'list_projects', arguments: {} });
     assert.match(firstText(projects), /Isolated MCP project/);
