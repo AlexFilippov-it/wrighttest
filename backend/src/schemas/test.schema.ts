@@ -100,7 +100,15 @@ export const CreateTestSchema = z.object({
   useProjectAuthentication: z.boolean().default(true)
 });
 
-export const UpdateTestSchema = CreateTestSchema.partial();
+export const UpdateTestSchema = z.object({
+  name: CreateTestSchema.shape.name.optional(),
+  url: CreateTestSchema.shape.url.optional(),
+  steps: z.array(StepSchema).optional(),
+  testData: TestDataSchema.optional(),
+  device: z.string().optional().nullable(),
+  environmentId: z.string().optional().nullable(),
+  useProjectAuthentication: z.boolean().optional()
+});
 
 export type StepDto = z.infer<typeof StepSchema>;
 export type TestDataCaseDto = z.infer<typeof TestDataCaseSchema>;

@@ -9,6 +9,7 @@ node_modules/
 # Build
 frontend/dist/
 backend/dist/
+mcp-server/dist/
 
 # Artifacts (generated at runtime)
 backend/screenshots/

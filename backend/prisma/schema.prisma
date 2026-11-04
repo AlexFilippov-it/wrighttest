@@ -27,6 +27,23 @@ model User {
   passwordHash String
   createdAt    DateTime        @default(now())
   memberships  ProjectMember[]
+  apiTokens    ApiToken[]
+}
+
+model ApiToken {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  tokenHash   String    @unique
+  tokenPrefix String
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
 }
 
 model InstanceSettings {
@@ -36,12 +53,12 @@ model InstanceSettings {
 }
 
 model LanguagePack {
-  locale        String   @id
-  displayName   String
-  translations  Json     @default("{}")
-  sourceHashes  Json     @default("{}")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  locale       String   @id
+  displayName  String
+  translations Json     @default("{}")
+  sourceHashes Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Test {

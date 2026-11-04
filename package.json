@@ -10,7 +10,8 @@
   },
   "workspaces": [
     "frontend",
-    "backend"
+    "backend",
+    "mcp-server"
   ],
   "scripts": {
     "setup": "node scripts/setup-playwright.mjs",

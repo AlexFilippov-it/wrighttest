@@ -32,6 +32,79 @@ test('checks support create, update, and delete', async ({ workspace }, testInfo
   }
 });
 
+test('personal API tokens authenticate as their user, retain RBAC, and can be revoked', async ({ workspace }) => {
+  const createdTokens: { id: string; sessionToken: string }[] = [];
+  const createToken = async (sessionToken: string, name: string) => {
+    const response = await workspace.adminApi.post('/auth/api-tokens', {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      data: { name, expiresInDays: 1 }
+    });
+    expect(response.status()).toBe(201);
+    const body = await response.json() as { id: string; token: string; tokenPrefix: string };
+    createdTokens.push({ id: body.id, sessionToken });
+    expect(body.token).toMatch(/^wtm_[A-Za-z0-9_-]{40,}$/);
+    expect(body.tokenPrefix).toBe(body.token.slice(0, 12));
+    return body;
+  };
+
+  try {
+    const ownerToken = await createToken(workspace.owner.token, `E2E owner ${Date.now()}`);
+    const ownerMe = await workspace.adminApi.get('/auth/me', {
+      headers: { Authorization: `Bearer ${ownerToken.token}` }
+    });
+    expect(ownerMe.ok()).toBeTruthy();
+    expect((await ownerMe.json() as { email: string }).email).toBe(workspace.owner.email);
+
+    const viewerToken = await createToken(workspace.viewer.token, `E2E viewer ${Date.now()}`);
+    const viewerCannotManageTokens = await workspace.adminApi.get('/auth/api-tokens', {
+      headers: { Authorization: `Bearer ${viewerToken.token}` }
+    });
+    expect(viewerCannotManageTokens.status()).toBe(403);
+
+    const viewerCanRead = await workspace.adminApi.get(`/projects/${workspace.projectId}/tests`, {
+      headers: { Authorization: `Bearer ${viewerToken.token}` }
+    });
+    expect(viewerCanRead.ok()).toBeTruthy();
+
+    const viewerCannotCreate = await workspace.adminApi.post(`/projects/${workspace.projectId}/tests`, {
+      headers: { Authorization: `Bearer ${viewerToken.token}` },
+      data: { name: 'Forbidden MCP check', url: 'https://example.test', steps: [] }
+    });
+    expect(viewerCannotCreate.status()).toBe(403);
+
+    const listedTokens = await workspace.adminApi.get('/auth/api-tokens', {
+      headers: { Authorization: `Bearer ${workspace.owner.token}` }
+    });
+    expect(listedTokens.ok()).toBeTruthy();
+    const listed = await listedTokens.json() as { id: string; tokenPrefix: string; token?: string }[];
+    expect(listed.some((item) => item.id === ownerToken.id)).toBeTruthy();
+    expect(listed.every((item) => !('token' in item))).toBeTruthy();
+
+    const viewerListedTokens = await workspace.adminApi.get('/auth/api-tokens', {
+      headers: { Authorization: `Bearer ${workspace.viewer.token}` }
+    });
+    expect(viewerListedTokens.ok()).toBeTruthy();
+    expect((await viewerListedTokens.json() as { id: string }[]).some((item) => item.id === viewerToken.id)).toBeTruthy();
+
+    const revoke = await workspace.adminApi.delete(`/auth/api-tokens/${viewerToken.id}`, {
+      headers: { Authorization: `Bearer ${workspace.viewer.token}` }
+    });
+    expect(revoke.status()).toBe(204);
+    const viewerTokenIndex = createdTokens.findIndex((item) => item.id === viewerToken.id);
+    if (viewerTokenIndex >= 0) createdTokens.splice(viewerTokenIndex, 1);
+    const revokedUse = await workspace.adminApi.get('/auth/me', {
+      headers: { Authorization: `Bearer ${viewerToken.token}` }
+    });
+    expect(revokedUse.status()).toBe(401);
+  } finally {
+    for (const token of createdTokens) {
+      await workspace.adminApi.delete(`/auth/api-tokens/${token.id}`, {
+        headers: { Authorization: `Bearer ${token.sessionToken}` }
+      }).catch(() => undefined);
+    }
+  }
+});
+
 test('suites can be managed and executed; schedules can be safely managed disabled', async ({ workspace }, testInfo) => {
   testInfo.setTimeout(120_000);
   const suiteName = `E2E suite ${Date.now()}`;
