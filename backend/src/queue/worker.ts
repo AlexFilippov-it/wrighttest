@@ -21,6 +21,7 @@ import {
   failAuthRefresh,
   resolveAuthStateForExecution
 } from '../services/auth-state';
+import { executeDatabaseStep, openDatabaseConnection, type SqlExecutionSummary, type SqlSession } from '../services/database-connections';
 import {
   buildActionCandidates,
   dedupe,
@@ -179,6 +180,7 @@ type RunStepResult = {
   durationMs: number;
   screenshot?: string | null;
   error?: string | null;
+  database?: SqlExecutionSummary;
 };
 
 let started = false;
@@ -226,7 +228,7 @@ async function runTest(job: Job<TestJobData>) {
     throw new Error(`Authentication refresh run ${testRunId} is missing its authentication profile.`);
   }
 
-  const steps = (test.steps as unknown as Step[]).map((step) => interpolateStep(step, runtimeVariables));
+  const steps = test.steps as unknown as Step[];
   const deviceConfig = test.device && test.device in devices ? devices[test.device as keyof typeof devices] : {};
 
   if (test.device && !(test.device in devices)) {
@@ -243,6 +245,7 @@ async function runTest(job: Job<TestJobData>) {
   let tracePath: string | null = null;
   let traceUnavailableReason: string | null = null;
   let runError: Error | null = null;
+  const databaseSessions = new Map<string, { session: SqlSession; name: string; accessMode: 'READ_ONLY' | 'READ_WRITE' }>();
 
   console.log(`[Worker] Using ${getBrowserName()} for test run ${testRunId}`);
 
@@ -278,10 +281,12 @@ async function runTest(job: Job<TestJobData>) {
 
     const page = await context.newPage();
 
-    for (const [index, step] of steps.entries()) {
+    for (const [index, rawStep] of steps.entries()) {
+      const step = interpolateStep(rawStep, runtimeVariables);
       currentStep = index + 1;
       const stepStartedAt = Date.now();
       let stepError: Error | null = null;
+      let databaseSummary: SqlExecutionSummary | undefined;
 
       await prisma.testRun.update({
         where: { id: testRunId },
@@ -301,12 +306,35 @@ async function runTest(job: Job<TestJobData>) {
           (step.expected && hasUnresolvedVariables(step.expected)) ||
           (step.selector && hasUnresolvedVariables(step.selector))
         ) {
-          throw new Error(
-            `Unresolved template variable in step ${index + 1}: ${JSON.stringify(step)}`
-          );
+          throw new Error(`Unresolved template variable in step ${index + 1}.`);
         }
 
         switch (step.action) {
+          case 'executeSql':
+          case 'assertDatabaseResult': {
+            const connectionId = step.databaseConnectionId!;
+            let databaseSession = databaseSessions.get(connectionId);
+            if (!databaseSession) {
+              const connection = await prisma.databaseConnection.findFirst({ where: { id: connectionId, projectId: test.projectId } });
+              if (!connection) throw new Error('The database connection was not found in this project.');
+              databaseSession = {
+                session: await openDatabaseConnection(connection),
+                name: connection.name,
+                accessMode: connection.accessMode
+              };
+              databaseSessions.set(connectionId, databaseSession);
+            }
+            const execution = await executeDatabaseStep(
+              databaseSession.session,
+              databaseSession.name,
+              databaseSession.accessMode,
+              step,
+              runtimeVariables
+            );
+            databaseSummary = execution.summary;
+            if (step.saveResultAs && execution.savedValue !== undefined) runtimeVariables[step.saveResultAs] = execution.savedValue;
+            break;
+          }
           case 'goto':
             await page.goto(resolveBrowserUrl(step.value!), { waitUntil: 'domcontentloaded' });
             break;
@@ -411,13 +439,17 @@ async function runTest(job: Job<TestJobData>) {
       } catch (error) {
         stepError = error instanceof Error ? error : new Error(String(error));
       } finally {
-        const screenshotName = `${testRunId}_step${index + 1}${stepError ? '_failed' : ''}.png`;
-        const screenshotPath = path.join(SCREENSHOTS_DIR, screenshotName);
-        try {
-          await page.screenshot({ path: screenshotPath });
-          screenshots.push(screenshotName);
-        } catch (screenshotError) {
-          console.error(`[Worker] Failed to capture screenshot for ${testRunId} step ${index + 1}:`, screenshotError);
+        let screenshot: string | null = null;
+        if (!['executeSql', 'assertDatabaseResult'].includes(step.action)) {
+          const screenshotName = `${testRunId}_step${index + 1}${stepError ? '_failed' : ''}.png`;
+          const screenshotPath = path.join(SCREENSHOTS_DIR, screenshotName);
+          try {
+            await page.screenshot({ path: screenshotPath });
+            screenshots.push(screenshotName);
+            screenshot = screenshotName;
+          } catch (screenshotError) {
+            console.error(`[Worker] Failed to capture screenshot for ${testRunId} step ${index + 1}:`, screenshotError);
+          }
         }
 
         stepResults.push({
@@ -426,8 +458,12 @@ async function runTest(job: Job<TestJobData>) {
           target: getStepTarget(step),
           status: stepError ? 'failed' : 'passed',
           durationMs: Date.now() - stepStartedAt,
-          screenshot: screenshots[screenshots.length - 1] ?? null,
-          error: stepError?.message ?? null
+          screenshot,
+          error: stepError?.message ?? null,
+          ...(databaseSummary ? { database: databaseSummary } : {}),
+          ...(stepError && 'databaseSummary' in stepError && typeof stepError.databaseSummary === 'object'
+            ? { database: stepError.databaseSummary as SqlExecutionSummary }
+            : {})
         });
       }
 
@@ -451,6 +487,9 @@ async function runTest(job: Job<TestJobData>) {
   } catch (error) {
     runError = error instanceof Error ? error : new Error(String(error));
   } finally {
+    await Promise.all([...databaseSessions.values()].map(({ session }) => session.close().catch(() => {
+      console.warn('[Worker] Failed to close a database session after the run.');
+    })));
     if (context && traceStarted) {
       const traceName = `${testRunId}.zip`;
       tracePath = path.join(TRACES_DIR, traceName);

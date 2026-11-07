@@ -20,6 +20,7 @@ import AppShell from './shell/AppShell';
 import ProjectShell from './shell/ProjectShell';
 import NotFoundPage from './shell/NotFoundPage';
 import InstanceLanguagePage from './pages/InstanceLanguagePage';
+import ConnectionsPage from './pages/ConnectionsPage';
 import { loadInstanceLocale } from './localization/i18n';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -73,6 +74,7 @@ function LocalizedRoutes() {
             <Route path="schedules" element={<ProjectPage />} />
             <Route path="environments" element={<ProjectPage />} />
             <Route path="authentication" element={<ProjectPage />} />
+            <Route path="connections" element={<ConnectionsPage />} />
             <Route path="alerts" element={<ProjectPage />} />
             <Route path="notifications" element={<LegacyNotificationsRedirect />} />
             <Route path="settings" element={<ProjectPage />} />

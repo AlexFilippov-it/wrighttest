@@ -35,15 +35,33 @@ export const StepSchema = z.object({
     'assertTitle',
     'assertChecked',
     'assertCount',
-    'waitForSelector'
+    'waitForSelector',
+    'executeSql',
+    'assertDatabaseResult'
   ]),
   selector: z.string().optional(),
   selectorCandidates: z.array(z.string()).optional(),
   elementText: z.string().optional(),
   elementTag: z.string().optional(),
-  value: z.string().optional()
-  ,
+  value: z.string().optional(),
   expected: z.string().optional(),
+  databaseConnectionId: z.string().min(1).optional(),
+  sql: z.string().max(20_000).optional(),
+  parameters: z.record(z.string(), z.union([z.string().max(10_000), z.number().finite(), z.boolean(), z.null()])).optional(),
+  assertion: z.object({
+    type: z.enum(['rowCountEquals', 'rowCountGreaterThan', 'empty', 'notEmpty', 'columnEquals', 'columnContains', 'columnNotNull', 'affectedRowsEquals']),
+    expected: z.string().optional(),
+    column: z.string().max(256).optional(),
+    rowIndex: z.number().int().nonnegative().max(100).optional()
+  }).optional(),
+  waitForResult: z.object({
+    timeoutMs: z.number().int().min(250).max(30_000),
+    pollIntervalMs: z.number().int().min(250).max(5_000)
+  }).optional(),
+  saveResultAs: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/).optional(),
+  saveRowIndex: z.number().int().nonnegative().max(100).optional(),
+  saveColumn: z.string().max(256).optional(),
+  captureRows: z.boolean().optional(),
   options: z
     .object({
       exact: z.boolean().optional(),
@@ -51,6 +69,32 @@ export const StepSchema = z.object({
       nth: z.number().int().nonnegative().optional()
     })
     .optional()
+}).superRefine((step, ctx) => {
+  if (step.action === 'executeSql' || step.action === 'assertDatabaseResult') {
+    if (!step.databaseConnectionId) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Database connection is required', path: ['databaseConnectionId'] });
+    if (!step.sql?.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'SQL query is required', path: ['sql'] });
+    if (step.action === 'assertDatabaseResult' && !step.assertion) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Database assertion is required', path: ['assertion'] });
+    if (step.assertion) {
+      const assertionNeedsColumn = ['columnEquals', 'columnContains', 'columnNotNull'].includes(step.assertion.type);
+      const assertionNeedsExpected = ['rowCountEquals', 'rowCountGreaterThan', 'columnEquals', 'columnContains', 'affectedRowsEquals'].includes(step.assertion.type);
+      if (assertionNeedsColumn && !step.assertion.column?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Database assertion column is required', path: ['assertion', 'column'] });
+      }
+      if (assertionNeedsExpected && step.assertion.expected === undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Database assertion expected value is required', path: ['assertion', 'expected'] });
+      }
+      if (['rowCountEquals', 'rowCountGreaterThan', 'affectedRowsEquals'].includes(step.assertion.type)) {
+        const expectedCount = Number(step.assertion.expected);
+        if (!/^(0|[1-9]\d*)$/.test(step.assertion.expected ?? '') || !Number.isSafeInteger(expectedCount) || expectedCount < 0) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Expected row or affected-row count must be a non-negative integer', path: ['assertion', 'expected'] });
+        }
+      }
+    }
+    if (step.waitForResult && !step.assertion) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Wait for Result requires an assertion', path: ['waitForResult'] });
+    if (step.saveResultAs && step.saveColumn !== undefined && !step.saveColumn.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Choose a non-empty result column or use the first-column default', path: ['saveColumn'] });
+    }
+  }
 });
 
 export const TestDataCaseSchema = z.object({

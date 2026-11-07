@@ -15,7 +15,8 @@ import {
   Table,
   Tag,
   Tooltip,
-  Typography
+  Typography,
+  Descriptions
 } from 'antd';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +25,8 @@ import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
 import RunStatusBadge from '../components/RunStatusBadge';
-import type { RunStatus, StepAction, TestRun } from '../types';
+import '../components/database-testing.css';
+import type { RunStatus, Step, StepAction, TestRun } from '../types';
 import { BACKEND_URL } from '../utils/runtimeConfig';
 import { useAppShell } from '../shell/ShellContext';
 
@@ -40,6 +42,8 @@ type StepResultRow = {
   durationMs?: number | null;
   screenshot?: string | null;
   error?: string | null;
+  database?: NonNullable<NonNullable<TestRun['stepResults']>[number]['database']>;
+  stepDefinition?: Step;
 };
 
 function resolveBackendUrl(value?: string) {
@@ -97,7 +101,9 @@ function buildStepRows(run: TestRun, t: (key: string) => string): StepResultRow[
       status: stepResult.status,
       durationMs: stepResult.durationMs,
       screenshot: stepResult.screenshot ?? undefined,
-      error: stepResult.error ?? undefined
+      error: stepResult.error ?? undefined,
+      database: stepResult.database,
+      stepDefinition: run.test?.steps?.[stepResult.index]
     }));
   }
 
@@ -116,7 +122,8 @@ function buildStepRows(run: TestRun, t: (key: string) => string): StepResultRow[
           : 'pending',
     durationMs: null,
     screenshot: run.screenshots[index],
-    error: undefined
+    error: undefined,
+    stepDefinition: fallbackSteps[index]
   }));
 }
 
@@ -492,6 +499,53 @@ export default function RunResultPage() {
                   size="small"
                   pagination={false}
                   rowClassName={(record?: StepResultRow) => (record?.status === 'failed' ? 'run-step-row-failed' : '')}
+                  expandable={{
+                    expandedRowRender: (record) => {
+                      if (!record) return null;
+                      const step = record.stepDefinition;
+                      const parameters = Object.entries(step?.parameters ?? {}).map(([name, value]) => ({
+                        key: name,
+                        label: name,
+                        children: typeof value === 'string' && /^\{\{[A-Z][A-Z0-9_]*\}\}$/.test(value) ? value : '••••••'
+                      }));
+                      return <div className="wt-run-sql-details">
+                        {step?.sql && <div>
+                          <Text type="secondary">{t('connections.sqlQuery')}</Text>
+                          <pre className="wt-run-sql-query">{step.sql}</pre>
+                        </div>}
+                        {parameters.length > 0 && <div>
+                          <Text type="secondary">{t('connections.parameters')}</Text>
+                          <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }} items={parameters} />
+                        </div>}
+                        {step?.assertion && <div>
+                          <Text type="secondary">{t('connections.assertion')}</Text>
+                          <Space wrap>
+                            <Tag>{t(`connections.assertion.${step.assertion.type}`)}</Tag>
+                            {step.assertion.column && <Text>{t('connections.column')}: {step.assertion.column}</Text>}
+                            {step.assertion.expected !== undefined && <Text>{t('connections.expected')}: {/^\{\{[A-Z][A-Z0-9_]*\}\}$/.test(step.assertion.expected) ? step.assertion.expected : '••••••'}</Text>}
+                          </Space>
+                        </div>}
+                        {record.database && <div>
+                          <Space wrap>
+                            <Text>{t('connections.rowsReturned', { count: record.database.rowCount })}{record.database.rowLimitReached ? '+' : ''}</Text>
+                            <Text>{t('connections.rowsAffected', { count: record.database.affectedRows })}</Text>
+                            {record.database.assertion && <Tag color={record.database.assertion.passed ? 'success' : 'error'}>{t(record.database.assertion.passed ? 'connections.assertionPassed' : 'connections.assertionFailed')}</Tag>}
+                          </Space>
+                          {record.database.rows && record.database.rows.length > 0 ? <Table
+                            size="small"
+                            pagination={false}
+                            rowKey={(_, index) => String(index)}
+                            dataSource={record.database.rows}
+                            columns={record.database.columns.map((column) => ({ title: column, dataIndex: column, render: (value: unknown) => String(value ?? '—') }))}
+                            scroll={{ x: true }}
+                          /> : <Text type="secondary">{t('connections.noCapturedRows')}</Text>}
+                          {record.database.rowLimitReached && <Text type="secondary">{t('connections.resultTruncated')}</Text>}
+                        </div>}
+                        {record.error && <Alert type="error" showIcon message={record.error} />}
+                      </div>;
+                    },
+                    rowExpandable: (record) => Boolean(record && (record.stepDefinition?.action === 'executeSql' || record.database || record.stepDefinition?.sql))
+                  }}
                   columns={[
                     {
                       title: t('runResult.step'),
@@ -513,6 +567,16 @@ export default function RunResultPage() {
                           </Text>
                         </Tooltip>
                       )
+                    },
+                    {
+                      title: t('connections.databaseResult'),
+                      dataIndex: 'database',
+                      width: 230,
+                      render: (database?: StepResultRow['database']) => database ? <Space orientation="vertical" size={0}>
+                        <Text>{database.connectionName}</Text>
+                        <Text type="secondary">{t('connections.rowsReturned', { count: database.rowCount })}{database.rowLimitReached ? '+' : ''} · {t('connections.rowsAffected', { count: database.affectedRows })}</Text>
+                        {database.assertion && <Tag color={database.assertion.passed ? 'success' : 'error'}>{t(database.assertion.passed ? 'connections.assertionPassed' : 'connections.assertionFailed')}</Tag>}
+                      </Space> : '—'
                     },
                     {
                       title: t('common.status'),

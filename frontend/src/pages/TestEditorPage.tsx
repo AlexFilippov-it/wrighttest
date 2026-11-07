@@ -2,16 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Breadcrumb, Button, Card, Checkbox, Col, Dropdown, Form, Input, Layout, Modal, Radio, Row, Select, Space, Tag, Typography, message, notification } from 'antd';
 import type { MenuProps } from 'antd';
 import { DownOutlined, DownloadOutlined, PlayCircleOutlined, StopOutlined, VideoCameraOutlined, WarningOutlined } from '@ant-design/icons';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api, createTest, getDevices, getEnvironments, getProject, getTest, startRecording, stopRecording, updateTest, validateTestSteps, runTestWithEnvironment, runAllEnabledTestCases } from '../api/client';
+import { api, createTest, getDatabaseConnections, getDevices, getEnvironments, getProject, getTest, startRecording, stopRecording, updateTest, validateTestSteps, runTestWithEnvironment, runAllEnabledTestCases } from '../api/client';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import StepEditor from '../components/StepEditor';
 import TestDataEditor from '../components/test-data/TestDataEditor';
 import VariableAutocompleteInput from '../components/VariableAutocompleteInput';
 import UserMenu from '../components/UserMenu';
-import type { Environment, Step, StepValidationResult, Test } from '../types';
+import type { DatabaseConnection, Environment, Step, StepValidationResult, Test } from '../types';
 import {
   hasTestDataValidationErrors,
   getEnabledTestDataCaseOptions,
@@ -113,6 +113,27 @@ function buildStepIssue(fields: Omit<StepIssue, 'message'>): StepIssue | null {
 }
 
 function validateRequiredStepFields(step: Step, t: (key: string) => string): StepIssue | null {
+  if (step.action === 'executeSql' || step.action === 'assertDatabaseResult') {
+    if (!step.databaseConnectionId) return { message: t('connections.validation.connectionRequired') };
+    if (!step.sql?.trim()) return { message: t('connections.validation.queryRequired') };
+    if (step.action === 'assertDatabaseResult' && !step.assertion) return { message: t('connections.validation.assertionRequired') };
+    if (step.assertion) {
+      if (['columnEquals', 'columnContains', 'columnNotNull'].includes(step.assertion.type) && !step.assertion.column?.trim()) {
+        return { message: t('connections.validation.columnRequired') };
+      }
+      if (['rowCountEquals', 'rowCountGreaterThan', 'columnEquals', 'columnContains', 'affectedRowsEquals'].includes(step.assertion.type) && step.assertion.expected === undefined) {
+        return { message: t('connections.validation.expectedRequired') };
+      }
+      if (['rowCountEquals', 'rowCountGreaterThan', 'affectedRowsEquals'].includes(step.assertion.type)) {
+        const expectedCount = Number(step.assertion.expected);
+        if (!/^(0|[1-9]\d*)$/.test(step.assertion.expected ?? '') || !Number.isSafeInteger(expectedCount) || expectedCount < 0) return { message: t('connections.validation.countMustBeNonNegativeInteger') };
+      }
+    }
+    if (step.waitForResult && !step.assertion) return { message: t('connections.validation.waitNeedsAssertion') };
+    if (step.saveResultAs && step.saveColumn !== undefined && !step.saveColumn.trim()) return { message: t('connections.validation.saveColumnRequired') };
+    return null;
+  }
+
   switch (step.action) {
     case 'goto':
       if (!step.value?.trim()) {
@@ -209,6 +230,7 @@ export default function TestEditorPage() {
   const [recordingProjectId, setRecordingProjectId] = useState<string | undefined>(projectId);
   const [recordEnvironments, setRecordEnvironments] = useState<Environment[]>([]);
   const [environmentVariableNames, setEnvironmentVariableNames] = useState<string[]>([]);
+  const [databaseConnections, setDatabaseConnections] = useState<DatabaseConnection[]>([]);
   const [selectedRecordingEnvironmentId, setSelectedRecordingEnvironmentId] = useState<string | undefined>(undefined);
   const [useProjectAuthentication, setUseProjectAuthentication] = useState(true);
   const [recordingUrlHasTemplate, setRecordingUrlHasTemplate] = useState(false);
@@ -234,6 +256,7 @@ export default function TestEditorPage() {
   const stepsRef = useRef<Step[]>([]);
   const initialSnapshotRef = useRef<string>('');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [confirmModal, confirmModalContextHolder] = Modal.useModal();
   const isEdit = Boolean(testId);
   const isReadOnly = currentProjectRole === 'VIEWER';
@@ -314,6 +337,7 @@ export default function TestEditorPage() {
     if (!recordingProjectId) {
       setRecordEnvironments([]);
       setEnvironmentVariableNames([]);
+      setDatabaseConnections([]);
       return;
     }
 
@@ -330,6 +354,10 @@ export default function TestEditorPage() {
         setRecordEnvironments([]);
         setEnvironmentVariableNames([]);
       });
+
+    void getDatabaseConnections(recordingProjectId)
+      .then((connections) => { if (!cancelled) setDatabaseConnections(connections); })
+      .catch(() => { if (!cancelled) setDatabaseConnections([]); });
 
     return () => {
       cancelled = true;
@@ -934,7 +962,7 @@ export default function TestEditorPage() {
     return recordEnvironments.find((environment) => environment.id === selectedRecordingEnvironmentId)?.name ?? t('editor.noEnvironment');
   };
 
-  const stepAssertionsCount = steps.filter((step) => step.action.startsWith('assert')).length;
+  const stepAssertionsCount = steps.filter((step) => step.action.startsWith('assert') || (step.action === 'executeSql' && Boolean(step.assertion))).length;
   const stepSummaryBadges = [
     <Tag key="steps" color="blue">
       {t('editor.stepsCount', { count: steps.length })}
@@ -1363,6 +1391,9 @@ export default function TestEditorPage() {
 
                 {steps.length > 0 ? (
                   <StepEditor
+                    databaseConnections={databaseConnections}
+                    projectId={currentProjectId}
+                    defaultDatabaseConnectionId={!isEdit ? searchParams.get('databaseConnectionId') ?? undefined : undefined}
                     steps={steps}
                     onChange={handleStepsChange}
                     readOnly={isReadOnly}

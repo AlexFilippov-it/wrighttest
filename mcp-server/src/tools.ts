@@ -3,13 +3,22 @@ import { z } from 'zod';
 import { jsonBody, redactStrings, WrightTestApi } from './api.js';
 
 const StepSchema = z.object({
-  action: z.enum(['goto', 'click', 'fill', 'press', 'keyboardPress', 'selectOption', 'assertVisible', 'assertHidden', 'assertText', 'assertValue', 'assertURL', 'assertTitle', 'assertChecked', 'assertCount', 'waitForSelector']),
+  action: z.enum(['goto', 'click', 'fill', 'press', 'keyboardPress', 'selectOption', 'assertVisible', 'assertHidden', 'assertText', 'assertValue', 'assertURL', 'assertTitle', 'assertChecked', 'assertCount', 'waitForSelector', 'executeSql', 'assertDatabaseResult']),
   selector: z.string().optional(),
   selectorCandidates: z.array(z.string()).optional(),
   elementText: z.string().optional(),
   elementTag: z.string().optional(),
   value: z.string().optional(),
   expected: z.string().optional(),
+  databaseConnectionId: z.string().min(1).optional(),
+  sql: z.string().max(20_000).optional(),
+  parameters: z.record(z.string(), z.union([z.string().max(10_000), z.number().finite(), z.boolean(), z.null()])).optional(),
+  assertion: z.object({ type: z.enum(['rowCountEquals', 'rowCountGreaterThan', 'empty', 'notEmpty', 'columnEquals', 'columnContains', 'columnNotNull', 'affectedRowsEquals']), expected: z.string().optional(), column: z.string().max(256).optional(), rowIndex: z.number().int().nonnegative().max(100).optional() }).optional(),
+  waitForResult: z.object({ timeoutMs: z.number().int().min(250).max(30_000), pollIntervalMs: z.number().int().min(250).max(5_000) }).optional(),
+  saveResultAs: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/).optional(),
+  saveRowIndex: z.number().int().nonnegative().max(100).optional(),
+  saveColumn: z.string().max(256).optional(),
+  captureRows: z.boolean().optional(),
   options: z.object({ exact: z.boolean().optional(), timeout: z.number().int().positive().optional(), nth: z.number().int().nonnegative().optional() }).optional()
 });
 
@@ -119,7 +128,8 @@ async function safeRunPayload(api: WrightTestApi, run: RunPayload) {
       action: record.action,
       status: record.status,
       durationMs: record.durationMs,
-      error: hasShortSecret ? undefined : record.error
+      error: hasShortSecret ? undefined : record.error,
+      database: record.database && typeof record.database === 'object' ? record.database : undefined
     };
   }).filter(Boolean);
   const screenshots = Array.isArray(run.screenshots)
@@ -150,6 +160,22 @@ async function safeRunPayload(api: WrightTestApi, run: RunPayload) {
 }
 
 export function registerWrightTestTools(server: McpServer, api: WrightTestApi) {
+  server.registerTool('list_database_connections', {
+    description: `List safe database connection metadata in a project. Passwords and encrypted credentials are never returned. Requires ${READ_ROLES}.`,
+    inputSchema: { projectId: z.string().min(1) }
+  }, async ({ projectId }) => {
+    try { return result(await api.request(`/projects/${encodeURIComponent(projectId)}/connections`)); }
+    catch (error) { return fail(error); }
+  });
+
+  server.registerTool('get_database_connection', {
+    description: `Get safe metadata for a database connection. Passwords and encrypted credentials are never returned. Requires ${READ_ROLES}.`,
+    inputSchema: { connectionId: z.string().min(1) }
+  }, async ({ connectionId }) => {
+    try { return result(await api.request(`/connections/${encodeURIComponent(connectionId)}`)); }
+    catch (error) { return fail(error); }
+  });
+
   server.registerTool('list_projects', {
     description: `List projects the authenticated user can access (${READ_ROLES}).`,
     inputSchema: {}

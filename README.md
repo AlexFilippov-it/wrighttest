@@ -19,6 +19,7 @@
 - **Assertions Builder** - configure visibility, text, value, URL, title, checked state, and element-count assertions
 - **Device Presets** - run desktop 1280px by default or emulate iPhone 15, Pixel 7, iPad and other devices
 - **Environments and authentication** - use project-scoped variables and optionally reuse encrypted Playwright storage state per environment
+- **Database checks** - connect PostgreSQL, MySQL, or Supabase PostgreSQL databases; run bounded, parameterized SQL steps and verify results inside existing Checks and Suites ([setup and limits](./docs/database-testing.md))
 - **Data-driven checks** - define named scenario cases, run one selected case, or queue all enabled cases as a batch
 - **Suites and schedules** - group checks and run checks or suites manually or on a cron schedule
 - **Run results** - inspect step-level outcomes, screenshots, and Playwright traces in the built-in trace viewer
@@ -52,6 +53,7 @@ cd wrighttest
 
 cp .env.example .env
 # Edit .env: set JWT_SECRET to a long random value and change the initial admin password.
+# Set DATABASE_CREDENTIALS_ENCRYPTION_KEY to the output of: openssl rand -hex 32
 
 docker compose up --build
 ```
@@ -90,7 +92,7 @@ git clone https://github.com/AlexFilippov-it/wrighttest.git
 cd wrighttest
 
 cp .env.example .env
-# Set JWT_SECRET to a long random value and change the initial admin password.
+# Set JWT_SECRET and DATABASE_CREDENTIALS_ENCRYPTION_KEY, and change the initial admin password.
 
 docker compose -f docker-compose.hub.yml pull
 docker compose -f docker-compose.hub.yml up -d
@@ -151,12 +153,13 @@ For a server deployment:
 
 1. Copy `.env.example` to `.env`
 2. Set `JWT_SECRET` to a long random value
-3. Set `FRONTEND_URL` to your public domain or reverse-proxy URL
-4. Set `VITE_BACKEND_URL` and `VITE_NOVNC_URL` to the URLs users should reach from the browser
+3. Set `DATABASE_CREDENTIALS_ENCRYPTION_KEY` to a generated 32-byte hex key (`openssl rand -hex 32`)
+4. Set `FRONTEND_URL` to your public domain or reverse-proxy URL
+5. Set `VITE_BACKEND_URL` and `VITE_NOVNC_URL` to the URLs users should reach from the browser
    - local example: `http://localhost:6080`
    - reverse-proxy example: `/vnc`
-5. Adjust `*_HOST_PORT` values if your VPS already uses ports like `3000`, `5432`, or `6379`
-6. Run `docker compose up --build -d`
+6. Adjust `*_HOST_PORT` values if your VPS already uses ports like `3000`, `5432`, or `6379`
+7. Run `docker compose up --build -d`
 
 If you place nginx in front of the app, proxy the public frontend domain to the frontend container and route backend/API traffic to the backend container. The backend already exposes `/health` and `/health/db` for readiness checks.
 
@@ -249,6 +252,10 @@ docker compose up --build -d
 ```
 
 Migrations apply automatically on startup. Existing projects, tests and run history are preserved in the Postgres volume.
+
+## Database Testing
+
+Database connections and SQL steps extend the existing Checks, Suites, Runs, and worker. Credentials are encrypted by the backend and are never returned by the API. Configure `DATABASE_CREDENTIALS_ENCRYPTION_KEY` before using database connections. Start with **Read Only**, use bound query parameters, and use disposable/staging data for any **Read & Write** checks. Private/VPC targets are blocked by default. See [Database Connections and Testing](./docs/database-testing.md) for setup, permissions, SQL limits, assertions, run results, and current limitations.
 
 ## 🔧 Changing Ports
 

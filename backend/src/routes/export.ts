@@ -32,6 +32,13 @@ function sanitizeFilename(name: string) {
     .replace(/(^-|-$)/g, '');
 }
 
+function hasDatabaseSteps(steps: unknown): boolean {
+  return Array.isArray(steps) && steps.some((step) =>
+    typeof step === 'object' && step !== null && 'action' in step &&
+    ['executeSql', 'assertDatabaseResult'].includes(String(step.action))
+  );
+}
+
 export async function exportRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string }; Querystring: { envId?: string; useEnvVars?: string } }>(
     '/tests/:id/export',
@@ -47,6 +54,10 @@ export async function exportRoutes(fastify: FastifyInstance) {
         await requireProjectRole(test.projectId, userId, ['OWNER', 'EDITOR']);
       } catch (error) {
         return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
+      }
+
+      if (hasDatabaseSteps(test.steps)) {
+        return reply.status(409).send({ error: 'Standalone Playwright exports do not support WrightTest database connections yet.' });
       }
 
       let variables: Record<string, string> = {};
@@ -99,6 +110,10 @@ export async function exportRoutes(fastify: FastifyInstance) {
       await requireProjectRole(test.projectId, userId, ['OWNER', 'EDITOR']);
     } catch (error) {
       return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
+    }
+
+    if (hasDatabaseSteps(test.steps)) {
+      return reply.status(409).send({ error: 'Standalone Playwright exports do not support WrightTest database connections yet.' });
     }
 
     let variables: Record<string, string> = {};

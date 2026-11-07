@@ -1,0 +1,272 @@
+.wt-sql-step-fields {
+  display: grid;
+  flex: 1 1 100%;
+  gap: 16px;
+  min-width: 0;
+}
+
+.wt-sql-connection-option {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.wt-connection-name,
+.wt-connection-endpoint {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.wt-connection-name .ant-space,
+.wt-connection-name .ant-typography,
+.wt-connection-endpoint .ant-typography {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.wt-connection-actions {
+  white-space: nowrap;
+}
+
+.wt-sql-connection-help {
+  width: fit-content;
+  cursor: help;
+}
+
+.wt-sql-info-icon {
+  color: #8c96a5;
+  cursor: help;
+}
+
+.wt-connection-card-list {
+  display: grid;
+  gap: 12px;
+}
+
+.wt-connection-card__heading,
+.wt-connection-card__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.wt-connection-card__heading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.wt-connection-card__identity .ant-typography {
+  overflow-wrap: anywhere;
+}
+
+.wt-connection-card__heading > .ant-tag {
+  margin-inline-end: 0;
+}
+
+.wt-connection-card__details {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.wt-connection-card__details > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.wt-connection-card__details dt {
+  color: #667085;
+  font-size: 12px;
+}
+
+.wt-connection-card__details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .wt-connection-modal {
+    top: 8px;
+    max-width: calc(100vw - 16px);
+    margin: 0 auto;
+    padding-bottom: 0;
+  }
+
+  .wt-connection-modal .ant-modal-container {
+    display: flex;
+    max-height: calc(100dvh - 16px);
+    flex-direction: column;
+  }
+
+  .wt-connection-modal .ant-modal-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .wt-connection-modal .ant-modal-footer {
+    flex: 0 0 auto;
+    background: #fff;
+  }
+}
+
+.wt-sql-field-help {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.wt-sql-editor {
+  overflow: hidden;
+  border: 1px solid #d9dfe7;
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.wt-sql-editor:focus-within {
+  border-color: #4096ff;
+  box-shadow: 0 0 0 2px rgb(22 119 255 / 12%);
+}
+
+.wt-sql-editor .cm-editor {
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1.55;
+}
+
+.wt-sql-editor .cm-scroller {
+  overflow: auto;
+}
+
+.wt-sql-editor .cm-gutters {
+  background: #f7f8fa;
+  border-right-color: #edf0f3;
+}
+
+.wt-sql-editor .cm-placeholder {
+  color: #8c96a5;
+  font-style: normal;
+}
+
+.wt-sql-parameters,
+.wt-sql-save-result {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wt-sql-subsection-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.wt-sql-subsection-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.wt-sql-parameter-table {
+  display: grid;
+  min-width: 0;
+  border: 1px solid #e4e8ee;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.wt-sql-parameter-header,
+.wt-sql-parameter-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(180px, 2fr) minmax(112px, auto) 36px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.wt-sql-parameter-header {
+  background: #f7f8fa;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.wt-sql-parameter-row + .wt-sql-parameter-row {
+  border-top: 1px solid #edf0f3;
+}
+
+.wt-sql-parameter-row > * {
+  min-width: 0;
+}
+
+.wt-sql-parameter-type.ant-select {
+  width: 112px;
+  min-width: 0;
+}
+
+.wt-sql-assertion-field {
+  display: grid;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.wt-sql-assertion-field .ant-input-number {
+  width: 100%;
+}
+
+.wt-run-sql-details {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 4px 0;
+}
+
+.wt-run-sql-query {
+  max-height: 260px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #e4e8ee;
+  border-radius: 8px;
+  background: #f7f8fa;
+  color: #273244;
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .wt-sql-parameter-header {
+    display: none;
+  }
+
+  .wt-sql-parameter-row {
+    grid-template-columns: minmax(0, 1fr) 36px;
+    gap: 8px;
+  }
+
+  .wt-sql-parameter-row > :nth-child(1),
+  .wt-sql-parameter-row > :nth-child(2) {
+    grid-column: 1;
+  }
+
+  .wt-sql-parameter-row > :nth-child(3) {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .wt-sql-parameter-row > :nth-child(4) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}

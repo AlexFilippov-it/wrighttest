@@ -42,6 +42,13 @@ function normalizeEnvironmentId(environmentId?: string | null) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+async function validateConnectionReferences(projectId: string, steps: Array<{ databaseConnectionId?: string }>) {
+  const ids = [...new Set(steps.map((step) => step.databaseConnectionId).filter((id): id is string => Boolean(id)))];
+  if (!ids.length) return true;
+  const count = await prisma.databaseConnection.count({ where: { projectId, id: { in: ids } } });
+  return count === ids.length;
+}
+
 export async function testRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { projectId: string } }>('/projects/:projectId/tests', async (req, reply) => {
     const { userId } = getAuthUser(req);
@@ -93,6 +100,10 @@ export async function testRoutes(fastify: FastifyInstance) {
       return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
     }
 
+    if (!(await validateConnectionReferences(req.params.projectId, result.data.steps))) {
+      return reply.status(400).send({ error: 'A database connection referenced by this Check does not belong to this project.' });
+    }
+
     const test = await prisma.test.create({
       data: {
         ...result.data,
@@ -120,6 +131,9 @@ export async function testRoutes(fastify: FastifyInstance) {
     const { userId } = getAuthUser(req);
     try {
       await requireProjectRole(existingTest.projectId, userId, ['OWNER', 'EDITOR']);
+      if (result.data.steps && !(await validateConnectionReferences(existingTest.projectId, result.data.steps))) {
+        return reply.status(400).send({ error: 'A database connection referenced by this Check does not belong to this project.' });
+      }
       const test = await prisma.test.update({
         where: { id: req.params.id },
         data: {

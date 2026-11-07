@@ -17,7 +17,9 @@ export type StepAction =
   | 'assertTitle'
   | 'assertChecked'
   | 'assertCount'
-  | 'waitForSelector';
+  | 'waitForSelector'
+  | 'executeSql'
+  | 'assertDatabaseResult';
 
 export interface Step {
   action: StepAction;
@@ -27,6 +29,20 @@ export interface Step {
   elementTag?: string;
   value?: string;
   expected?: string;
+  databaseConnectionId?: string;
+  sql?: string;
+  parameters?: Record<string, string | number | boolean | null>;
+  assertion?: {
+    type: 'rowCountEquals' | 'rowCountGreaterThan' | 'empty' | 'notEmpty' | 'columnEquals' | 'columnContains' | 'columnNotNull' | 'affectedRowsEquals';
+    expected?: string;
+    column?: string;
+    rowIndex?: number;
+  };
+  waitForResult?: { timeoutMs: number; pollIntervalMs: number };
+  saveResultAs?: string;
+  saveRowIndex?: number;
+  saveColumn?: string;
+  captureRows?: boolean;
   options?: {
     exact?: boolean;
     timeout?: number;
@@ -269,6 +285,26 @@ export interface Environment {
   updatedAt: string;
 }
 
+export type DatabaseProvider = 'POSTGRESQL' | 'MYSQL' | 'SUPABASE';
+export type DatabaseAccessMode = 'READ_ONLY' | 'READ_WRITE';
+export interface DatabaseConnection {
+  id: string;
+  projectId: string;
+  name: string;
+  provider: DatabaseProvider;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  ssl: boolean;
+  accessMode: DatabaseAccessMode;
+  lastCheckedAt: string | null;
+  lastSuccessfulCheckAt: string | null;
+  lastCheckStatus: 'CONNECTED' | 'FAILED' | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ProjectAuthProfile {
   id: string;
   projectId: string;
@@ -402,6 +438,15 @@ export interface TestRun {
     durationMs: number;
     screenshot?: string | null;
     error?: string | null;
+    database?: {
+      connectionName: string;
+      rowCount: number;
+      affectedRows: number;
+      rowLimitReached: boolean;
+      columns: string[];
+      rows?: Record<string, string | number | boolean | null>[];
+      assertion?: { type: NonNullable<Step['assertion']>['type']; passed: boolean };
+    };
   }>;
   test?: (Test & {
     project?: Project | null;

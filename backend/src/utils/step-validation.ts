@@ -8,7 +8,8 @@ const ASSERTION_ACTIONS = new Set<Step['action']>([
   'assertURL',
   'assertTitle',
   'assertChecked',
-  'assertCount'
+  'assertCount',
+  'assertDatabaseResult'
 ]);
 
 export type StepRequirementIssue = {
@@ -34,6 +35,19 @@ export function hasAssertionSteps(steps: Step[]) {
 }
 
 export function validateStepRequirements(step: Step): StepRequirementIssue | null {
+  if (step.action === 'executeSql' || step.action === 'assertDatabaseResult') {
+    if (!step.databaseConnectionId?.trim()) {
+      return { message: required('Database connection'), fields: { value: required('Database connection') } };
+    }
+    if (!step.sql?.trim()) {
+      return { message: required('SQL query'), fields: { value: required('SQL query') } };
+    }
+    if (step.action === 'assertDatabaseResult' && !step.assertion) {
+      return { message: required('Database assertion'), fields: { expected: required('Database assertion') } };
+    }
+    return null;
+  }
+
   switch (step.action) {
     case 'goto':
       if (!step.value?.trim()) {

@@ -27,16 +27,17 @@ async function connectedClient(fetchImpl: typeof fetch) {
   return { client, server };
 }
 
-test('MCP initializes and lists project and browser exploration tools', async () => {
+test('MCP initializes and lists project, browser, and safe database metadata tools', async () => {
   const { client, server } = await connectedClient(async () => new Response('[]', { status: 200 }));
   const listed = await client.listTools();
-  assert.equal(listed.tools.length, 24);
+  assert.equal(listed.tools.length, 26);
   assert.deepEqual(new Set(listed.tools.map((tool) => tool.name)), new Set([
     'list_projects', 'get_project', 'create_project', 'update_project',
     'list_checks', 'get_check', 'create_check', 'update_check',
     'list_suites', 'create_suite', 'add_check_to_suite',
     'run_check', 'run_suite', 'get_run_status', 'get_run_results',
-    'browser_start', 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_select', 'browser_screenshot', 'browser_wait', 'browser_close'
+    'browser_start', 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_select', 'browser_screenshot', 'browser_wait', 'browser_close',
+    'list_database_connections', 'get_database_connection'
   ]));
   await client.close();
   await server.close();
@@ -79,15 +80,20 @@ test('list_projects forwards the user API token and returns a safe project summa
 
 test('create_check delegates to the API and returns its sanitized check payload', async () => {
   let received: unknown;
+  const databaseStep = {
+    action: 'executeSql', databaseConnectionId: 'db-1',
+    sql: 'SELECT status FROM orders WHERE id = :id', parameters: { id: '{{ORDER_ID}}' },
+    assertion: { type: 'columnEquals', column: 'status', expected: 'pending' }
+  };
   const { client, server } = await connectedClient(async (_input, init) => {
     received = JSON.parse(String(init?.body));
-    return Response.json({ id: 'check-1', projectId: 'project-1', name: 'Landing', url: 'https://example.test', steps: [] }, { status: 201 });
+    return Response.json({ id: 'check-1', projectId: 'project-1', name: 'Landing', url: 'https://example.test', steps: [databaseStep] }, { status: 201 });
   });
   const response = await client.callTool({
     name: 'create_check',
-    arguments: { projectId: 'project-1', name: 'Landing', url: 'https://example.test', steps: [] }
+    arguments: { projectId: 'project-1', name: 'Landing', url: 'https://example.test', steps: [databaseStep] }
   });
-  assert.deepEqual(received, { name: 'Landing', url: 'https://example.test', steps: [] });
+  assert.deepEqual(received, { name: 'Landing', url: 'https://example.test', steps: [databaseStep] });
   assert.equal(response.isError, undefined);
   await client.close();
   await server.close();

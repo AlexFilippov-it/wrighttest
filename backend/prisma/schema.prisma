@@ -19,6 +19,7 @@ model Project {
   schedules    Schedule[]
   members      ProjectMember[]
   authStates   ProjectAuthState[]
+  databaseConnections DatabaseConnection[]
 }
 
 model User {
@@ -177,6 +178,28 @@ model Environment {
   updatedAt  DateTime           @updatedAt
 }
 
+model DatabaseConnection {
+  id                  String                @id @default(cuid())
+  projectId           String
+  project             Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name                String
+  provider            DatabaseProvider
+  host                String
+  port                Int
+  database            String
+  username            String
+  encryptedCredentials String
+  ssl                 Boolean               @default(true)
+  accessMode          DatabaseAccessMode    @default(READ_ONLY)
+  lastCheckedAt       DateTime?
+  lastSuccessfulCheckAt DateTime?
+  lastCheckStatus     DatabaseCheckStatus?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@index([projectId])
+}
+
 model ProjectAuthState {
   id             String          @id @default(cuid())
   projectId      String
@@ -270,4 +293,20 @@ enum ProjectRole {
 enum ProjectMemberStatus {
   ACTIVE
   PENDING
+}
+
+enum DatabaseProvider {
+  POSTGRESQL
+  MYSQL
+  SUPABASE
+}
+
+enum DatabaseAccessMode {
+  READ_ONLY
+  READ_WRITE
+}
+
+enum DatabaseCheckStatus {
+  CONNECTED
+  FAILED
 }

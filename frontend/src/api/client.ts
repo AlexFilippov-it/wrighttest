@@ -2,6 +2,9 @@ import axios from 'axios';
 import type {
   DashboardResponse,
   Environment,
+  DatabaseConnection,
+  DatabaseProvider,
+  DatabaseAccessMode,
   NotificationChannel,
   NotificationChannelType,
   Project,
@@ -254,6 +257,32 @@ export const updateEnvironment = (
 
 export const deleteEnvironment = (id: string) =>
   api.delete(`/environments/${id}`);
+
+export const getDatabaseConnections = (projectId: string) =>
+  api.get<DatabaseConnection[]>(`/projects/${projectId}/connections`).then((r) => r.data);
+
+export type DatabaseConnectionInput = {
+  name: string;
+  provider: DatabaseProvider;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password: string;
+  ssl: boolean;
+  accessMode: DatabaseAccessMode;
+};
+
+export const createDatabaseConnection = (projectId: string, data: DatabaseConnectionInput) =>
+  api.post<DatabaseConnection>(`/projects/${projectId}/connections`, data).then((r) => r.data);
+
+export const updateDatabaseConnection = (id: string, data: Partial<DatabaseConnectionInput>) =>
+  api.patch<DatabaseConnection>(`/connections/${id}`, data).then((r) => r.data);
+
+export const deleteDatabaseConnection = (id: string) => api.delete(`/connections/${id}`);
+
+export const testDatabaseConnection = (id: string) =>
+  api.post<{ status: 'CONNECTED' | 'FAILED'; checkedAt: string; error?: string }>(`/connections/${id}/test`).then((r) => r.data);
 
 export const getProjectAuthProfiles = (projectId: string) =>
   api.get<ProjectAuthProfile[]>(`/projects/${projectId}/authentication`).then((r) => r.data);
