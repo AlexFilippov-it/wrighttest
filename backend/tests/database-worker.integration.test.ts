@@ -51,7 +51,7 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
     });
     connectionId = connection.id;
 
-    const url = 'data:text/html,%3Ctitle%3EDatabase%20Worker%20Integration%3C%2Ftitle%3E%3Ch1%3EReady%3C%2Fh1%3E';
+    const url = 'data:text/html,%3Ctitle%3EDatabase%20Worker%20Integration%3C%2Ftitle%3E%3Ch1%3EReady%3C%2Fh1%3E%3Cinput%20id%3D%22order-id%22%3E';
     const check = await prisma.test.create({
       data: {
         projectId: project.id,
@@ -67,6 +67,8 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
             assertion: { type: 'columnEquals', column: 'status', expected: 'ready' },
             saveResultAs: 'ORDER_ID', saveColumn: 'id'
           },
+          { action: 'fill', selector: "page.locator('#order-id')", value: '{{ORDER_ID}}' },
+          { action: 'assertValue', selector: "page.locator('#order-id')", expected: '{{ORDER_ID}}' },
           {
             action: 'executeSql', databaseConnectionId: connection.id,
             sql: 'UPDATE wrighttest_db_worker_fixture SET status = :status WHERE id = :id',
@@ -98,12 +100,14 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
     }
     assert.equal(completed?.status, 'PASSED', completed?.error ?? 'Worker run did not reach a terminal state');
     const results = completed?.stepResults as Array<{ status: string; action: string; screenshot?: string | null; database?: { rows?: Array<Record<string, unknown>>; assertion?: { passed: boolean } } }>;
-    assert.equal(results.length, 6);
+    assert.equal(results.length, 8);
     assert.equal(results[2].database?.rows?.[0]?.api_token, '[REDACTED]');
-    assert.equal(results[4].database?.assertion?.passed, true);
+    assert.equal(results[6].database?.assertion?.passed, true);
     assert.equal(results[2].screenshot, null);
     assert.equal(results[0].status, 'passed');
-    assert.equal(results[5].status, 'passed');
+    assert.equal(results[3].status, 'passed');
+    assert.equal(results[4].status, 'passed');
+    assert.equal(results[7].status, 'passed');
   } finally {
     await stopTestWorker();
     if (testRunId) await prisma.testRun.delete({ where: { id: testRunId } }).catch(() => undefined);

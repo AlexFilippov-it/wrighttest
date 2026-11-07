@@ -6,6 +6,7 @@ import mysql, { type Connection as MysqlConnection } from 'mysql2/promise';
 import { Parser } from 'node-sql-parser';
 import type { DatabaseConnection } from '@prisma/client';
 import type { Step } from '../types/step';
+import { VariableContext, type VariableValue } from '../utils/variable-context';
 
 const parser = new Parser();
 const CONNECT_TIMEOUT_MS = 5_000;
@@ -304,31 +305,33 @@ export function evaluateDatabaseAssertion(step: Step, rows: SqlRows, affectedRow
 
 export type SqlSession = Awaited<ReturnType<typeof openDatabaseConnection>>;
 
-export async function executeDatabaseStep(session: SqlSession, connectionName: string, connectionAccessMode: 'READ_ONLY' | 'READ_WRITE', step: Step, variables: Record<string, string>): Promise<{ summary: SqlExecutionSummary; savedValue?: string }> {
+export async function executeDatabaseStep(
+  session: SqlSession,
+  connectionName: string,
+  connectionAccessMode: 'READ_ONLY' | 'READ_WRITE',
+  step: Step,
+  variables: VariableContext | Record<string, unknown>
+): Promise<{ summary: SqlExecutionSummary; savedValue?: VariableValue }> {
   const provider = session.provider as 'POSTGRESQL' | 'MYSQL';
+  const variableContext = variables instanceof VariableContext ? variables : new VariableContext({ runInputs: variables });
   const statementType = validateSqlStatement(step.sql ?? '', provider, connectionAccessMode);
   if (step.waitForResult && statementType !== 'select') throw new Error('Wait for Result can only be used with SELECT statements.');
 
-  const params = Object.fromEntries(Object.entries(step.parameters ?? {}).map(([key, value]) => [key,
-    typeof value === 'string'
-      ? value.replace(/\{\{([A-Z][A-Z0-9_]*)\}\}/g, (match, name: string) => variables[name] ?? match)
-      : value
-  ]));
+  const params = variables instanceof VariableContext
+    ? (step.parameters ?? {})
+    : Object.fromEntries(Object.entries(step.parameters ?? {}).map(([key, value]) => [
+      key,
+      variableContext.resolveSqlParameter(value)
+    ]));
   const resolvedStep: Step = {
     ...step,
     assertion: step.assertion ? {
       ...step.assertion,
-      ...(step.assertion.expected ? {
-        expected: step.assertion.expected.replace(/\{\{([A-Z][A-Z0-9_]*)\}\}/g, (match, name: string) => variables[name] ?? match)
+      ...(step.assertion.expected && !(variables instanceof VariableContext) ? {
+        expected: variableContext.interpolate(step.assertion.expected)
       } : {})
     } : undefined
   };
-  if (resolvedStep.assertion?.expected && /\{\{[A-Z][A-Z0-9_]*\}\}/.test(resolvedStep.assertion.expected)) {
-    throw new Error('The database assertion contains an unresolved WrightTest variable.');
-  }
-  for (const value of Object.values(params)) {
-    if (typeof value === 'string' && /\{\{[A-Z][A-Z0-9_]*\}\}/.test(value)) throw new Error('An SQL parameter contains an unresolved WrightTest variable.');
-  }
   const bound = bindNamedParameters(step.sql ?? '', params, provider);
   const waitOptions = step.waitForResult;
   const deadline = Date.now() + (waitOptions?.timeoutMs ?? 0);
@@ -405,13 +408,16 @@ export async function executeDatabaseStep(session: SqlSession, connectionName: s
   };
 
   if (!assertionPassed) throw Object.assign(new Error('Database result assertion failed.'), { databaseSummary: summary });
-  let savedValue: string | undefined;
+  let savedValue: VariableValue | undefined;
   if (step.saveResultAs) {
     const row = rows[step.saveRowIndex ?? 0];
     const column = step.saveColumn?.trim() || (row ? Object.keys(row)[0] : undefined);
     const value = column ? row?.[column] : undefined;
-    if (value === undefined || value === null) throw new Error(`Cannot save SQL result: row ${step.saveRowIndex ?? 0} or result column is missing.`);
-    savedValue = String(value);
+    if (value === undefined) throw new Error(`Cannot save SQL result: row ${step.saveRowIndex ?? 0} or result column is missing.`);
+    if (value instanceof Date) savedValue = value.toISOString();
+    else if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') savedValue = value;
+    else if (Array.isArray(value) || (typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype)) savedValue = value as Record<string, unknown> | unknown[];
+    else throw new Error('Cannot save SQL result: the selected column is not a supported value.');
   }
   return { summary, savedValue };
 }

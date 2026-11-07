@@ -1,14 +1,10 @@
 import type { Step } from '../types/step';
+import { VariableContext } from './variable-context';
 
-const TEMPLATE_PATTERN = /\{\{(\w+)\}\}/g;
 const HAS_TEMPLATE_PATTERN = /\{\{\w+\}\}/;
 
 export function interpolate(value: string, variables: Record<string, string>): string {
-  return value.replace(TEMPLATE_PATTERN, (match, key) => {
-    if (key in variables) return variables[key];
-    console.warn(`[interpolate] Variable {{${key}}} not found`);
-    return match;
-  });
+  return new VariableContext({ runInputs: variables }).interpolate(value, { allowMissing: true });
 }
 
 export function hasUnresolvedVariables(value: string): boolean {
@@ -16,10 +12,13 @@ export function hasUnresolvedVariables(value: string): boolean {
 }
 
 export function interpolateStep(step: Step, variables: Record<string, string>): Step {
+  const context = new VariableContext({ runInputs: variables });
+  const allowMissing = (value: string | undefined) =>
+    value === undefined ? undefined : context.interpolate(value, { allowMissing: true });
   return {
     ...step,
-    value: step.value ? interpolate(step.value, variables) : step.value,
-    expected: step.expected ? interpolate(step.expected, variables) : step.expected,
-    selector: step.selector ? interpolate(step.selector, variables) : step.selector
+    ...(step.value === undefined ? {} : { value: allowMissing(step.value) }),
+    ...(step.expected === undefined ? {} : { expected: allowMissing(step.expected) }),
+    ...(step.selector === undefined ? {} : { selector: allowMissing(step.selector) })
   };
 }

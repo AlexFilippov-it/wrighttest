@@ -11,8 +11,7 @@ import { getTestWorkerConcurrency, markBatchRunning, updateBatchAfterRun } from 
 import type { Step } from '../types/step';
 import { resolveBrowserUrl } from '../utils/runtime-url';
 import { resolveLocator } from '../utils/locator';
-import { hasUnresolvedVariables, interpolateStep } from '../utils/interpolate';
-import { mergeRuntimeVariables } from '../utils/runtime-variables';
+import { VariableContext, VariableEngineError } from '../utils/variable-context';
 import { notifyRunResult } from '../services/notifier';
 import { getBrowserName, launchChromium } from '../utils/browser';
 import { hasAssertionSteps, validateStepRequirements } from '../utils/step-validation';
@@ -181,6 +180,12 @@ type RunStepResult = {
   screenshot?: string | null;
   error?: string | null;
   database?: SqlExecutionSummary;
+  variableError?: {
+    code: string;
+    variableName?: string;
+    stepIndex?: number;
+    expectedType?: string;
+  };
 };
 
 let started = false;
@@ -220,8 +225,8 @@ async function runTest(job: Job<TestJobData>) {
     }
   }
 
-  const dataCaseVariables = (runSnapshot.dataCaseVariables ?? {}) as Record<string, string>;
-  const runtimeVariables = mergeRuntimeVariables(environmentVariables, dataCaseVariables);
+  const dataCaseVariables = (runSnapshot.dataCaseVariables ?? {}) as Record<string, unknown>;
+  let variableContext = new VariableContext();
   const isAuthRefresh = runSnapshot.runMode === 'AUTH_REFRESH';
 
   if (isAuthRefresh && !runSnapshot.authStateId) {
@@ -259,6 +264,10 @@ async function runTest(job: Job<TestJobData>) {
   });
 
   try {
+    variableContext = new VariableContext({
+      environmentVariables,
+      testDataVariables: dataCaseVariables
+    });
     if (isAuthRefresh && !hasAssertionSteps(steps)) {
       throw new Error(
         'Authentication check must contain at least one assertion that confirms login succeeded, such as Assert URL or Assert visible.'
@@ -282,7 +291,7 @@ async function runTest(job: Job<TestJobData>) {
     const page = await context.newPage();
 
     for (const [index, rawStep] of steps.entries()) {
-      const step = interpolateStep(rawStep, runtimeVariables);
+      let step = rawStep;
       currentStep = index + 1;
       const stepStartedAt = Date.now();
       let stepError: Error | null = null;
@@ -296,22 +305,16 @@ async function runTest(job: Job<TestJobData>) {
       });
 
       try {
+        step = variableContext.resolveStep(rawStep, index);
         const requirementIssue = validateStepRequirements(step);
         if (requirementIssue) {
           throw new Error(requirementIssue.message);
         }
 
-        if (
-          (step.value && hasUnresolvedVariables(step.value)) ||
-          (step.expected && hasUnresolvedVariables(step.expected)) ||
-          (step.selector && hasUnresolvedVariables(step.selector))
-        ) {
-          throw new Error(`Unresolved template variable in step ${index + 1}.`);
-        }
-
         switch (step.action) {
           case 'executeSql':
           case 'assertDatabaseResult': {
+            if (step.saveResultAs) variableContext.assertRuntimeWritable(step.saveResultAs, false, index);
             const connectionId = step.databaseConnectionId!;
             let databaseSession = databaseSessions.get(connectionId);
             if (!databaseSession) {
@@ -329,10 +332,15 @@ async function runTest(job: Job<TestJobData>) {
               databaseSession.name,
               databaseSession.accessMode,
               step,
-              runtimeVariables
+              variableContext
             );
             databaseSummary = execution.summary;
-            if (step.saveResultAs && execution.savedValue !== undefined) runtimeVariables[step.saveResultAs] = execution.savedValue;
+            if (step.saveResultAs && execution.savedValue !== undefined) {
+              variableContext.setRuntime(step.saveResultAs, execution.savedValue, {
+                source: 'captured',
+                createdByStep: index + 1
+              });
+            }
             break;
           }
           case 'goto':
@@ -437,7 +445,10 @@ async function runTest(job: Job<TestJobData>) {
             throw new Error(`Unsupported action: ${step.action}`);
         }
       } catch (error) {
-        stepError = error instanceof Error ? error : new Error(String(error));
+        const message = error instanceof Error ? error.message : String(error);
+        stepError = error instanceof VariableEngineError
+          ? error
+          : new Error(variableContext.redact(message));
       } finally {
         let screenshot: string | null = null;
         if (!['executeSql', 'assertDatabaseResult'].includes(step.action)) {
@@ -455,11 +466,19 @@ async function runTest(job: Job<TestJobData>) {
         stepResults.push({
           index,
           action: step.action,
-          target: getStepTarget(step),
+          target: getStepTarget(rawStep),
           status: stepError ? 'failed' : 'passed',
           durationMs: Date.now() - stepStartedAt,
           screenshot,
           error: stepError?.message ?? null,
+          ...(stepError instanceof VariableEngineError ? {
+            variableError: {
+              code: stepError.code,
+              ...(stepError.variableName ? { variableName: stepError.variableName } : {}),
+              ...(stepError.stepIndex === undefined ? {} : { stepIndex: stepError.stepIndex }),
+              ...(stepError.expectedType ? { expectedType: stepError.expectedType } : {})
+            }
+          } : {}),
           ...(databaseSummary ? { database: databaseSummary } : {}),
           ...(stepError && 'databaseSummary' in stepError && typeof stepError.databaseSummary === 'object'
             ? { database: stepError.databaseSummary as SqlExecutionSummary }
