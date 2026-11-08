@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../prisma';
-import { testQueue } from '../queue/queue';
+import { enqueueTestRun } from '../queue/batch-sequencer';
 import { getAuthUser, getProjectAccessStatusCode, requireProjectRole } from '../utils/project-access';
 import { DATA_DRIVEN_CASE_REQUIRED_ERROR, hasTestDataCases } from '../utils/test-data';
 
@@ -203,11 +203,7 @@ export async function suiteRoutes(fastify: FastifyInstance) {
         }
       });
 
-      const job = await testQueue.add('run', {
-        testRunId: run.id,
-        testId: test.id,
-        environmentId: result.data.environmentId
-      });
+      const job = await enqueueTestRun({ id: run.id, testId: test.id, environmentId: result.data.environmentId });
 
       jobs.push({ testRunId: run.id, testId: test.id });
       console.log(`[Suite] Queued ${job.id} for suite "${suite.name}"`);

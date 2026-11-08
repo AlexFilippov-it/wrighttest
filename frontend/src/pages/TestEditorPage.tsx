@@ -4,7 +4,7 @@ import type { MenuProps } from 'antd';
 import { DownOutlined, DownloadOutlined, PlayCircleOutlined, StopOutlined, VideoCameraOutlined, WarningOutlined } from '@ant-design/icons';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api, createTest, getDatabaseConnections, getDevices, getEnvironments, getProject, getTest, startRecording, stopRecording, updateTest, validateTestSteps, runTestWithEnvironment, runAllEnabledTestCases } from '../api/client';
+import { api, createTest, getDatabaseConnections, getDevices, getEnvironments, getProject, getProjectVariables, getTest, startRecording, stopRecording, updateTest, validateTestSteps, runTestWithEnvironment, runAllEnabledTestCases, type ProjectVariable } from '../api/client';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import StepEditor from '../components/StepEditor';
@@ -240,6 +240,7 @@ export default function TestEditorPage() {
   const [recordingProjectId, setRecordingProjectId] = useState<string | undefined>(projectId);
   const [recordEnvironments, setRecordEnvironments] = useState<Environment[]>([]);
   const [environmentVariableNames, setEnvironmentVariableNames] = useState<string[]>([]);
+  const [projectVariables, setProjectVariables] = useState<ProjectVariable[]>([]);
   const [databaseConnections, setDatabaseConnections] = useState<DatabaseConnection[]>([]);
   const [selectedRecordingEnvironmentId, setSelectedRecordingEnvironmentId] = useState<string | undefined>(undefined);
   const [useProjectAuthentication, setUseProjectAuthentication] = useState(true);
@@ -347,6 +348,7 @@ export default function TestEditorPage() {
     if (!recordingProjectId) {
       setRecordEnvironments([]);
       setEnvironmentVariableNames([]);
+      setProjectVariables([]);
       setDatabaseConnections([]);
       return;
     }
@@ -364,6 +366,10 @@ export default function TestEditorPage() {
         setRecordEnvironments([]);
         setEnvironmentVariableNames([]);
       });
+
+    void getProjectVariables(recordingProjectId)
+      .then((variables) => { if (!cancelled) setProjectVariables(variables); })
+      .catch(() => { if (!cancelled) setProjectVariables([]); });
 
     void getDatabaseConnections(recordingProjectId)
       .then((connections) => { if (!cancelled) setDatabaseConnections(connections); })
@@ -1248,7 +1254,7 @@ export default function TestEditorPage() {
                       <VariableAutocompleteInput
                         placeholder="{{BASE_URL}}/projects or https://example.com"
                         size="large"
-                        variableNames={environmentVariableNames}
+                        variableNames={[...new Set([...projectVariables.map(({ name }) => name), ...environmentVariableNames])]}
                         disabled={isReadOnly}
                       />
                     </Form.Item>
@@ -1417,6 +1423,11 @@ export default function TestEditorPage() {
                     stepIssues={stepIssues}
                     validationResults={validationResults}
                     variableNames={environmentVariableNames}
+                    projectVariables={projectVariables}
+                    testDataVariableNames={testDataVariableNames}
+                    databaseConnections={databaseConnections}
+                    projectId={currentProjectId}
+                    defaultDatabaseConnectionId={!isEdit ? searchParams.get('databaseConnectionId') ?? undefined : undefined}
                   />
                 ) : (
                   <Card style={{ borderRadius: 16, background: '#fafafa' }}>

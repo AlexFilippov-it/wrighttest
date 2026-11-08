@@ -10,6 +10,7 @@ export interface ProjectExportOptions {
   testName: string;
   testUrl: string;
   steps: Step[];
+  testData?: Array<{ name: string; enabled: boolean; variables: Record<string, unknown> }>;
   variables?: Record<string, string>;
   useEnvVars?: boolean;
 }
@@ -159,7 +160,7 @@ async function zipDirectoryToBuffer(directoryPath: string) {
 }
 
 export async function buildPlaywrightProjectZip(options: ProjectExportOptions): Promise<ProjectExportResult> {
-  const { testName, testUrl, steps, variables = {}, useEnvVars = false } = options;
+  const { testName, testUrl, steps, testData = [], variables = {}, useEnvVars = false } = options;
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'wrighttest-export-'));
   const projectRoot = path.join(tempRoot, 'wrighttest-export');
   const testsDir = path.join(projectRoot, 'tests');
@@ -182,6 +183,7 @@ export async function buildPlaywrightProjectZip(options: ProjectExportOptions): 
 
   const spec = exportToSpec(exportSteps, {
     testName,
+    testData,
     variables,
     useEnvVars
   });

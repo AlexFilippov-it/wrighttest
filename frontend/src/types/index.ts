@@ -72,7 +72,7 @@ export interface StepValidationResult {
 export interface TestDataCase {
   name: string;
   enabled: boolean;
-  variables: Record<string, string>;
+  variables: Record<string, string | { kind: 'literal'; value: unknown } | { kind: 'reference'; name: string; source?: 'project' | 'environment' } | { kind: 'generated'; generator: string; options?: Record<string, string | number | boolean>; secret?: boolean }>;
 }
 
 export interface ValidationReport {
@@ -428,7 +428,8 @@ export interface TestRun {
   traceUnavailableReason?: string | null;
   dataCaseName?: string | null;
   dataCaseIndex?: number | null;
-  dataCaseVariables?: Record<string, string> | null;
+  dataCaseVariables?: Record<string, unknown> | null;
+  variableSnapshot?: Array<{ name: string; source: string; type: string; secret: boolean; value?: unknown }>;
   trace?: {
     available: boolean;
     downloadUrl?: string;

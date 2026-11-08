@@ -24,6 +24,7 @@ import { webhookRoutes } from './routes/webhooks';
 import { testRoutes } from './routes/tests';
 import { projectAuthRoutes } from './routes/project-auth';
 import { databaseConnectionRoutes } from './routes/database-connections';
+import { projectVariableRoutes } from './routes/project-variables';
 import { localizationRoutes } from './routes/localization';
 import { createBrowserSessionRoutes } from './routes/browser-sessions';
 import { createHash } from 'node:crypto';
@@ -233,8 +234,9 @@ async function start() {
 
   await fastify.register(projectRoutes);
   await fastify.register(environmentRoutes);
-  await fastify.register(channelRoutes);
   await fastify.register(databaseConnectionRoutes);
+  await fastify.register(projectVariableRoutes);
+  await fastify.register(channelRoutes);
   await fastify.register(exportRoutes);
   await fastify.register(dashboardRoutes);
   await fastify.register(suiteRoutes);

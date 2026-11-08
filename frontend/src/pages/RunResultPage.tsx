@@ -226,9 +226,20 @@ export default function RunResultPage() {
     if (!run) return [];
     const rows: Array<{ key: string; name: string; source: string; type: string; step?: number; secret: boolean; value?: string }> = [];
     if (run.dataCaseName) rows.push({ key: 'case', name: t('capture.results.dataCase'), source: run.dataCaseName, type: '—', secret: false });
-    for (const [name, value] of Object.entries(run.dataCaseVariables ?? {})) {
-      const secret = isSecretVariableName(name);
-      rows.push({ key: `data:${name}`, name, source: t('capture.results.dataCase'), type: value === null ? 'null' : typeof value, secret, value: secret ? '••••••••' : String(value ?? '—') });
+    if (run.variableSnapshot?.length) {
+      for (const variable of run.variableSnapshot) rows.push({
+        key: `snapshot:${variable.source}:${variable.name}`,
+        name: variable.name,
+        source: variable.source === 'project' || variable.source === 'environment' ? t(`capture.variableSource.${variable.source}`) : variable.source === 'generated' ? t('capture.results.generated') : t('capture.results.dataCase'),
+        type: variable.type,
+        secret: variable.secret,
+        value: variable.secret ? '••••••••' : variable.value === null ? 'null' : typeof variable.value === 'object' ? JSON.stringify(variable.value) : String(variable.value ?? '—')
+      });
+    } else {
+      for (const [name, value] of Object.entries(run.dataCaseVariables ?? {})) {
+        const secret = isSecretVariableName(name);
+        rows.push({ key: `data:${name}`, name, source: t('capture.results.dataCase'), type: value === null ? 'null' : typeof value, secret, value: secret ? '••••••••' : String(value ?? '—') });
+      }
     }
     for (const result of run.stepResults ?? []) {
       if (result.generated) rows.push({

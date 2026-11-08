@@ -118,13 +118,16 @@ export class VariableContext {
   private readonly sources: Record<'project' | 'environment' | 'testData' | 'runInput', Map<string, VariableEntry>>;
   private readonly runtime = new Map<string, VariableEntry>();
   private readonly resolver: VariableResolver;
+  private readonly secretNames: Set<string>;
 
   constructor(input: {
     projectVariables?: Record<string, unknown>;
     environmentVariables?: Record<string, unknown>;
     testDataVariables?: Record<string, unknown>;
     runInputs?: Record<string, unknown>;
+    secretNames?: string[];
   } = {}) {
+    this.secretNames = new Set(input.secretNames ?? []);
     this.sources = {
       project: this.makeSource('project', input.projectVariables),
       environment: this.makeSource('environment', input.environmentVariables),
@@ -148,7 +151,7 @@ export class VariableContext {
         name,
         value,
         type: variableType(value),
-        secret: SECRET_NAME.test(name),
+        secret: SECRET_NAME.test(name) || this.secretNames.has(name),
         source
       });
     }

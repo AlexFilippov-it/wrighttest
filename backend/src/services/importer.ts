@@ -69,15 +69,26 @@ function parseMaybeRegexOrString(expression: string) {
   return expressionToTemplate(trimmed);
 }
 
-export function parsePlaywrightSpec(code: string): { testName: string; steps: Step[] } {
+export function parsePlaywrightSpec(code: string): { testName: string; steps: Step[]; testData: Array<{ name: string; enabled: boolean; variables: Record<string, unknown> }> } {
   const lines = code.split('\n');
   const steps: Step[] = [];
+  let testData: Array<{ name: string; enabled: boolean; variables: Record<string, unknown> }> = [];
 
   const nameMatch = code.match(/test\((['"`])(.+?)\1/);
   const testName = nameMatch?.[2] ?? 'Imported test';
 
   for (const line of lines) {
     const t = line.trim();
+    const testDataMatch = t.match(/^\/\/ WRIGHTTEST_TEST_DATA (\[.*\])$/);
+    if (testDataMatch) {
+      try {
+        const parsed = JSON.parse(testDataMatch[1]) as unknown;
+        if (Array.isArray(parsed)) testData = parsed as typeof testData;
+      } catch {
+        // Ignore malformed optional metadata; regular Playwright steps remain importable.
+      }
+      continue;
+    }
     const exportedStep = t.match(/^\/\/ WRIGHTTEST_STEP (\{.*\})$/);
     if (exportedStep) {
       try {
@@ -229,5 +240,5 @@ export function parsePlaywrightSpec(code: string): { testName: string; steps: St
     }
   }
 
-  return { testName, steps };
+  return { testName, steps, testData };
 }

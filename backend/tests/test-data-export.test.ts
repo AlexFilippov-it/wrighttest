@@ -37,3 +37,18 @@ test('export/import round-trips browser capture and SQL capture configuration wi
   assert.deepEqual(parsed.steps, source);
   assert.doesNotMatch(spec, /captured runtime value/i);
 });
+
+test('export/import round-trips typed Test Data and project/environment references', () => {
+  const testData = [{
+    name: 'Generated account',
+    enabled: true,
+    variables: {
+      COUNTRY: { kind: 'literal', value: 'Germany' },
+      BASE_URL: { kind: 'reference', name: 'BASE_URL', source: 'project' },
+      EMAIL: { kind: 'generated', generator: 'email', options: { domain: 'example.test' } }
+    }
+  }];
+  const spec = exportToSpec([{ action: 'goto', value: '{{BASE_URL}}' }], { testName: 'typed test data', testData });
+  const parsed = parsePlaywrightSpec(spec);
+  assert.deepEqual(parsed.testData, testData);
+});

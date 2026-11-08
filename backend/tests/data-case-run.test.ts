@@ -13,6 +13,7 @@ import { runRoutes } from '../src/routes/runs';
 import { suiteRoutes } from '../src/routes/suites';
 import { DATA_DRIVEN_CASE_REQUIRED_ERROR } from '../src/utils/test-data';
 import { mergeRuntimeVariables } from '../src/utils/runtime-variables';
+import { decryptRunVariablesSnapshot } from '../src/services/project-variable-crypto';
 
 async function buildApp(userId: string, email: string) {
   const app = Fastify();
@@ -160,7 +161,7 @@ test('manual run API validates dataCaseIndex and stores selected case snapshot',
     assert.equal(enabledRun?.dataCaseIndex, 0);
     assert.deepEqual(enabledRun?.dataCaseVariables, {
       EMAIL: 'wrong-email',
-      PASSWORD: 'Password123'
+      PASSWORD: '••••••'
     });
 
     await prisma.test.update({
@@ -180,8 +181,12 @@ test('manual run API validates dataCaseIndex and stores selected case snapshot',
     assert.equal(snapshotAfterEdit?.dataCaseName, 'Invalid email');
     assert.deepEqual(snapshotAfterEdit?.dataCaseVariables, {
       EMAIL: 'wrong-email',
-      PASSWORD: 'Password123'
+      PASSWORD: '••••••'
     });
+    const protectedSnapshot = decryptRunVariablesSnapshot(snapshotAfterEdit!.variablesSnapshot!) as {
+      testDataVariables: Record<string, unknown>;
+    };
+    assert.equal(protectedSnapshot.testDataVariables.PASSWORD, 'Password123');
   } finally {
     await app.close();
     await cleanup(project.id, user.id);
@@ -361,14 +366,19 @@ test('run all enabled cases queues separate runs in case order and skips disable
     assert.deepEqual(createdRuns.map((run) => run?.environmentId), [environment.id, environment.id]);
     assert.deepEqual(createdRuns[0]?.dataCaseVariables, {
       EMAIL: 'invalid-email',
-      PASSWORD: 'Password123',
+      PASSWORD: '••••••',
       EXPECTED_MESSAGE: 'Invalid email'
     });
     assert.deepEqual(createdRuns[1]?.dataCaseVariables, {
       EMAIL: 'user@example.com',
-      PASSWORD: 'wrong-password',
+      PASSWORD: '••••••',
       EXPECTED_MESSAGE: 'Wrong password'
     });
+    assert.ok(createdRuns.every((run) => run?.variablesSnapshot));
+    const secondSnapshot = decryptRunVariablesSnapshot(createdRuns[1]!.variablesSnapshot!) as {
+      testDataVariables: Record<string, unknown>;
+    };
+    assert.equal(secondSnapshot.testDataVariables.PASSWORD, 'wrong-password');
 
     const firstJob = await testQueue.getJob(buildTestRunJobId(payload.runs[0].id));
     const secondJob = await testQueue.getJob(buildTestRunJobId(payload.runs[1].id));

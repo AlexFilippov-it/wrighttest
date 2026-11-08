@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { Step, StepAction, StepValidationResult } from '../types';
 import type { DatabaseConnection } from '../types';
+import type { ProjectVariable } from '../api/client';
 import VariableAutocompleteInput from './VariableAutocompleteInput';
 import { isSecretVariableName } from '../utils/secret-variable';
 import SqlCodeEditor from './SqlCodeEditor';
@@ -81,6 +82,7 @@ interface Props {
     expected?: string;
   } | undefined>;
   variableNames?: string[];
+  projectVariables?: ProjectVariable[];
   testDataVariableNames?: string[];
   databaseConnections?: DatabaseConnection[];
   projectId?: string;
@@ -160,7 +162,7 @@ function parameterType(value: SqlParameterValue): SqlParameterType {
   return /^\{\{[A-Z][A-Z0-9_]*\}\}$/.test(value) ? 'variable' : 'string';
 }
 
-export default function StepEditor({ steps, onChange, readOnly = false, validationResults, stepIssues = [], variableNames = [], testDataVariableNames = [], databaseConnections = [], projectId, defaultDatabaseConnectionId }: Props) {
+export default function StepEditor({ steps, onChange, readOnly = false, validationResults, stepIssues = [], variableNames = [], projectVariables = [], testDataVariableNames = [], databaseConnections = [], projectId, defaultDatabaseConnectionId }: Props) {
   const { t } = useTranslation();
   const [parameterDrafts, setParameterDrafts] = useState<Record<number, string>>({});
   const [rawParameterIndex, setRawParameterIndex] = useState<number | null>(null);
@@ -235,8 +237,10 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
           (candidate.action === 'captureValue' && candidate.saveAs) ||
           ((candidate.action === 'executeSql' || candidate.action === 'assertDatabaseResult') && candidate.saveResultAs)
         ).map((candidate) => candidate.saveAs ?? candidate.saveResultAs!);
-        const availableVariableNames = [...new Set([...variableNames, ...testDataVariableNames, ...priorGeneratedNames, ...priorCapturedNames])];
+        const projectVariableNames = projectVariables.map(({ name }) => name);
+        const availableVariableNames = [...new Set([...projectVariableNames, ...variableNames, ...testDataVariableNames, ...priorGeneratedNames, ...priorCapturedNames])];
         const availableVariableDetails = [
+          ...projectVariables.map((variable) => ({ name: variable.name, source: t('capture.variableSource.project'), type: variable.type, secret: variable.secret })),
           ...variableNames.map((name) => ({ name, source: t('capture.variableSource.environment'), type: 'string', secret: isSecretVariableName(name) })),
           ...testDataVariableNames.map((name) => ({ name, source: t('capture.variableSource.testData'), type: 'string', secret: isSecretVariableName(name) })),
           ...steps.slice(0, index).flatMap((candidate) => {

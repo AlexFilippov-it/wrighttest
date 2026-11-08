@@ -21,6 +21,7 @@ import ProjectShell from './shell/ProjectShell';
 import NotFoundPage from './shell/NotFoundPage';
 import InstanceLanguagePage from './pages/InstanceLanguagePage';
 import ConnectionsPage from './pages/ConnectionsPage';
+import ProjectVariablesPage from './pages/ProjectVariablesPage';
 import { loadInstanceLocale } from './localization/i18n';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -73,6 +74,7 @@ function LocalizedRoutes() {
             <Route path="runs" element={<ProjectPage />} />
             <Route path="schedules" element={<ProjectPage />} />
             <Route path="environments" element={<ProjectPage />} />
+            <Route path="variables" element={<ProjectVariablesPage />} />
             <Route path="authentication" element={<ProjectPage />} />
             <Route path="connections" element={<ConnectionsPage />} />
             <Route path="alerts" element={<ProjectPage />} />

@@ -24,6 +24,7 @@ import {
 import { executeDatabaseStep, openDatabaseConnection, type SqlExecutionSummary, type SqlSession } from '../services/database-connections';
 import { captureBrowserValue } from '../services/value-capture';
 import { generateTestDataValue, isSecretGeneratorStep } from '../services/test-data-generators';
+import { decryptRunVariablesSnapshot } from '../services/project-variable-crypto';
 import {
   buildActionCandidates,
   dedupe,
@@ -221,17 +222,14 @@ async function runTest(job: Job<TestJobData>) {
     throw new Error(`TestRun ${testRunId} not found`);
   }
 
-  let environmentVariables: Record<string, string> = {};
-  if (runSnapshot.environmentId) {
-    const environment = await prisma.environment.findUnique({
-      where: { id: runSnapshot.environmentId }
-    });
-    if (environment) {
-      environmentVariables = (environment.variables ?? {}) as Record<string, string>;
-    }
+  let variableSnapshot: { projectVariables?: Record<string, unknown>; environmentVariables?: Record<string, unknown>; testDataVariables?: Record<string, unknown>; secretNames?: string[] } = {};
+  variableSnapshot.testDataVariables = (runSnapshot.dataCaseVariables ?? {}) as Record<string, unknown>;
+  if (runSnapshot.variablesSnapshot) {
+    variableSnapshot = decryptRunVariablesSnapshot(runSnapshot.variablesSnapshot) as typeof variableSnapshot;
+  } else if (runSnapshot.environmentId) {
+    const environment = await prisma.environment.findUnique({ where: { id: runSnapshot.environmentId } });
+    variableSnapshot.environmentVariables = (environment?.variables ?? {}) as Record<string, unknown>;
   }
-
-  const dataCaseVariables = (runSnapshot.dataCaseVariables ?? {}) as Record<string, unknown>;
   let variableContext = new VariableContext();
   const isAuthRefresh = runSnapshot.runMode === 'AUTH_REFRESH';
 
@@ -279,8 +277,10 @@ async function runTest(job: Job<TestJobData>) {
 
   try {
     variableContext = new VariableContext({
-      environmentVariables,
-      testDataVariables: dataCaseVariables
+      projectVariables: variableSnapshot.projectVariables,
+      environmentVariables: variableSnapshot.environmentVariables,
+      testDataVariables: variableSnapshot.testDataVariables,
+      secretNames: variableSnapshot.secretNames
     });
     if (variableContext.getMetadata().some((entry) => entry.secret)) {
       omitArtifactsForSecrets = true;

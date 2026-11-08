@@ -33,7 +33,12 @@ const StepSchema = z.object({
 const TestDataSchema = z.array(z.object({
   name: z.string().min(1).max(150),
   enabled: z.boolean(),
-  variables: z.record(z.string(), z.string())
+  variables: z.record(z.string(), z.union([
+    z.string(),
+    z.object({ kind: z.literal('literal'), value: z.unknown() }).strict(),
+    z.object({ kind: z.literal('reference'), name: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/), source: z.enum(['project', 'environment']).optional() }).strict(),
+    z.object({ kind: z.literal('generated'), generator: z.enum(['username', 'email', 'password', 'uuid', 'string', 'number', 'boolean', 'date', 'timestamp', 'pattern']), options: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(), secret: z.boolean().optional() }).strict()
+  ]))
 })).max(100);
 
 const CheckFields = {
@@ -289,6 +294,48 @@ export function registerWrightTestTools(server: McpServer, api: WrightTestApi) {
     inputSchema: { projectId: z.string().min(1), name: z.string().min(1).max(100) }
   }, async ({ projectId, name }) => {
     try { return result(await api.request(`/projects/${encodeURIComponent(projectId)}`, { method: 'PATCH', body: jsonBody({ name }) })); }
+    catch (error) { return fail(error); }
+  });
+
+  server.registerTool('list_project_variables', {
+    description: `List project variable metadata. Secret values are never returned. Requires ${READ_ROLES}.`,
+    inputSchema: { projectId: z.string().min(1) }
+  }, async ({ projectId }) => {
+    try { return result(await api.request(`/projects/${encodeURIComponent(projectId)}/variables`)); }
+    catch (error) { return fail(error); }
+  });
+
+  server.registerTool('create_project_variable', {
+    description: `Create a project variable. Secret values are write-only and only Owners can create them. Requires ${WRITE_ROLES}.`,
+    inputSchema: {
+      projectId: z.string().min(1),
+      name: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/),
+      type: z.enum(['string', 'number', 'boolean', 'json', 'null']),
+      value: z.unknown(), secret: z.boolean().optional(), description: z.string().max(500).optional()
+    }
+  }, async ({ projectId, ...payload }) => {
+    try { return result(await api.request(`/projects/${encodeURIComponent(projectId)}/variables`, { method: 'POST', body: jsonBody(payload) })); }
+    catch (error) { return fail(error); }
+  });
+
+  server.registerTool('update_project_variable', {
+    description: `Update variable metadata/value. Existing secrets are never returned; only Owners can change secret values. Requires ${WRITE_ROLES}.`,
+    inputSchema: {
+      variableId: z.string().min(1),
+      name: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/).optional(),
+      type: z.enum(['string', 'number', 'boolean', 'json', 'null']).optional(),
+      value: z.unknown().optional(), secret: z.boolean().optional(), description: z.string().max(500).optional()
+    }
+  }, async ({ variableId, ...payload }) => {
+    try { return result(await api.request(`/variables/${encodeURIComponent(variableId)}`, { method: 'PATCH', body: jsonBody(payload) })); }
+    catch (error) { return fail(error); }
+  });
+
+  server.registerTool('delete_project_variable', {
+    description: `Delete a project variable. Only Owners can delete secret variables. Requires ${WRITE_ROLES}.`,
+    inputSchema: { variableId: z.string().min(1) }
+  }, async ({ variableId }) => {
+    try { await api.request(`/variables/${encodeURIComponent(variableId)}`, { method: 'DELETE' }); return result({ deleted: true, variableId }); }
     catch (error) { return fail(error); }
   });
 

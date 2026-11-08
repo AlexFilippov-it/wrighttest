@@ -284,6 +284,18 @@ export const deleteDatabaseConnection = (id: string) => api.delete(`/connections
 export const testDatabaseConnection = (id: string) =>
   api.post<{ status: 'CONNECTED' | 'FAILED'; checkedAt: string; error?: string }>(`/connections/${id}/test`).then((r) => r.data);
 
+export type ProjectVariable = {
+  id: string; projectId: string; name: string;
+  type: 'string' | 'number' | 'boolean' | 'json' | 'null';
+  value?: unknown; secret: boolean; configured: boolean; description: string;
+  createdAt: string; updatedAt: string;
+};
+export type ProjectVariableInput = Pick<ProjectVariable, 'name' | 'type' | 'secret' | 'description'> & { value?: unknown };
+export const getProjectVariables = (projectId: string) => api.get<ProjectVariable[]>(`/projects/${projectId}/variables`).then((r) => r.data);
+export const createProjectVariable = (projectId: string, data: ProjectVariableInput) => api.post<ProjectVariable>(`/projects/${projectId}/variables`, data).then((r) => r.data);
+export const updateProjectVariable = (id: string, data: Partial<ProjectVariableInput>) => api.patch<ProjectVariable>(`/variables/${id}`, data).then((r) => r.data);
+export const deleteProjectVariable = (id: string) => api.delete(`/variables/${id}`);
+
 export const getProjectAuthProfiles = (projectId: string) =>
   api.get<ProjectAuthProfile[]>(`/projects/${projectId}/authentication`).then((r) => r.data);
 

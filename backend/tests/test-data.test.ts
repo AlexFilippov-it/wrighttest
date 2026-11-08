@@ -7,7 +7,7 @@ import { testRoutes } from '../src/routes/tests';
 type TestDataCase = {
   name: string;
   enabled: boolean;
-  variables: Record<string, string>;
+  variables: Record<string, unknown>;
 };
 
 async function buildApp(userId: string, email: string) {
@@ -138,6 +138,33 @@ test('creates a test with valid testData and returns it from list/detail APIs', 
     assert.equal(listResponse.statusCode, 200);
     const listed = listResponse.json() as Array<{ id: string; testData: TestDataCase[] }>;
     assert.deepEqual(listed.find((item) => item.id === created.id)?.testData, validTestData());
+  } finally {
+    await app.close();
+    await cleanup(project.id, user.id);
+  }
+});
+
+test('round-trips typed Test Data cells while preserving legacy string cells', async () => {
+  const { user, project } = await createProjectAccess();
+  const app = await buildApp(user.id, user.email);
+  const typedCases: TestDataCase[] = [{
+    name: 'Typed values',
+    enabled: true,
+    variables: {
+      LEGACY: 'still supported',
+      COUNT: { kind: 'literal', value: 7 },
+      BASE_URL: { kind: 'reference', name: 'BASE_URL', source: 'environment' },
+      EMAIL: { kind: 'generated', generator: 'email', options: { domain: 'example.test' } }
+    }
+  }];
+
+  try {
+    const response = await app.inject({ method: 'POST', url: `/projects/${project.id}/tests`, payload: basePayload({ testData: typedCases }) });
+    assert.equal(response.statusCode, 201, response.body);
+    const created = response.json() as { id: string; testData: TestDataCase[] };
+    assert.deepEqual(created.testData, typedCases);
+    const detail = await app.inject({ method: 'GET', url: `/tests/${created.id}` });
+    assert.deepEqual((detail.json() as { testData: TestDataCase[] }).testData, typedCases);
   } finally {
     await app.close();
     await cleanup(project.id, user.id);

@@ -30,14 +30,15 @@ async function connectedClient(fetchImpl: typeof fetch) {
 test('MCP initializes and lists project, browser, and safe database metadata tools', async () => {
   const { client, server } = await connectedClient(async () => new Response('[]', { status: 200 }));
   const listed = await client.listTools();
-  assert.equal(listed.tools.length, 26);
+  assert.equal(listed.tools.length, 30);
   assert.deepEqual(new Set(listed.tools.map((tool) => tool.name)), new Set([
     'list_projects', 'get_project', 'create_project', 'update_project',
     'list_checks', 'get_check', 'create_check', 'update_check',
     'list_suites', 'create_suite', 'add_check_to_suite',
     'run_check', 'run_suite', 'get_run_status', 'get_run_results',
     'browser_start', 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_select', 'browser_screenshot', 'browser_wait', 'browser_close',
-    'list_database_connections', 'get_database_connection'
+    'list_database_connections', 'get_database_connection',
+    'list_project_variables', 'create_project_variable', 'update_project_variable', 'delete_project_variable'
   ]));
   await client.close();
   await server.close();

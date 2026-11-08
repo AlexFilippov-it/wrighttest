@@ -4,6 +4,7 @@ export interface ExportOptions {
   testName: string;
   variables?: Record<string, string>;
   useEnvVars?: boolean;
+  testData?: Array<{ name: string; enabled: boolean; variables: Record<string, unknown> }>;
 }
 
 function escapeRegExp(value: string) {
@@ -224,7 +225,7 @@ function __wtGenerate(generator: string, options: Record<string, string | number
 }
 
 export function exportToSpec(steps: Step[], opts: ExportOptions): string {
-  const { testName, variables = {}, useEnvVars = false } = opts;
+  const { testName, variables = {}, useEnvVars = false, testData = [] } = opts;
   const hasAssertions = steps.some((step) => step.action.startsWith('assert'));
   const generatedNames = new Set(steps.filter((step) => step.action === 'generateData' && step.saveAs).map((step) => step.saveAs!));
   const hasGenerators = generatedNames.size > 0;
@@ -258,6 +259,7 @@ export function exportToSpec(steps: Step[], opts: ExportOptions): string {
       ? "import { test, expect } from '@playwright/test';"
       : "import { test } from '@playwright/test';",
     helper,
+    ...(testData.length > 0 ? [`// WRIGHTTEST_TEST_DATA ${JSON.stringify(testData)}`] : []),
     `test(${JSON.stringify(testName)}, async ({ page }) => {`,
     hasSqlSteps ? '  // SQL steps are preserved for WrightTest import but require a configured database connection to execute.' : '',
     lines,

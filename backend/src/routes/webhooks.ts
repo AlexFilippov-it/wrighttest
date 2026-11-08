@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../prisma';
-import { testQueue } from '../queue/queue';
+import { enqueueTestRun } from '../queue/batch-sequencer';
 import { DATA_DRIVEN_CASE_REQUIRED_ERROR, hasTestDataCases } from '../utils/test-data';
 
 const WebhookPayloadSchema = z.object({
@@ -62,7 +62,7 @@ export async function webhookRoutes(fastify: FastifyInstance) {
       const run = await prisma.testRun.create({
         data: { testId, status: 'PENDING', environmentId }
       });
-      await testQueue.add('run', { testRunId: run.id, testId, environmentId });
+      await enqueueTestRun({ id: run.id, testId, environmentId });
       jobs.push({ testRunId: run.id, testId });
     } else if (projectId) {
       const tests = await prisma.test.findMany({ where: { projectId } });
@@ -89,11 +89,7 @@ export async function webhookRoutes(fastify: FastifyInstance) {
         const run = await prisma.testRun.create({
           data: { testId: test.id, status: 'PENDING', environmentId }
         });
-        await testQueue.add('run', {
-          testRunId: run.id,
-          testId: test.id,
-          environmentId
-        });
+        await enqueueTestRun({ id: run.id, testId: test.id, environmentId });
         jobs.push({ testRunId: run.id, testId: test.id });
       }
     } else {

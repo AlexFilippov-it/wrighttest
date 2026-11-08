@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import type { Schedule } from '@prisma/client';
 import prisma from '../prisma';
-import { testQueue } from '../queue/queue';
+import { enqueueTestRun } from '../queue/batch-sequencer';
 import { DATA_DRIVEN_CASE_REQUIRED_ERROR, hasTestDataCases } from '../utils/test-data';
 
 class SchedulerService {
@@ -59,11 +59,7 @@ class SchedulerService {
             }
           });
 
-          await testQueue.add('run', {
-            testRunId: run.id,
-            testId,
-            environmentId: schedule.environmentId ?? undefined
-          });
+          await enqueueTestRun({ id: run.id, testId, environmentId: schedule.environmentId ?? undefined });
         }
 
         await prisma.schedule.update({

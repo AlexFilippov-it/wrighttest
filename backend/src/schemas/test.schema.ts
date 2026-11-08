@@ -127,6 +127,25 @@ export const StepSchema = z.object({
   }
 });
 
+const TestDataCellSchema = z.union([
+  z.string().max(TEST_DATA_VARIABLE_VALUE_LIMIT),
+  z.object({ kind: z.literal('literal'), value: z.unknown() }).strict(),
+  z.object({
+    kind: z.literal('reference'),
+    name: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/),
+    source: z.enum(['project', 'environment']).optional()
+  }).strict(),
+  z.object({
+    kind: z.literal('generated'),
+    generator: z.enum(['username', 'email', 'password', 'uuid', 'string', 'number', 'boolean', 'date', 'timestamp', 'pattern']),
+    options: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
+    secret: z.boolean().optional()
+  }).strict().superRefine((cell, ctx) => {
+    try { validateGeneratorOptions(cell.generator, cell.options); }
+    catch (error) { ctx.addIssue({ code: 'custom', message: error instanceof Error ? error.message : 'Invalid generator configuration.' }); }
+  })
+]);
+
 export const TestDataCaseSchema = z.object({
   name: z.string().transform((value) => value.trim()).pipe(z.string().min(1).max(TEST_DATA_NAME_LIMIT)),
   enabled: z.boolean(),
@@ -134,7 +153,7 @@ export const TestDataCaseSchema = z.object({
     z.string()
       .max(TEST_DATA_VARIABLE_KEY_LIMIT)
       .regex(TEST_DATA_VARIABLE_KEY_PATTERN, 'Variable key must match ^[A-Z][A-Z0-9_]*$'),
-    z.string().max(TEST_DATA_VARIABLE_VALUE_LIMIT)
+    TestDataCellSchema
   ).superRefine((variables, ctx) => {
     if (Object.keys(variables).length > TEST_DATA_VARIABLE_LIMIT) {
       ctx.addIssue({

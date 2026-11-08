@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../prisma';
 import { CreateTestSchema, StepSchema, UpdateTestSchema } from '../schemas/test.schema';
@@ -107,6 +108,7 @@ export async function testRoutes(fastify: FastifyInstance) {
     const test = await prisma.test.create({
       data: {
         ...result.data,
+        testData: result.data.testData as Prisma.InputJsonValue,
         device: normalizeDevice(result.data.device),
         environmentId: normalizeEnvironmentId(result.data.environmentId),
         projectId: req.params.projectId
@@ -138,9 +140,10 @@ export async function testRoutes(fastify: FastifyInstance) {
         where: { id: req.params.id },
         data: {
           ...result.data,
+          ...(result.data.testData ? { testData: result.data.testData as Prisma.InputJsonValue } : {}),
           device: normalizeDevice(result.data.device),
           environmentId: normalizeEnvironmentId(result.data.environmentId)
-        }
+        } as Prisma.TestUncheckedUpdateInput
       });
       return test;
     } catch (error) {

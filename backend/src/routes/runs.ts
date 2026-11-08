@@ -2,11 +2,13 @@ import { FastifyInstance } from 'fastify';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import prisma from '../prisma';
-import { enqueueTestRun } from '../queue/batch-sequencer';
+import { enqueueTestRun, prepareRunVariableSnapshot } from '../queue/batch-sequencer';
 import { getAccessibleProjectIds, getAuthUser, getProjectAccessStatusCode, requireProjectRole } from '../utils/project-access';
 import { buildDataCaseSnapshot, getTestDataCases } from '../utils/test-data';
 import { isSecretVariableName } from '../utils/variable-context';
+import { decryptRunVariablesSnapshot } from '../services/project-variable-crypto';
 
 const TRACES_DIR = path.resolve(process.env.TRACES_DIR || './traces');
 
@@ -22,6 +24,32 @@ export async function runRoutes(fastify: FastifyInstance) {
       name,
       isSecretVariableName(name) ? '••••••' : variable
     ]));
+  }
+
+  function safeVariableSnapshot(value: string | null) {
+    if (!value) return undefined;
+    const snapshot = decryptRunVariablesSnapshot(value) as {
+      projectVariables?: Record<string, unknown>; environmentVariables?: Record<string, unknown>;
+      testDataVariables?: Record<string, unknown>; secretNames?: string[]; sources?: Record<string, string>;
+    };
+    const secretNames = new Set(snapshot.secretNames ?? []);
+    const items = [
+      ...Object.entries(snapshot.projectVariables ?? {}).map(([name, item]) => ({ name, value: item, source: 'project' })),
+      ...Object.entries(snapshot.environmentVariables ?? {}).map(([name, item]) => ({ name, value: item, source: 'environment' })),
+      ...Object.entries(snapshot.testDataVariables ?? {}).map(([name, item]) => ({ name, value: item, source: snapshot.sources?.[name] ?? 'testData' }))
+    ];
+    const deduped = new Map<string, typeof items[number]>();
+    for (const item of items) deduped.set(item.name, item);
+    return [...deduped.values()].map(({ name, value: itemValue, source }) => {
+      const secret = secretNames.has(name) || isSecretVariableName(name);
+      return {
+        name,
+        source,
+        type: itemValue === null ? 'null' : Array.isArray(itemValue) || typeof itemValue === 'object' ? 'json' : typeof itemValue,
+        secret,
+        ...(!secret ? { value: itemValue } : {})
+      };
+    });
   }
 
   async function buildTraceMetadata(run: {
@@ -106,7 +134,7 @@ export async function runRoutes(fastify: FastifyInstance) {
         testId: test.id,
         status: 'PENDING',
         environmentId: body.data.environmentId,
-        ...(dataCaseSnapshot ?? {})
+        ...(dataCaseSnapshot ? { ...dataCaseSnapshot, dataCaseVariables: dataCaseSnapshot.dataCaseVariables as Prisma.InputJsonValue } : {})
       }
     });
 
@@ -180,7 +208,8 @@ export async function runRoutes(fastify: FastifyInstance) {
             environmentId: body.data.environmentId,
             batchId: batch.id,
             batchOrder,
-            ...dataCaseSnapshot
+            ...dataCaseSnapshot,
+            dataCaseVariables: dataCaseSnapshot.dataCaseVariables as Prisma.InputJsonValue
           }
         });
 
@@ -196,6 +225,21 @@ export async function runRoutes(fastify: FastifyInstance) {
 
       return { batch, runs };
     });
+
+    try {
+      await Promise.all(runs.map((run) => prepareRunVariableSnapshot(run.id)));
+    } catch (error) {
+      const safeMessage = error instanceof Error ? error.message : 'Could not prepare run variables.';
+      await prisma.testRun.updateMany({
+        where: { batchId: batch.id, status: 'PENDING' },
+        data: { status: 'FAILED', error: `Variable snapshot preparation failed: ${safeMessage}`.slice(0, 4000), durationMs: 0, finishedAt: new Date() }
+      });
+      await prisma.testRunBatch.update({
+        where: { id: batch.id },
+        data: { status: 'FAILED', completedCases: runs.length, failedCases: runs.length, finishedAt: new Date() }
+      });
+      return reply.status(503).send({ error: safeMessage });
+    }
 
     const firstRun = runs[0];
     const firstJob = firstRun ? await enqueueTestRun(firstRun) : null;
@@ -238,9 +282,11 @@ export async function runRoutes(fastify: FastifyInstance) {
     } catch (error) {
       return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
     }
+    const { variablesSnapshot: _variablesSnapshot, ...publicRun } = run;
     return {
-      ...run,
+      ...publicRun,
       dataCaseVariables: maskSecretVariables(run.dataCaseVariables),
+      variableSnapshot: safeVariableSnapshot(run.variablesSnapshot),
       environment: run.environment ? {
         ...run.environment,
         variables: maskSecretVariables(run.environment.variables)

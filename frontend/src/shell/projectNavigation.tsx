@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   BellOutlined,
+  CodeOutlined,
   DatabaseOutlined,
   CalendarOutlined,
   CheckSquareOutlined,
@@ -29,6 +30,7 @@ export const projectMainNavigation: ProjectNavigationItem[] = [
 
 export const projectConfigurationNavigation: ProjectNavigationItem[] = [
   { key: 'environments', icon: <WalletOutlined /> },
+  { key: 'variables', icon: <CodeOutlined /> },
   { key: 'authentication', icon: <KeyOutlined /> },
   { key: 'connections', icon: <DatabaseOutlined /> },
   { key: 'alerts', icon: <BellOutlined /> },
