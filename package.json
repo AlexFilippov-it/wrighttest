@@ -13,6 +13,11 @@
     "backend",
     "mcp-server"
   ],
+  "overrides": {
+    "@prisma/config": {
+      "deepmerge-ts": "^8.0.2"
+    }
+  },
   "scripts": {
     "setup": "node scripts/setup-playwright.mjs",
     "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
