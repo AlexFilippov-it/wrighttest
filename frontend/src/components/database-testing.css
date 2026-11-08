@@ -1,8 +1,11 @@
 .wt-sql-step-fields {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   flex: 1 1 100%;
   gap: 16px;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .wt-sql-connection-option {
@@ -158,13 +161,19 @@
 .wt-sql-parameters,
 .wt-sql-save-result {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .wt-sql-subsection-heading {
   display: flex;
+  box-sizing: border-box;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -174,6 +183,17 @@
 .wt-sql-subsection-heading > div {
   display: grid;
   gap: 2px;
+}
+
+.wt-sql-subsection-heading > .ant-space {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.wt-sql-subsection-heading > .ant-space > .ant-space-item {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .wt-sql-parameter-table {
@@ -245,7 +265,83 @@
   overflow-wrap: anywhere;
 }
 
+.wt-http-row {
+  min-width: 0;
+}
+
+.wt-http-request-editor {
+  width: 100%;
+  max-width: 100%;
+}
+
+.wt-http-request-editor > *,
+.wt-http-request-line,
+.wt-http-request-editor .ant-space,
+.wt-http-request-editor .ant-tabs {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wt-http-request-editor .ant-tabs-nav {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.wt-http-request-editor .ant-tabs-nav-wrap {
+  min-width: 0;
+  width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.wt-http-request-editor .ant-tabs-nav-wrap::-webkit-scrollbar {
+  display: none;
+}
+
+.wt-http-request-editor .ant-tabs-nav-wrap {
+  flex: 1 1 0;
+}
+
+.wt-http-request-editor .ant-tabs-nav-list {
+  max-width: 100%;
+}
+
+.wt-http-request-editor .ant-tag {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.wt-http-row .ant-input,
+.wt-http-row .ant-select,
+.wt-http-row .ant-input-affix-wrapper {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wt-http-request-line > * {
+  min-width: 0;
+}
+
+.wt-run-http-details {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 0;
+}
+
 @media (max-width: 640px) {
+  .wt-step-editor-row {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .wt-step-editor-row > * {
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 auto !important;
+  }
+
   .wt-sql-parameter-header {
     display: none;
   }
@@ -267,6 +363,54 @@
 
   .wt-sql-parameter-row > :nth-child(4) {
     grid-column: 2;
+    grid-row: 1;
+  }
+
+  .wt-http-request-line {
+    grid-template-columns: minmax(88px, 108px) minmax(0, 1fr) !important;
+  }
+
+  .wt-http-request-editor > .ant-space {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .wt-http-request-editor > .ant-space > .ant-space-item {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .wt-http-request-editor > .ant-space .ant-checkbox-wrapper,
+  .wt-http-request-editor > .ant-space .ant-typography {
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .wt-http-row {
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    gap: 8px;
+  }
+
+  .wt-http-row > :nth-child(1),
+  .wt-http-row > :nth-child(2),
+  .wt-http-row > :nth-child(3),
+  .wt-http-row > :nth-child(4),
+  .wt-http-row > :nth-child(5) {
+    min-width: 0;
+  }
+
+  .wt-http-row > :nth-child(2),
+  .wt-http-row > :nth-child(3) {
+    grid-column: 2;
+  }
+
+  .wt-http-row > :last-child {
+    grid-column: 1;
     grid-row: 1;
   }
 }

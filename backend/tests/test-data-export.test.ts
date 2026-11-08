@@ -52,3 +52,22 @@ test('export/import round-trips typed Test Data and project/environment referenc
   const parsed = parsePlaywrightSpec(spec);
   assert.deepEqual(parsed.testData, testData);
 });
+
+test('export/import preserves HTTP request, assertions, captures, and variable references without credential values', () => {
+  const source: Step[] = [{
+    action: 'httpRequest',
+    http: {
+      method: 'POST', url: 'https://api.example.test/users',
+      auth: { type: 'bearer', token: '{{API_TOKEN}}' },
+      headers: [{ key: 'X-Client', value: '{{CLIENT_ID}}', enabled: true }],
+      queryParams: [{ key: 'active', value: 'true', enabled: true }],
+      body: { type: 'json', value: '{"username":"{{USERNAME}}"}' },
+      assertions: [{ type: 'statusEquals', expected: 201 }, { type: 'jsonPathExists', path: '$.id' }],
+      capture: [{ source: 'jsonPath', path: '$.id', saveAs: 'USER_ID', secret: false }]
+    }
+  }];
+  const spec = exportToSpec(source, { testName: 'API create user' });
+  assert.match(spec, /WRIGHTTEST_STEP/);
+  assert.doesNotMatch(spec, /actual-token-value/);
+  assert.deepEqual(parsePlaywrightSpec(spec).steps, source);
+});

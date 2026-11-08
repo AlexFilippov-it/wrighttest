@@ -33,11 +33,12 @@ import type { ProjectVariable } from '../api/client';
 import VariableAutocompleteInput from './VariableAutocompleteInput';
 import { isSecretVariableName } from '../utils/secret-variable';
 import SqlCodeEditor from './SqlCodeEditor';
+import HttpRequestEditor from './HttpRequestEditor';
 import './database-testing.css';
 
 const { Text } = Typography;
 
-type ActionGroup = 'Actions' | 'Assertions' | 'Database';
+type ActionGroup = 'Actions' | 'Assertions' | 'Database' | 'API';
 
 type ActionOption = {
   value: StepAction;
@@ -53,6 +54,7 @@ const ACTION_OPTIONS: ActionOption[] = [
   { value: 'captureValue', icon: <SaveOutlined />, group: 'Actions', needsSelector: false, needsValue: false, needsExpected: false },
   { value: 'executeSql', icon: <DatabaseOutlined />, group: 'Database', needsSelector: false, needsValue: false, needsExpected: false },
   { value: 'assertDatabaseResult', icon: <DatabaseOutlined />, group: 'Database', needsSelector: false, needsValue: false, needsExpected: false },
+  { value: 'httpRequest', icon: <GlobalOutlined />, group: 'API', needsSelector: false, needsValue: false, needsExpected: false },
   { value: 'goto', icon: <GlobalOutlined />, group: 'Actions', needsSelector: false, needsValue: true, needsExpected: false },
   { value: 'click', icon: <AimOutlined />, group: 'Actions', needsSelector: true, needsValue: false, needsExpected: false },
   { value: 'fill', icon: <EditOutlined />, group: 'Actions', needsSelector: true, needsValue: true, needsExpected: false },
@@ -206,7 +208,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
   };
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
+    <div className="wt-editor-step-list" style={{ display: 'grid', gap: 12 }}>
       {steps.map((step, index) => {
         const opt = ACTION_OPTIONS.find((candidate) => candidate.value === step.action)!;
         const validation = validationResults?.[index];
@@ -231,14 +233,17 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
         const isSelectSql = /^(?:--[^\n]*\n\s*|\/\*[\s\S]*?\*\/\s*)*select\b/i.test(step.sql?.trim() ?? '');
         const isGenerateDataStep = step.action === 'generateData';
         const isCaptureValueStep = step.action === 'captureValue';
+        const isHttpRequestStep = step.action === 'httpRequest';
         const generatorOptions = step.generatorOptions ?? {};
         const priorGeneratedNames = steps.slice(0, index).filter((candidate) => candidate.action === 'generateData' && candidate.saveAs).map((candidate) => candidate.saveAs!);
         const priorCapturedNames = steps.slice(0, index).filter((candidate) =>
           (candidate.action === 'captureValue' && candidate.saveAs) ||
+          (candidate.action === 'httpRequest' && candidate.http?.capture?.some((capture) => capture.saveAs)) ||
           ((candidate.action === 'executeSql' || candidate.action === 'assertDatabaseResult') && candidate.saveResultAs)
         ).map((candidate) => candidate.saveAs ?? candidate.saveResultAs!);
         const projectVariableNames = projectVariables.map(({ name }) => name);
-        const availableVariableNames = [...new Set([...projectVariableNames, ...variableNames, ...testDataVariableNames, ...priorGeneratedNames, ...priorCapturedNames])];
+        const priorHttpCapturedNames = steps.slice(0, index).flatMap((candidate) => candidate.action === 'httpRequest' ? (candidate.http?.capture ?? []).map((capture) => capture.saveAs) : []);
+        const availableVariableNames = [...new Set([...projectVariableNames, ...variableNames, ...testDataVariableNames, ...priorGeneratedNames, ...priorCapturedNames, ...priorHttpCapturedNames])];
         const availableVariableDetails = [
           ...projectVariables.map((variable) => ({ name: variable.name, source: t('capture.variableSource.project'), type: variable.type, secret: variable.secret })),
           ...variableNames.map((name) => ({ name, source: t('capture.variableSource.environment'), type: 'string', secret: isSecretVariableName(name) })),
@@ -247,6 +252,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
             if (candidate.action === 'generateData' && candidate.saveAs) return [{ name: candidate.saveAs, source: t('capture.variableSource.generated'), type: candidate.generator === 'number' ? 'number' : candidate.generator === 'boolean' ? 'boolean' : 'string', secret: Boolean(candidate.secret || candidate.generator === 'password' || isSecretVariableName(candidate.saveAs)) }];
             if (candidate.action === 'captureValue' && candidate.saveAs) return [{ name: candidate.saveAs, source: t('capture.variableSource.captured'), type: candidate.captureSource === 'count' ? 'number' : 'string', secret: Boolean(candidate.secret || isSecretVariableName(candidate.saveAs)) }];
             if ((candidate.action === 'executeSql' || candidate.action === 'assertDatabaseResult') && candidate.saveResultAs) return [{ name: candidate.saveResultAs, source: t('capture.variableSource.sql'), type: t('capture.type.runtime'), secret: Boolean(candidate.secret || isSecretVariableName(candidate.saveResultAs)) }];
+            if (candidate.action === 'httpRequest') return (candidate.http?.capture ?? []).map((capture) => ({ name: capture.saveAs, source: t('http.capture'), type: t('capture.type.runtime'), secret: Boolean(capture.secret || isSecretVariableName(capture.saveAs)) }));
             return [];
           })
         ];
@@ -260,6 +266,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
         return (
           <Card
             key={`${index}-${step.action}`}
+            className="wt-editor-step-card"
             size="small"
             style={{
               borderRadius: 16,
@@ -317,7 +324,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
               </Space>
             }
           >
-            <div style={rowStyle}>
+            <div className="wt-step-editor-row" style={rowStyle}>
               <div style={{ flex: '0 0 260px', minWidth: 0 }}>
                 <Select
                   value={step.action}
@@ -329,7 +336,8 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                     ...(action === 'captureValue' && step.action !== 'captureValue' ? { captureSource: 'text', selector: '', saveAs: 'CAPTURED_VALUE', secret: false, replace: false } : {}),
                     ...(action === 'executeSql' || action === 'assertDatabaseResult'
                       ? { databaseConnectionId: step.databaseConnectionId ?? defaultDatabaseConnectionId }
-                      : {})
+                      : {}),
+                    ...(action === 'httpRequest' && step.action !== 'httpRequest' ? { http: { method: 'GET', url: '', body: { type: 'none' }, auth: { type: 'none' }, headers: [], queryParams: [], assertions: [], capture: [], timeoutMs: 15000, followRedirects: true } } : {})
                   })}
                 >
                   <Select.OptGroup label={t('step.actions')}>
@@ -358,6 +366,9 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                         <Space size={8}>{option.icon}<span>{humanizeStepAction(option.value, t)}</span></Space>
                       </Select.Option>
                     ))}
+                  </Select.OptGroup>
+                  <Select.OptGroup label={t('http.group')}>
+                    {ACTION_OPTIONS.filter((option) => option.group === 'API').map((option) => <Select.Option key={option.value} value={option.value}><Space size={8}>{option.icon}<span>{humanizeStepAction(option.value, t)}</span></Space></Select.Option>)}
                   </Select.OptGroup>
                 </Select>
               </div>
@@ -721,6 +732,8 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                 </div>
                 {fieldIssue?.message && <Text type="danger">{fieldIssue.message}</Text>}
               </div>}
+
+              {isHttpRequestStep && <HttpRequestEditor step={step} variableNames={availableVariableNames} readOnly={readOnly} onChange={(http) => updateStep(index, { http })} />}
 
               {needsSelector && (
                 <div style={{ flex: '1 1 320px', minWidth: 0 }}>

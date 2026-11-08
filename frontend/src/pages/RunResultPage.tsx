@@ -45,6 +45,7 @@ type StepResultRow = {
   screenshot?: string | null;
   error?: string | null;
   database?: NonNullable<NonNullable<TestRun['stepResults']>[number]['database']>;
+  http?: NonNullable<NonNullable<TestRun['stepResults']>[number]['http']>;
   generated?: NonNullable<NonNullable<TestRun['stepResults']>[number]['generated']>;
   captured?: NonNullable<NonNullable<TestRun['stepResults']>[number]['captured']>;
   stepDefinition?: Step;
@@ -107,6 +108,7 @@ function buildStepRows(run: TestRun, t: (key: string) => string): StepResultRow[
       screenshot: stepResult.screenshot ?? undefined,
       error: stepResult.error ?? undefined,
       database: stepResult.database,
+      http: stepResult.http,
       generated: stepResult.generated,
       captured: stepResult.captured,
       stepDefinition: run.test?.steps?.[stepResult.index]
@@ -565,6 +567,7 @@ export default function RunResultPage() {
                   rowKey="key"
                   size="small"
                   pagination={false}
+                  scroll={{ x: true }}
                   rowClassName={(record?: StepResultRow) => (record?.status === 'failed' ? 'run-step-row-failed' : '')}
                   expandable={{
                     expandedRowRender: (record) => {
@@ -629,10 +632,24 @@ export default function RunResultPage() {
                           /> : <Text type="secondary">{t('connections.noCapturedRows')}</Text>}
                           {record.database.rowLimitReached && <Text type="secondary">{t('connections.resultTruncated')}</Text>}
                         </div>}
+                        {record.http && <div className="wt-run-http-details">
+                          <Text type="secondary">{t('http.requestDetails')}</Text>
+                          <Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[
+                            { key: 'method', label: t('http.method'), children: record.http.method },
+                            { key: 'url', label: t('http.url'), children: <Text style={{ overflowWrap: 'anywhere' }}>{record.http.url}</Text> },
+                            { key: 'status', label: t('http.status'), children: record.http.status },
+                            { key: 'duration', label: t('common.duration'), children: formatDuration(record.http.durationMs) },
+                            { key: 'size', label: t('http.responseSize'), children: `${record.http.responseBytes} B` },
+                            { key: 'requestHeaders', label: t('http.requestHeaders'), children: record.http.requestHeaderNames.join(', ') || '—' },
+                            { key: 'responseHeaders', label: t('http.responseHeaders'), children: record.http.responseHeaderNames.join(', ') || '—' }
+                          ]} />
+                          {record.http.assertions.length > 0 && <div><Text type="secondary">{t('http.assertions')}</Text><div style={{ display: 'grid', gap: 4 }}>{record.http.assertions.map((assertion, assertionIndex) => <Space key={assertionIndex} wrap><Tag color={assertion.passed ? 'success' : 'error'}>{t(`http.assertion.${assertion.type}`)}</Tag><Text>{assertion.message}</Text></Space>)}</div></div>}
+                          {record.http.captures.length > 0 && <div><Text type="secondary">{t('http.capture')}</Text><Descriptions size="small" column={{ xs: 1, sm: 2 }} items={record.http.captures.map((capture) => ({ key: capture.variableName, label: `{{${capture.variableName}}}`, children: `${capture.type}${capture.secret ? ` · ${t('http.secret')}` : ''}` }))} /></div>}
+                        </div>}
                         {record.error && <Alert type="error" showIcon message={record.error} />}
                       </div>;
                     },
-                    rowExpandable: (record) => Boolean(record && (record.captured || record.stepDefinition?.action === 'executeSql' || record.database || record.stepDefinition?.sql))
+                    rowExpandable: (record) => Boolean(record && (record.captured || record.stepDefinition?.action === 'executeSql' || record.database || record.stepDefinition?.sql || record.http || record.stepDefinition?.action === 'httpRequest'))
                   }}
                   columns={[
                     {

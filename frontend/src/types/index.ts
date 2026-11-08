@@ -21,7 +21,8 @@ export type StepAction =
   | 'executeSql'
   | 'assertDatabaseResult'
   | 'generateData'
-  | 'captureValue';
+  | 'captureValue'
+  | 'httpRequest';
 
 export interface Step {
   action: StepAction;
@@ -53,6 +54,18 @@ export interface Step {
   saveRowIndex?: number;
   saveColumn?: string;
   captureRows?: boolean;
+  http?: {
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
+    url: string;
+    headers?: Array<{ key: string; value: string; enabled: boolean; secret?: boolean }>;
+    queryParams?: Array<{ key: string; value: string; enabled: boolean }>;
+    body?: { type: 'none' | 'json' | 'text' | 'form-urlencoded'; value?: string; fields?: Array<{ key: string; value: string; enabled: boolean }> };
+    timeoutMs?: number;
+    followRedirects?: boolean;
+    auth?: { type: 'none' | 'bearer' | 'basic' | 'apiKey'; token?: string; username?: string; password?: string; apiKeyName?: string; apiKeyValue?: string; apiKeyLocation?: 'header' };
+    assertions?: Array<Record<string, unknown>>;
+    capture?: Array<{ source: 'jsonPath' | 'responseHeader' | 'status' | 'responseTime' | 'textBody'; path?: string; headerName?: string; saveAs: string; secret?: boolean; replace?: boolean }>;
+  };
   options?: {
     exact?: boolean;
     timeout?: number;
@@ -485,6 +498,17 @@ export interface TestRun {
       columns: string[];
       rows?: Record<string, string | number | boolean | null>[];
       assertion?: { type: NonNullable<Step['assertion']>['type']; passed: boolean };
+    };
+    http?: {
+      method: string;
+      url: string;
+      status: number;
+      durationMs: number;
+      responseBytes: number;
+      requestHeaderNames: string[];
+      responseHeaderNames: string[];
+      assertions: Array<{ type: string; passed: boolean; message: string }>;
+      captures: Array<{ variableName: string; type: string; secret: boolean }>;
     };
   }>;
   test?: (Test & {

@@ -31,7 +31,7 @@ function hasValue(value: string | undefined | null) {
 }
 
 export function hasAssertionSteps(steps: Step[]) {
-  return steps.some((step) => ASSERTION_ACTIONS.has(step.action));
+  return steps.some((step) => ASSERTION_ACTIONS.has(step.action) || (step.action === 'httpRequest' && Boolean(step.http?.assertions?.length)));
 }
 
 export function validateStepRequirements(step: Step): StepRequirementIssue | null {
@@ -44,6 +44,26 @@ export function validateStepRequirements(step: Step): StepRequirementIssue | nul
     }
     if (step.action === 'assertDatabaseResult' && !step.assertion) {
       return { message: required('Database assertion'), fields: { expected: required('Database assertion') } };
+    }
+    return null;
+  }
+  if (step.action === 'httpRequest') {
+    if (!step.http?.method) return { message: required('HTTP method'), fields: { value: required('HTTP method') } };
+    if (!step.http.url?.trim()) return { message: required('HTTP URL'), fields: { value: required('HTTP URL') } };
+    if (!step.http.url.includes('{{')) {
+      try {
+        const url = new URL(step.http.url);
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+      } catch {
+        return { message: 'Enter a valid HTTP or HTTPS URL.', fields: { value: 'Enter a valid HTTP or HTTPS URL.' } };
+      }
+    }
+    if (step.http.body?.type === 'json') {
+      try { JSON.parse(step.http.body.value ?? '{}'); }
+      catch { return { message: 'Request body is not valid JSON.', fields: { value: 'Request body is not valid JSON.' } }; }
+    }
+    for (const capture of step.http.capture ?? []) {
+      if (!capture.saveAs?.trim()) return { message: required('Capture variable name'), fields: { value: required('Capture variable name') } };
     }
     return null;
   }

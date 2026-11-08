@@ -51,6 +51,22 @@ a {
   background: #fff1f2 !important;
 }
 
+.wt-test-editor-page {
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+.wt-test-editor-page__content {
+  box-sizing: border-box;
+  flex: 1 1 0%;
+  width: 100%;
+  min-width: 0;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
 .wt-editor-section-card .ant-card-head {
   min-height: 68px;
   padding-block: 12px;
@@ -87,7 +103,30 @@ a {
   overflow-wrap: anywhere;
 }
 
+.wt-editor-step-list {
+  width: 100%;
+  min-width: 0;
+}
+
+.wt-editor-step-card {
+  width: 100%;
+  min-width: 0;
+}
+
+.wt-editor-step-card .ant-card-head-wrapper,
+.wt-editor-step-card .ant-card-head-title {
+  min-width: 0;
+}
+
+.wt-editor-step-card .ant-card-head-title {
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 768px) {
+  .wt-test-editor-page__content {
+    padding: 16px;
+  }
+
   .wt-editor-section-card .ant-card-head {
     min-height: unset;
     padding-block: 10px;

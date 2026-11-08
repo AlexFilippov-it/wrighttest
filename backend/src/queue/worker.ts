@@ -23,6 +23,7 @@ import {
   resolveAuthStateForExecution
 } from '../services/auth-state';
 import { executeDatabaseStep, openDatabaseConnection, type SqlExecutionSummary, type SqlSession } from '../services/database-connections';
+import { executeHttpRequest, type HttpExecutionSummary } from '../services/http-request';
 import { captureBrowserValue } from '../services/value-capture';
 import { generateTestDataValue, isSecretGeneratorStep } from '../services/test-data-generators';
 import { decryptRunVariablesSnapshot } from '../services/project-variable-crypto';
@@ -186,6 +187,7 @@ type RunStepResult = {
   screenshot?: string | null;
   error?: string | null;
   database?: SqlExecutionSummary;
+  http?: HttpExecutionSummary;
   generated?: { variableName: string; generator: string; secret: boolean; value?: string | number | boolean };
   captured?: { variableName: string; source: NonNullable<Step['captureSource']> | 'sql'; type: string; secret: boolean; createdByStep: number; value?: string | number | boolean | null | Record<string, unknown> | unknown[] };
   variableError?: {
@@ -265,6 +267,7 @@ async function runTest(job: Job<TestJobData>) {
   let omitArtifactsForSecrets = steps.some((step) =>
     (step.action === 'generateData' && (isSecretGeneratorStep(step) || isSecretVariableName(step.saveAs ?? ''))) ||
     step.action === 'captureValue' ||
+    step.action === 'httpRequest' ||
     (step.action === 'executeSql' && Boolean(step.saveResultAs)) ||
     step.secret === true ||
     (Boolean(step.saveResultAs) && isSecretVariableName(step.saveResultAs ?? ''))
@@ -325,6 +328,7 @@ async function runTest(job: Job<TestJobData>) {
       const stepStartedAt = Date.now();
       let stepError: Error | null = null;
       let databaseSummary: SqlExecutionSummary | undefined;
+      let httpSummary: HttpExecutionSummary | undefined;
       let generatedSummary: RunStepResult['generated'];
       let capturedSummary: RunStepResult['captured'];
 
@@ -420,6 +424,12 @@ async function runTest(job: Job<TestJobData>) {
                 ...(!entry.secret ? { value: execution.savedValue } : {})
               };
             }
+            break;
+          }
+          case 'httpRequest': {
+            const execution = await executeHttpRequest(rawStep, variableContext, index);
+            httpSummary = execution.summary;
+            if (execution.failed) throw new Error(execution.error ?? 'HTTP assertion failed.');
             break;
           }
           case 'goto':
@@ -530,7 +540,7 @@ async function runTest(job: Job<TestJobData>) {
           : new Error(variableContext.redact(message));
       } finally {
         let screenshot: string | null = null;
-        if (!omitArtifactsForSecrets && !['executeSql', 'assertDatabaseResult'].includes(step.action)) {
+        if (!omitArtifactsForSecrets && !['executeSql', 'assertDatabaseResult', 'httpRequest'].includes(step.action)) {
           const screenshotName = `${testRunId}_step${index + 1}${stepError ? '_failed' : ''}.png`;
           const screenshotPath = path.join(SCREENSHOTS_DIR, screenshotName);
           try {
@@ -559,6 +569,7 @@ async function runTest(job: Job<TestJobData>) {
             }
           } : {}),
           ...(databaseSummary ? { database: databaseSummary } : {}),
+          ...(httpSummary ? { http: httpSummary } : {}),
           ...(generatedSummary ? { generated: generatedSummary } : {}),
           ...(capturedSummary ? { captured: capturedSummary } : {}),
           ...(stepError && 'databaseSummary' in stepError && typeof stepError.databaseSummary === 'object'

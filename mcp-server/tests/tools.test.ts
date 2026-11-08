@@ -128,6 +128,29 @@ test('create_check accepts browser Capture Value steps through the existing tool
   await server.close();
 });
 
+test('create_check forwards HTTP requests, assertions, and captures through the existing tool', async () => {
+  const httpStep = {
+    action: 'httpRequest',
+    http: {
+      method: 'POST', url: 'https://api.example.test/users',
+      auth: { type: 'bearer', token: '{{API_TOKEN}}' },
+      body: { type: 'json', value: '{"name":"{{USERNAME}}"}' },
+      assertions: [{ type: 'statusEquals', expected: 201 }, { type: 'jsonPathType', path: '$.id', expectedType: 'number' }],
+      capture: [{ source: 'jsonPath', path: '$.id', saveAs: 'USER_ID' }]
+    }
+  };
+  let received: unknown;
+  const { client, server } = await connectedClient(async (_input, init) => {
+    received = JSON.parse(String(init?.body));
+    return Response.json({ id: 'check-http', projectId: 'project-1', name: 'Create user via API', url: 'https://api.example.test/', steps: [httpStep] }, { status: 201 });
+  });
+  const response = await client.callTool({ name: 'create_check', arguments: { projectId: 'project-1', name: 'Create user via API', url: 'https://api.example.test/', steps: [httpStep] } });
+  assert.equal(response.isError, undefined);
+  assert.deepEqual((received as Record<string, unknown>).steps, [httpStep]);
+  await client.close();
+  await server.close();
+});
+
 test('update_check accepts and forwards a partial patch', async () => {
   let requestPath = '';
   let requestMethod = '';

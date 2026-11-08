@@ -57,6 +57,10 @@ export function normalizeSuiteConfig(suite: Pick<SuiteLike, 'testIds' | 'executi
 function declaredOutputs(test: Pick<Test, 'steps'>) {
   const steps = Array.isArray(test.steps) ? test.steps as Array<Record<string, unknown>> : [];
   return new Set(steps.flatMap((step) => {
+    if (step.action === 'httpRequest' && step.http && typeof step.http === 'object') {
+      const captures = (step.http as { capture?: Array<{ saveAs?: unknown }> }).capture ?? [];
+      return captures.flatMap((capture) => typeof capture.saveAs === 'string' ? [capture.saveAs] : []);
+    }
     const value = step.action === 'executeSql' || step.action === 'assertDatabaseResult'
       ? step.saveResultAs
       : step.action === 'generateData' || step.action === 'captureValue' ? step.saveAs : undefined;

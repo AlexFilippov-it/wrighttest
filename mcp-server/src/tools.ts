@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { jsonBody, redactStrings, WrightTestApi } from './api.js';
 
 const StepSchema = z.object({
-  action: z.enum(['goto', 'click', 'fill', 'press', 'keyboardPress', 'selectOption', 'assertVisible', 'assertHidden', 'assertText', 'assertValue', 'assertURL', 'assertTitle', 'assertChecked', 'assertCount', 'waitForSelector', 'executeSql', 'assertDatabaseResult', 'generateData', 'captureValue']),
+  action: z.enum(['goto', 'click', 'fill', 'press', 'keyboardPress', 'selectOption', 'assertVisible', 'assertHidden', 'assertText', 'assertValue', 'assertURL', 'assertTitle', 'assertChecked', 'assertCount', 'waitForSelector', 'executeSql', 'assertDatabaseResult', 'generateData', 'captureValue', 'httpRequest']),
   generator: z.enum(['username', 'email', 'password', 'uuid', 'string', 'number', 'boolean', 'date', 'timestamp', 'pattern']).optional(),
   generatorOptions: z.record(z.string().max(64), z.union([z.string().max(512), z.number().finite(), z.boolean()])).refine((options) => Object.keys(options).length <= 20).optional(),
   saveAs: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/).optional(),
@@ -27,6 +27,16 @@ const StepSchema = z.object({
   saveRowIndex: z.number().int().nonnegative().max(100).optional(),
   saveColumn: z.string().max(256).optional(),
   captureRows: z.boolean().optional(),
+  http: z.object({
+    method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']), url: z.string().min(1).max(8192),
+    headers: z.array(z.object({ key: z.string().max(256), value: z.string().max(10000), enabled: z.boolean(), secret: z.boolean().optional() })).max(100).optional(),
+    queryParams: z.array(z.object({ key: z.string().max(256), value: z.string().max(10000), enabled: z.boolean() })).max(100).optional(),
+    body: z.object({ type: z.enum(['none', 'json', 'text', 'form-urlencoded']), value: z.string().max(512000).optional(), fields: z.array(z.object({ key: z.string().max(256), value: z.string().max(10000), enabled: z.boolean() })).max(100).optional() }).optional(),
+    timeoutMs: z.number().int().min(100).max(120000).optional(), followRedirects: z.boolean().optional(),
+    auth: z.discriminatedUnion('type', [z.object({ type: z.literal('none') }), z.object({ type: z.literal('bearer'), token: z.string().max(10000) }), z.object({ type: z.literal('basic'), username: z.string().max(2000), password: z.string().max(10000) }), z.object({ type: z.literal('apiKey'), apiKeyName: z.string().min(1).max(256), apiKeyValue: z.string().max(10000), apiKeyLocation: z.literal('header') })]).optional(),
+    assertions: z.array(z.record(z.string(), z.unknown())).max(100).optional(),
+    capture: z.array(z.object({ source: z.enum(['jsonPath', 'responseHeader', 'status', 'responseTime', 'textBody']), path: z.string().max(256).optional(), headerName: z.string().max(256).optional(), saveAs: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/), secret: z.boolean().optional(), replace: z.boolean().optional() })).max(100).optional()
+  }).optional(),
   options: z.object({ exact: z.boolean().optional(), timeout: z.number().int().positive().optional(), nth: z.number().int().nonnegative().optional() }).optional()
 });
 
@@ -181,6 +191,9 @@ async function safeRunPayload(api: WrightTestApi, run: RunPayload) {
     const capturedRecord = record.captured && typeof record.captured === 'object' && !Array.isArray(record.captured)
       ? record.captured as Record<string, unknown>
       : undefined;
+    const httpRecord = record.http && typeof record.http === 'object' && !Array.isArray(record.http)
+      ? record.http as Record<string, unknown>
+      : undefined;
     const generatedSecret = generatedRecord && (
       generatedRecord.secret === true || generatedRecord.generator === 'password' ||
       (typeof generatedRecord.variableName === 'string' && /(pass(word)?|secret|token|api[_-]?key|authorization|auth[_-]?code|verification[_-]?code|otp|cookie|credential|private[_-]?key)/i.test(generatedRecord.variableName))
@@ -192,6 +205,17 @@ async function safeRunPayload(api: WrightTestApi, run: RunPayload) {
       durationMs: record.durationMs,
       error: hasShortSecret ? undefined : record.error,
       database: record.database && typeof record.database === 'object' ? record.database : undefined,
+      http: httpRecord ? {
+        method: httpRecord.method,
+        url: httpRecord.url,
+        status: httpRecord.status,
+        durationMs: httpRecord.durationMs,
+        responseBytes: httpRecord.responseBytes,
+        requestHeaderNames: httpRecord.requestHeaderNames,
+        responseHeaderNames: httpRecord.responseHeaderNames,
+        assertions: httpRecord.assertions,
+        captures: httpRecord.captures
+      } : undefined,
       generated: generatedRecord ? {
         variableName: generatedRecord.variableName,
         generator: generatedRecord.generator,

@@ -978,7 +978,7 @@ export default function TestEditorPage() {
     return recordEnvironments.find((environment) => environment.id === selectedRecordingEnvironmentId)?.name ?? t('editor.noEnvironment');
   };
 
-  const stepAssertionsCount = steps.filter((step) => step.action.startsWith('assert') || (step.action === 'executeSql' && Boolean(step.assertion))).length;
+  const stepAssertionsCount = steps.filter((step) => step.action.startsWith('assert') || (step.action === 'executeSql' && Boolean(step.assertion)) || (step.action === 'httpRequest' && Boolean(step.http?.assertions?.length))).length;
   const stepSummaryBadges = [
     <Tag key="steps" color="blue">
       {t('editor.stepsCount', { count: steps.length })}
@@ -1132,10 +1132,10 @@ export default function TestEditorPage() {
     </Dropdown>
   );
   return (
-    <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #ffffff 100%)' }}>
+    <Layout className="wt-test-editor-page" style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #ffffff 100%)' }}>
       {confirmModalContextHolder}
       <AppHeader actions={[<UserMenu key="menu" />]} />
-      <Content style={{ padding: 32, paddingBottom: 260, maxWidth: 1180, width: '100%', margin: '0 auto' }}>
+      <Content className="wt-test-editor-page__content">
         <Row gutter={[24, 24]}>
           <Col span={24}>
             <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}>

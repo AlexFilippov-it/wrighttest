@@ -41,6 +41,9 @@ const adminPassword = randomBytes(24).toString('base64url');
 const jwtSecret = randomBytes(48).toString('base64url');
 const environment = {
   ...process.env,
+  NODE_ENV: 'test',
+  WRIGHTTEST_HTTP_TEST_ALLOW_LOOPBACK: '1',
+  WRIGHTTEST_DATABASE_TEST_MODE: '1',
   DATABASE_URL: databaseUrl.toString(),
   ADMIN_EMAIL: adminEmail,
   ADMIN_PASSWORD: adminPassword,
@@ -58,6 +61,7 @@ const environment = {
   E2E_OUTPUT_DIR: path.join(tempRoot, 'results'),
   E2E_REPORT_DIR: path.join(tempRoot, 'report'),
   PHASE5_SCREENSHOT_DIR: path.join(root, 'output', 'phase5-screenshots'),
+  PHASE6_SCREENSHOT_DIR: '/tmp/wrighttest-api-phase6',
   SCREENSHOTS_DIR: path.join(tempRoot, 'screenshots'),
   TRACES_DIR: path.join(tempRoot, 'traces'),
   AUTH_STATES_DIR: path.join(tempRoot, 'auth-states'),
