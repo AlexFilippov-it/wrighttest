@@ -235,6 +235,25 @@ test('run results mask explicitly secret captured values and preserve non-secret
   await server.close();
 });
 
+test('run results expose only scoped artifact links and never filesystem artifact names', async () => {
+  const { client, server } = await connectedClient(async () => Response.json({
+    id: 'run-artifact', status: 'PASSED', screenshots: ['/api/artifacts?ticket=scoped-short-ticket'],
+    trace: {
+      available: true,
+      downloadUrl: '/api/artifacts?ticket=scoped-trace-ticket',
+      viewerUrl: '/trace-viewer/?trace=%2Fapi%2Fartifacts%3Fticket%3Dscoped-trace-ticket'
+    },
+    tracePath: '/srv/wrighttest/traces/private-run.zip'
+  }));
+  const response = await client.callTool({ name: 'get_run_results', arguments: { runId: 'run-artifact' } });
+  const text = firstText(response);
+  assert.match(text, /scoped-short-ticket/);
+  assert.match(text, /scoped-trace-ticket/);
+  assert.doesNotMatch(text, /private-run\.zip|\/srv\/wrighttest/);
+  await client.close();
+  await server.close();
+});
+
 test('run results never expose generated secret values even if a backend payload contains one', async () => {
   const { client, server } = await connectedClient(async () => Response.json({
     id: 'run-2', status: 'PASSED',

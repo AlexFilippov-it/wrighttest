@@ -245,8 +245,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
                 status: true,
                 startedAt: true,
                 durationMs: true,
-                error: true,
-                tracePath: true
+                error: true
               }
             }
           },

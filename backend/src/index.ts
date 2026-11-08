@@ -29,6 +29,7 @@ import { localizationRoutes } from './routes/localization';
 import { createBrowserSessionRoutes } from './routes/browser-sessions';
 import { createHash } from 'node:crypto';
 import { schedulerService } from './services/scheduler';
+import { validateRuntimeConfiguration } from './services/runtime-config';
 
 const envCandidates = [
   path.resolve(process.cwd(), '.env'),
@@ -75,6 +76,7 @@ fs.mkdirSync(screenshotsDir, { recursive: true });
 fs.mkdirSync(tracesDir, { recursive: true });
 
 async function start() {
+  validateRuntimeConfiguration();
   const fastify = Fastify({
     logger: {
       redact: {
@@ -100,13 +102,14 @@ async function start() {
     frameguard: false
   });
 
+  const configuredRateLimitMax = Number(process.env.RATE_LIMIT_MAX);
   await fastify.register(rateLimit, {
-    max: 100,
+    max: Number.isSafeInteger(configuredRateLimitMax) && configuredRateLimitMax > 0 ? configuredRateLimitMax : 100,
     timeWindow: '1 minute'
   });
 
   await fastify.register(fastifyJwt, {
-    secret: process.env.JWT_SECRET ?? 'replace-this-with-a-long-random-string'
+    secret: process.env.JWT_SECRET ?? 'development-only-jwt-secret-change-me'
   });
 
   fastify.addHook('preHandler', async (req, reply) => {
@@ -117,9 +120,7 @@ async function start() {
       { method: 'GET', url: '/health' },
       { method: 'GET', url: '/health/db' },
       { method: 'POST', url: '/webhooks/trigger' },
-      { method: 'GET', url: '/screenshots/' },
-      { method: 'GET', url: '/traces/' },
-      { method: 'GET', url: '/api/traces/' },
+      { method: 'GET', url: '/api/artifacts' },
       { method: 'GET', url: '/trace-viewer/' },
       { method: 'GET', url: '/api/trace-viewer/' },
       { method: 'GET', url: '/trace-viewer' }
@@ -182,35 +183,6 @@ async function start() {
   await fastify.register(authRoutes);
   await fastify.register(localizationRoutes);
   await fastify.register(createBrowserSessionRoutes().routes);
-
-  await fastify.register(fastifyStatic, {
-    root: screenshotsDir,
-    prefix: '/screenshots/',
-    decorateReply: false,
-    setHeaders: (res) => {
-      res.raw.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    }
-  });
-
-  await fastify.register(fastifyStatic, {
-    root: tracesDir,
-    prefix: '/traces/',
-    decorateReply: false,
-    setHeaders: (res) => {
-      res.raw.setHeader('Access-Control-Allow-Origin', 'https://trace.playwright.dev');
-      res.raw.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    }
-  });
-
-  await fastify.register(fastifyStatic, {
-    root: tracesDir,
-    prefix: '/api/traces/',
-    decorateReply: false,
-    setHeaders: (res) => {
-      res.raw.setHeader('Access-Control-Allow-Origin', 'https://trace.playwright.dev');
-      res.raw.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    }
-  });
 
   await fastify.register(fastifyStatic, {
     root: traceViewerRoot,

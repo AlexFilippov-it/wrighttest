@@ -239,8 +239,8 @@ async function safeRunPayload(api: WrightTestApi, run: RunPayload) {
       ]))
     : undefined;
   const screenshots = !hasGeneratedSecrets && !captureArtifactsOmitted && Array.isArray(run.screenshots)
-    ? run.screenshots.filter((name): name is string => typeof name === 'string' && name.length > 0 && !name.includes('..'))
-      .map((name) => ({ name, url: api.absoluteUrl(`/screenshots/${encodeURIComponent(name)}`) }))
+    ? run.screenshots.filter((url): url is string => typeof url === 'string' && url.startsWith('/api/artifacts?ticket='))
+      .map((url, index) => ({ name: `Screenshot ${index + 1}`, url: api.absoluteUrl(url) }))
     : [];
   const trace = hasGeneratedSecrets || captureArtifactsOmitted
     ? { available: false, reason: captureArtifactsOmitted ? 'Trace links are omitted for runs that may capture secret values.' : 'Trace links are omitted for runs containing generated secrets.' }

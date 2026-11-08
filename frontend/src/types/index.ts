@@ -91,7 +91,8 @@ export interface TestDataCase {
 export interface ValidationReport {
   valid: boolean;
   results: StepValidationResult[];
-  tracePath?: string;
+  traceUrl?: string;
+  traceViewerUrl?: string;
 }
 
 export interface Project {

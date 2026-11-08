@@ -253,7 +253,7 @@ export default function TestEditorPage() {
   const [exportMode, setExportMode] = useState<'inline' | 'envvars' | 'raw'>('inline');
   const [exportEnvId, setExportEnvId] = useState<string | undefined>(undefined);
   const [deviceOptions, setDeviceOptions] = useState<{ label: string; value: string }[]>([]);
-  const [validationTracePath, setValidationTracePath] = useState<string | undefined>(undefined);
+  const [validationTraceViewerUrl, setValidationTraceViewerUrl] = useState<string | undefined>(undefined);
   const [novncAvailable, setNovncAvailable] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [currentProjectId, setCurrentProjectId] = useState<string | undefined>(projectId);
@@ -302,7 +302,7 @@ export default function TestEditorPage() {
       setCurrentProjectId(projectId);
       setSelectedRecordingEnvironmentId(undefined);
       setUseProjectAuthentication(true);
-      setValidationTracePath(undefined);
+      setValidationTraceViewerUrl(undefined);
       setValidationFeedback(null);
       setStepIssues([]);
       setFirstInvalidStepIndex(null);
@@ -328,7 +328,7 @@ export default function TestEditorPage() {
           setCurrentProjectRole(project.currentUserRole ?? null);
         })
         .catch(() => setCurrentProjectRole(null));
-      setValidationTracePath(undefined);
+      setValidationTraceViewerUrl(undefined);
       setValidationFeedback(null);
       setStepIssues([]);
       setFirstInvalidStepIndex(null);
@@ -435,7 +435,7 @@ export default function TestEditorPage() {
     stepsRef.current = nextSteps;
     setSteps(nextSteps);
     setValidationResults(undefined);
-    setValidationTracePath(undefined);
+    setValidationTraceViewerUrl(undefined);
     setValidationFeedback(null);
     setStepIssues([]);
     setFirstInvalidStepIndex(null);
@@ -491,7 +491,7 @@ export default function TestEditorPage() {
     const currentSteps = stepsRef.current;
     const localIssues = validateCurrentSteps(currentSteps, t);
     setValidationResults(undefined);
-    setValidationTracePath(undefined);
+    setValidationTraceViewerUrl(undefined);
     setStepIssues(localIssues.issues);
     setFirstInvalidStepIndex(localIssues.firstInvalidIndex);
     if (localIssues.firstInvalidIndex !== null) {
@@ -519,9 +519,9 @@ export default function TestEditorPage() {
         useProjectAuthentication
       );
       setValidationResults(report.results);
-      setValidationTracePath(report.tracePath);
-      if (report.tracePath) {
-        const traceUrl = `${BACKEND_URL}/trace-viewer/?trace=${encodeURIComponent(`${BACKEND_URL}/api/traces/${report.tracePath}`)}`;
+      setValidationTraceViewerUrl(report.traceViewerUrl ? `${BACKEND_URL}${report.traceViewerUrl}` : undefined);
+      if (report.traceViewerUrl) {
+        const traceUrl = `${BACKEND_URL}${report.traceViewerUrl}`;
         notification.info({
           message: t('editor.validationTraceReady'),
           description: (
@@ -1111,9 +1111,7 @@ export default function TestEditorPage() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [isDirty]);
 
-  const validationTraceUrl = validationTracePath
-    ? `${BACKEND_URL}/trace-viewer/?trace=${encodeURIComponent(`${BACKEND_URL}/api/traces/${validationTracePath}`)}`
-    : undefined;
+  const validationTraceUrl = validationTraceViewerUrl;
   const projectRouteId = currentProjectId ?? projectId;
   const projectLink = projectRouteId ? `/projects/${projectRouteId}/checks` : '/projects';
   const exportMenu: MenuProps = {

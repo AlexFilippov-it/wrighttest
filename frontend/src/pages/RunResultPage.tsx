@@ -328,7 +328,9 @@ export default function RunResultPage() {
   };
 
   const failedScreenshotName = failedStep?.screenshot ?? (failedStepIndex ? run?.screenshots[failedStepIndex - 1] : undefined);
-  const failedScreenshotUrl = resolveBackendUrl(failedScreenshotName ? `/screenshots/${failedScreenshotName}` : undefined);
+  const failedScreenshotUrl = resolveBackendUrl(failedScreenshotName
+    ? (failedScreenshotName.startsWith('/api/artifacts?ticket=') ? failedScreenshotName : `/screenshots/${failedScreenshotName}`)
+    : undefined);
 
   const runContext = useMemo(() => {
     if (!run) return [];
@@ -647,7 +649,7 @@ export default function RunResultPage() {
                       actionLabel={row?.action ?? humanizeAction(result.action, t)}
                       target={row?.target ?? result.target ?? '—'}
                       statusLabel={statusLabel}
-                      screenshotUrl={result.screenshot ? resolveBackendUrl(`/screenshots/${result.screenshot}`) : undefined}
+                      screenshotUrl={result.screenshot ? resolveBackendUrl(result.screenshot.startsWith('/api/artifacts?ticket=') ? result.screenshot : `/screenshots/${result.screenshot}`) : undefined}
                       highlighted={result.status === 'failed' && failedStepIndex === stepNumber}
                       expanded={expandedMobileStep === stepNumber}
                       onToggle={() => setExpandedMobileStep((current) => current === stepNumber ? null : stepNumber)}
@@ -824,7 +826,7 @@ export default function RunResultPage() {
                       width: 120,
                       render: (screenshot?: string | null) =>
                         screenshot ? (
-                          <a href={resolveBackendUrl(`/screenshots/${screenshot}`)} target="_blank" rel="noreferrer">
+                          <a href={resolveBackendUrl(screenshot.startsWith('/api/artifacts?ticket=') ? screenshot : `/screenshots/${screenshot}`)} target="_blank" rel="noreferrer">
                             {t('common.view')}
                           </a>
                         ) : (
@@ -854,7 +856,7 @@ export default function RunResultPage() {
                       cover={
                         <Image
                           alt={t('runResult.stepNumber', { number: index + 1 })}
-                          src={`${BACKEND_URL}/screenshots/${name}`}
+                          src={resolveBackendUrl(name.startsWith('/api/artifacts?ticket=') ? name : `/screenshots/${name}`)}
                           preview
                         />
                       }

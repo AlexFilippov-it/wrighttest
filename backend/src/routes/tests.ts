@@ -7,6 +7,8 @@ import { runValidationInSubprocess } from '../services/validation-runner';
 import { getAvailableDevices } from '../utils/devices';
 import { getAuthUser, getProjectAccessStatusCode, requireProjectRole } from '../utils/project-access';
 import { deleteAuthStateArtifact, resolveAuthStateForExecution } from '../services/auth-state';
+import path from 'node:path';
+import { resolveArtifactPath } from '../services/artifact-path';
 
 const urlOrTemplate = z.string().refine((value) => {
   if (value.includes('{{')) return true;
@@ -69,7 +71,16 @@ export async function testRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>('/tests/:id', async (req, reply) => {
     const test = await prisma.test.findUnique({
       where: { id: req.params.id },
-      include: { runs: { orderBy: { startedAt: 'desc' }, take: 10 } }
+      include: {
+        runs: {
+          select: {
+            id: true, status: true, startedAt: true, finishedAt: true, durationMs: true,
+            error: true, currentStep: true, totalSteps: true
+          },
+          orderBy: { startedAt: 'desc' },
+          take: 10
+        }
+      }
     });
 
     if (!test) return reply.status(404).send({ error: 'Test not found' });
@@ -213,7 +224,28 @@ export async function testRoutes(fastify: FastifyInstance) {
         result.data.device,
         storageState
       );
-      return report;
+      const { tracePath, ...safeReport } = report;
+      let traceUrl: string | undefined;
+      let traceViewerUrl: string | undefined;
+      if (tracePath) {
+        const filename = path.basename(tracePath);
+        const tracesDir = path.resolve(process.env.TRACES_DIR || './traces');
+        try {
+          await resolveArtifactPath(tracesDir, filename);
+          const ticket = fastify.jwt.sign({
+            typ: 'wrighttest-artifact',
+            userId,
+            projectId: result.data.projectId,
+            kind: 'validationTrace',
+            filename
+          }, { expiresIn: '5m' });
+          traceUrl = `/api/artifacts?ticket=${encodeURIComponent(ticket)}`;
+          traceViewerUrl = `/trace-viewer/?trace=${encodeURIComponent(traceUrl)}`;
+        } catch {
+          // Do not expose an unverified filesystem path when the artifact is unavailable.
+        }
+      }
+      return { ...safeReport, traceUrl, traceViewerUrl };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Validation failed';
       return reply.status(500).send({ error: message });
