@@ -25,12 +25,14 @@ import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
 import RunStatusBadge from '../components/RunStatusBadge';
+import RunStepResultCard from '../components/RunStepResultCard';
 import StatusBadge from '../design-system/StatusBadge';
 import '../components/database-testing.css';
 import type { RunStatus, Step, StepAction, TestRun } from '../types';
 import { BACKEND_URL } from '../utils/runtimeConfig';
 import { useAppShell } from '../shell/ShellContext';
 import { isSecretVariableName } from '../utils/secret-variable';
+import { safeHttpUrl } from '../utils/safe-display';
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -51,6 +53,15 @@ type StepResultRow = {
   stepDefinition?: Step;
 };
 
+function sqlResultCountLabel(database: NonNullable<StepResultRow['database']>, sql: string | undefined, t: (key: string, options?: { count: number }) => string) {
+  const query = sql?.trim().replace(/^(?:--[^\n]*\n\s*|\/\*[\s\S]*?\*\/\s*)*/, '').split(/\s+/, 1)[0]?.toLowerCase();
+  if (query === 'select' || database.rowCount > 0 || database.columns.length > 0) {
+    return `${t('connections.rowsReturned', { count: database.rowCount })}${database.rowLimitReached ? '+' : ''}`;
+  }
+  if (database.affectedRows !== undefined) return t('connections.rowsAffected', { count: database.affectedRows });
+  return t('connections.noRowCount');
+}
+
 function resolveBackendUrl(value?: string) {
   if (!value) return undefined;
   return value.startsWith('http') ? value : `${BACKEND_URL}${value}`;
@@ -65,6 +76,20 @@ function humanizeAction(action: StepAction | string, t: (key: string) => string)
 function formatDuration(ms?: number | null) {
   if (!ms && ms !== 0) return '—';
   return `${(ms / 1000).toFixed(ms >= 10000 ? 1 : 2)}s`;
+}
+
+function variableSourceLabel(source: string, t: (key: string) => string) {
+  switch (source) {
+    case 'project': return t('capture.variableSource.project');
+    case 'environment': return t('capture.variableSource.environment');
+    case 'testData': return t('capture.variableSource.testData');
+    case 'runInput': return t('capture.variableSource.runInput');
+    case 'generated': return t('capture.variableSource.generated');
+    case 'captured': return t('capture.variableSource.browser');
+    case 'sql': return t('capture.variableSource.sql');
+    case 'http': return t('capture.variableSource.http');
+    default: return source;
+  }
 }
 
 function formatTimestamp(value: string | null | undefined, locale: string) {
@@ -102,7 +127,7 @@ function buildStepRows(run: TestRun, t: (key: string) => string): StepResultRow[
       key: index + 1,
       step: index + 1,
       action: humanizeAction(stepResult.action, t),
-      target: stepResult.target || '—',
+      target: stepResult.http ? `${stepResult.http.method} ${safeHttpUrl(stepResult.http.url)}` : stepResult.target || '—',
       status: stepResult.status,
       durationMs: stepResult.durationMs,
       screenshot: stepResult.screenshot ?? undefined,
@@ -178,6 +203,9 @@ export default function RunResultPage() {
   const { setProject: setShellProject } = useAppShell();
   const [run, setRun] = useState<TestRun | null>(null);
   const [rerunning, setRerunning] = useState(false);
+  const [expandedStepKeys, setExpandedStepKeys] = useState<number[]>([]);
+  const [expandedMobileStep, setExpandedMobileStep] = useState<number | null>(null);
+  const [focusedFailedStep, setFocusedFailedStep] = useState<number | null>(null);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
@@ -233,7 +261,7 @@ export default function RunResultPage() {
       for (const variable of run.variableSnapshot) rows.push({
         key: `snapshot:${variable.source}:${variable.name}`,
         name: variable.name,
-        source: variable.source === 'project' || variable.source === 'environment' ? t(`capture.variableSource.${variable.source}`) : variable.source === 'generated' ? t('capture.results.generated') : t('capture.results.dataCase'),
+        source: variableSourceLabel(variable.source, t),
         type: variable.type,
         secret: variable.secret,
         value: variable.secret ? '••••••••' : variable.value === null ? 'null' : typeof variable.value === 'object' ? JSON.stringify(variable.value) : String(variable.value ?? '—')
@@ -257,7 +285,7 @@ export default function RunResultPage() {
       if (result.captured) rows.push({
         key: `captured:${result.index}:${result.captured.variableName}`,
         name: result.captured.variableName,
-        source: result.captured.source === 'sql' ? t('connections.sqlQuery') : t(`capture.source.${result.captured.source}`),
+        source: result.action === 'captureValue' ? t('capture.variableSource.browser') : variableSourceLabel(result.captured.source, t),
         type: result.captured.type,
         step: result.captured.createdByStep,
         secret: result.captured.secret,
@@ -286,6 +314,18 @@ export default function RunResultPage() {
   }, [run, failedStepIndex]);
 
   const failureSummary = useMemo(() => parseFailureSummary(run?.error), [run?.error]);
+  const failedStepTotal = run?.stepResults?.filter((stepResult) => stepResult.status === 'failed').length ?? (run?.status === 'FAILED' ? 1 : 0);
+
+  const focusFailedStep = () => {
+    if (!failedStepIndex) return;
+    setFocusedFailedStep(failedStepIndex);
+    setExpandedStepKeys((current) => current.includes(failedStepIndex) ? current : [...current, failedStepIndex]);
+    setExpandedMobileStep(failedStepIndex);
+    window.requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>(`[data-run-step="${failedStepIndex}"], tr[data-row-key="${failedStepIndex}"]`);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
 
   const failedScreenshotName = failedStep?.screenshot ?? (failedStepIndex ? run?.screenshots[failedStepIndex - 1] : undefined);
   const failedScreenshotUrl = resolveBackendUrl(failedScreenshotName ? `/screenshots/${failedScreenshotName}` : undefined);
@@ -446,6 +486,18 @@ export default function RunResultPage() {
 
           {variableRows.length > 0 && <Col span={24}>
             <Card title={t('capture.results.title')}>
+              <div className="wt-run-variable-mobile-cards">
+                {variableRows.map((variable) => <article className="wt-run-variable-card" key={variable.key}>
+                  <div className="wt-run-variable-card__name"><Text strong className="wt-run-breakable">{variable.name}</Text>{variable.secret && <Tag>{t('testData.secret')}</Tag>}</div>
+                  <dl>
+                    <div><dt>{t('capture.results.source')}</dt><dd className="wt-run-breakable">{variable.source}</dd></div>
+                    <div><dt>{t('capture.results.type')}</dt><dd className="wt-run-breakable">{variable.type}</dd></div>
+                    <div><dt>{t('capture.results.step')}</dt><dd>{variable.step ?? '—'}</dd></div>
+                    <div><dt>{t('capture.results.value')}</dt><dd className="wt-run-breakable">{variable.value ?? '—'}</dd></div>
+                  </dl>
+                </article>)}
+              </div>
+              <div className="wt-run-desktop-table">
               <Table
                 size="small"
                 pagination={false}
@@ -461,6 +513,7 @@ export default function RunResultPage() {
                   { title: t('capture.results.value'), dataIndex: 'value', render: (value?: string) => value ?? '—' }
                 ]}
               />
+              </div>
             </Card>
           </Col>}
 
@@ -499,6 +552,11 @@ export default function RunResultPage() {
                     {t('runResult.failedAtStep', { step: failedStepIndex ?? run.currentStep ?? '—' })} —{' '}
                     {humanizeAction(failedStep?.action ?? failedTestStep?.action ?? 'step', t)}
                   </Title>
+                  {failedStepIndex && <Space wrap align="center">
+                    <Text type="secondary" className="wt-run-breakable">{failureSummary?.summary ?? failedStep?.error ?? t('runResult.checkFailed')}</Text>
+                    <Button type="primary" onClick={focusFailedStep}>{t('runResult.viewFailedStep')}</Button>
+                    {failedStepTotal > 1 && <Text type="secondary">{t('runResult.otherFailures', { count: failedStepTotal - 1 })}</Text>}
+                  </Space>}
                   <Row gutter={[16, 16]}>
                     <Col xs={24} md={8}>
                       <Card size="small" bordered={false} style={{ background: '#fafafa' }}>
@@ -562,14 +620,54 @@ export default function RunResultPage() {
               ) : stepRows.length === 0 ? (
                 <Text type="secondary">{t('runResult.noStepResults')}</Text>
               ) : (
+                <>
+                <div className="wt-run-step-mobile-cards">
+                  {(run.stepResults ?? stepRows.map((row) => ({
+                    index: row.step - 1,
+                    action: (run.test?.steps?.[row.step - 1]?.action ?? 'goto') as StepAction,
+                    target: row.target,
+                    status: row.status as 'passed' | 'failed' | 'pending',
+                    durationMs: row.durationMs ?? 0,
+                    screenshot: row.screenshot,
+                    error: row.error,
+                    generated: undefined,
+                    captured: undefined,
+                    database: undefined,
+                    http: undefined
+                  }))).map((result) => {
+                    const row = stepRows.find((item) => item.step === result.index + 1);
+                    const stepNumber = result.index + 1;
+                    const stepDefinition = run.test?.steps?.[result.index];
+                    const statusLabel = result.status === 'passed' ? t('common.passed') : result.status === 'failed' ? t('common.failed') : t('status.pending');
+                    return <RunStepResultCard
+                      key={stepNumber}
+                      result={result}
+                      stepNumber={stepNumber}
+                      stepDefinition={stepDefinition}
+                      actionLabel={row?.action ?? humanizeAction(result.action, t)}
+                      target={row?.target ?? result.target ?? '—'}
+                      statusLabel={statusLabel}
+                      screenshotUrl={result.screenshot ? resolveBackendUrl(`/screenshots/${result.screenshot}`) : undefined}
+                      highlighted={result.status === 'failed' && failedStepIndex === stepNumber}
+                      expanded={expandedMobileStep === stepNumber}
+                      onToggle={() => setExpandedMobileStep((current) => current === stepNumber ? null : stepNumber)}
+                    />;
+                  })}
+                </div>
+                <div className="wt-run-desktop-table">
                 <Table
                   dataSource={stepRows}
                   rowKey="key"
                   size="small"
                   pagination={false}
                   scroll={{ x: true }}
-                  rowClassName={(record?: StepResultRow) => (record?.status === 'failed' ? 'run-step-row-failed' : '')}
+                  rowClassName={(record?: StepResultRow) => [record?.status === 'failed' ? 'run-step-row-failed' : '', record?.step === focusedFailedStep ? 'run-step-row-focused' : ''].filter(Boolean).join(' ')}
                   expandable={{
+                    expandedRowKeys: expandedStepKeys,
+                    onExpand: (expanded, record) => {
+                      if (!record) return;
+                      setExpandedStepKeys((current) => expanded ? [...current, record.key] : current.filter((key) => key !== record.key));
+                    },
                     expandedRowRender: (record) => {
                       if (!record) return null;
                       const step = record.stepDefinition;
@@ -636,7 +734,7 @@ export default function RunResultPage() {
                           <Text type="secondary">{t('http.requestDetails')}</Text>
                           <Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[
                             { key: 'method', label: t('http.method'), children: record.http.method },
-                            { key: 'url', label: t('http.url'), children: <Text style={{ overflowWrap: 'anywhere' }}>{record.http.url}</Text> },
+                            { key: 'url', label: t('http.url'), children: <Text style={{ overflowWrap: 'anywhere' }}>{safeHttpUrl(record.http.url)}</Text> },
                             { key: 'status', label: t('http.status'), children: record.http.status },
                             { key: 'duration', label: t('common.duration'), children: formatDuration(record.http.durationMs) },
                             { key: 'size', label: t('http.responseSize'), children: `${record.http.responseBytes} B` },
@@ -665,11 +763,12 @@ export default function RunResultPage() {
                     {
                       title: t('runResult.target'),
                       dataIndex: 'target',
-                      render: (value: string) => (
+                      render: (value: string, record?: StepResultRow) => (
                         <Tooltip title={value} placement="topLeft">
-                          <Text style={{ maxWidth: 360 }} ellipsis>
-                            {value}
-                          </Text>
+                          <Space orientation="vertical" size={0}>
+                            <Text style={{ maxWidth: 360 }} ellipsis>{value}</Text>
+                            {record?.http && <Text type="secondary">{record.http.method} · {record.http.status} · {formatDuration(record.http.durationMs)} · {t('http.assertionCount', { count: record.http.assertions.length })} · {t('http.captureCount', { count: record.http.captures.length })}</Text>}
+                          </Space>
                         </Tooltip>
                       )
                     },
@@ -677,9 +776,9 @@ export default function RunResultPage() {
                       title: t('connections.databaseResult'),
                       dataIndex: 'database',
                       width: 230,
-                      render: (database?: StepResultRow['database']) => database ? <Space orientation="vertical" size={0}>
+                      render: (database?: StepResultRow['database'], record?: StepResultRow) => database ? <Space orientation="vertical" size={0}>
                         <Text>{database.connectionName}</Text>
-                        <Text type="secondary">{t('connections.rowsReturned', { count: database.rowCount })}{database.rowLimitReached ? '+' : ''} · {t('connections.rowsAffected', { count: database.affectedRows })}</Text>
+                        <Text type="secondary">{sqlResultCountLabel(database, record?.stepDefinition?.sql, t)}</Text>
                         {database.assertion && <Tag color={database.assertion.passed ? 'success' : 'error'}>{t(database.assertion.passed ? 'connections.assertionPassed' : 'connections.assertionFailed')}</Tag>}
                       </Space> : '—'
                     },
@@ -734,6 +833,8 @@ export default function RunResultPage() {
                     }
                   ]}
                 />
+                </div>
+                </>
               )}
             </Card>
           </Col>

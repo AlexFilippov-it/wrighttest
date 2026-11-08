@@ -15,6 +15,7 @@ import {
   LinkOutlined,
   OrderedListOutlined,
   PlusOutlined,
+  UpOutlined,
   HolderOutlined,
   CopyOutlined,
   TagOutlined,
@@ -23,7 +24,7 @@ import {
   SaveOutlined
 } from '@ant-design/icons';
 import { Alert, Button, Card, Checkbox, Collapse, Dropdown, Input, InputNumber, message, Select, Space, Tag, Tooltip, Typography } from 'antd';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -34,6 +35,7 @@ import VariableAutocompleteInput from './VariableAutocompleteInput';
 import { isSecretVariableName } from '../utils/secret-variable';
 import SqlCodeEditor from './SqlCodeEditor';
 import HttpRequestEditor from './HttpRequestEditor';
+import { safeHttpUrl } from '../utils/safe-display';
 import './database-testing.css';
 
 const { Text } = Typography;
@@ -166,17 +168,31 @@ function parameterType(value: SqlParameterValue): SqlParameterType {
 
 export default function StepEditor({ steps, onChange, readOnly = false, validationResults, stepIssues = [], variableNames = [], projectVariables = [], testDataVariableNames = [], databaseConnections = [], projectId, defaultDatabaseConnectionId }: Props) {
   const { t } = useTranslation();
+  const [collapsedSteps, setCollapsedSteps] = useState<Set<number>>(() => new Set());
   const [parameterDrafts, setParameterDrafts] = useState<Record<number, string>>({});
   const [rawParameterIndex, setRawParameterIndex] = useState<number | null>(null);
   const [parameterNameDrafts, setParameterNameDrafts] = useState<Record<string, string>>({});
-  const addStep = () => onChange([...steps, { action: 'goto', value: '' }]);
+  const addStep = () => {
+    const newIndex = steps.length;
+    setCollapsedSteps((current) => {
+      if (!current.has(newIndex)) return current;
+      const next = new Set(current);
+      next.delete(newIndex);
+      return next;
+    });
+    onChange([...steps, { action: 'goto', value: '' }]);
+  };
 
-  const removeStep = (index: number) => onChange(steps.filter((_, idx) => idx !== index));
+  const removeStep = (index: number) => {
+    setCollapsedSteps((current) => new Set(Array.from(current, (stepIndex) => stepIndex < index ? stepIndex : stepIndex > index ? stepIndex - 1 : -1).filter((stepIndex) => stepIndex >= 0)));
+    onChange(steps.filter((_, idx) => idx !== index));
+  };
 
   const duplicateStep = (index: number) => {
     const cloned = { ...steps[index] };
     const nextSteps = [...steps];
     nextSteps.splice(index + 1, 0, cloned);
+    setCollapsedSteps((current) => new Set(Array.from(current, (stepIndex) => stepIndex > index ? stepIndex + 1 : stepIndex)));
     onChange(nextSteps);
   };
 
@@ -186,6 +202,12 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
     const nextSteps = [...steps];
     const [moved] = nextSteps.splice(index, 1);
     nextSteps.splice(nextIndex, 0, moved);
+    setCollapsedSteps((current) => new Set(Array.from(current, (stepIndex) => {
+      if (stepIndex === index) return nextIndex;
+      if (index < nextIndex && stepIndex > index && stepIndex <= nextIndex) return stepIndex - 1;
+      if (nextIndex < index && stepIndex >= nextIndex && stepIndex < index) return stepIndex + 1;
+      return stepIndex;
+    })));
     onChange(nextSteps);
   };
 
@@ -195,6 +217,29 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
   const updateParameters = (index: number, parameters: Record<string, SqlParameterValue>) => {
     setParameterDrafts((current) => { const next = { ...current }; delete next[index]; return next; });
     updateStep(index, { parameters });
+  };
+
+  useEffect(() => {
+    const issueIndex = stepIssues.findIndex((issue) => Boolean(issue?.message || issue?.selector || issue?.value || issue?.expected));
+    const validationIndex = validationResults?.findIndex((result) => result.status === 'not_found' || result.status === 'action_failed');
+    const invalidIndex = issueIndex >= 0 ? issueIndex : validationIndex != null && validationIndex >= 0 ? validationIndex : -1;
+    if (invalidIndex < 0) return;
+    setCollapsedSteps((current) => {
+      if (!current.has(invalidIndex)) return current;
+      const next = new Set(current);
+      next.delete(invalidIndex);
+      return next;
+    });
+    const timer = window.setTimeout(() => {
+      const card = document.querySelector<HTMLElement>(`[data-step-index="${invalidIndex}"]`);
+      card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card?.querySelector<HTMLElement>('.ant-input-status-error input, .ant-select-status-error, [aria-invalid="true"]')?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [stepIssues, validationResults]);
+
+  const setAllCollapsed = (collapsed: boolean) => {
+    setCollapsedSteps(collapsed ? new Set(steps.map((_, index) => index)) : new Set());
   };
 
   const changeParameterType = (index: number, key: string, value: SqlParameterValue, type: SqlParameterType) => {
@@ -209,6 +254,10 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
 
   return (
     <div className="wt-editor-step-list" style={{ display: 'grid', gap: 12 }}>
+      {steps.length > 1 && <Space className="wt-editor-step-list__controls" wrap>
+        <Button size="small" onClick={() => setAllCollapsed(true)}>{t('step.collapseAll')}</Button>
+        <Button size="small" onClick={() => setAllCollapsed(false)}>{t('step.expandAll')}</Button>
+      </Space>}
       {steps.map((step, index) => {
         const opt = ACTION_OPTIONS.find((candidate) => candidate.value === step.action)!;
         const validation = validationResults?.[index];
@@ -221,6 +270,17 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
         const needsValue = opt.needsValue;
         const needsExpected = opt.needsExpected;
         const stepLabel = humanizeStepAction(step.action, t);
+        const isCollapsed = collapsedSteps.has(index);
+        const isInvalid = isHardInvalid || validation?.status === 'ambiguous';
+        const stepSummary = step.action === 'httpRequest'
+          ? [step.http?.method, step.http?.url ? safeHttpUrl(step.http.url) : t('http.urlRequired'), step.http?.assertions?.length ? t('http.assertionCount', { count: step.http.assertions.length }) : undefined, step.http?.capture?.length ? t('http.captureCount', { count: step.http.capture.length }) : undefined].filter(Boolean).join(' · ')
+          : step.action === 'executeSql' || step.action === 'assertDatabaseResult'
+            ? [step.sql?.trim().split(/\s+/)[0]?.toUpperCase() || t('connections.sqlQuery'), step.assertion ? t('connections.assertion') : undefined, step.saveResultAs ? t('connections.saveResultAs', { variable: step.saveResultAs }) : undefined].filter(Boolean).join(' · ')
+            : step.action === 'generateData' || step.action === 'captureValue'
+              ? step.saveAs ? `{{${step.saveAs}}}${step.secret || isSecretVariableName(step.saveAs) ? ` · ${t('testData.secret')}` : ''}` : t('step.notConfigured')
+              : step.action === 'goto' && step.value
+                ? safeHttpUrl(step.value)
+                : [step.selector, step.value, step.expected].filter(Boolean)[0] ?? t('step.notConfigured');
         const rowStyle = {
           display: 'flex',
           alignItems: 'flex-start',
@@ -281,6 +341,22 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
             }}
             data-step-index={index}
             extra={
+              <Space size={4} className="wt-editor-step-card__actions">
+              <Button
+                size="small"
+                type="text"
+                aria-expanded={!isCollapsed}
+                aria-label={t(isCollapsed ? 'step.expand' : 'step.collapse')}
+                icon={isCollapsed ? <DownOutlined /> : <UpOutlined />}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setCollapsedSteps((current) => {
+                    const next = new Set(current);
+                    if (next.has(index)) next.delete(index); else next.add(index);
+                    return next;
+                  });
+                }}
+              />
               <Dropdown
                 trigger={['click']}
                 menu={{
@@ -305,9 +381,10 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                   {t('step.more')}
                 </Button>
               </Dropdown>
+              </Space>
             }
               title={
-                <Space size={8}>
+                <Space size={8} wrap className="wt-editor-step-card__title">
                   <HolderOutlined style={{ color: '#8c8c8c', cursor: 'grab' }} />
                 <span style={{ color: opt.group === 'Assertions' ? '#722ed1' : '#1677ff' }}>
                   {opt.icon}
@@ -317,14 +394,16 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {stepLabel}
                   </Text>
+                  <Text type="secondary" className="wt-editor-step-card__summary">{stepSummary}</Text>
                 </div>
+                {isInvalid && <Tag color="error">{t('step.validation.invalid')}</Tag>}
                 {validation?.status === 'ambiguous' && <span style={{ color: '#ad8b00', fontSize: 12 }}>{t('step.selectorAmbiguous')}</span>}
                 {validation?.status === 'not_found' && <span style={{ color: '#cf1322', fontSize: 12 }}>{t('step.selectorNotFound')}</span>}
                 {validation?.status === 'action_failed' && <span style={{ color: '#cf1322', fontSize: 12 }}>{t('step.actionFailed')}</span>}
               </Space>
             }
           >
-            <div className="wt-step-editor-row" style={rowStyle}>
+            {!isCollapsed && <div className="wt-step-editor-row" style={rowStyle}>
               <div style={{ flex: '0 0 260px', minWidth: 0 }}>
                 <Select
                   value={step.action}
@@ -850,7 +929,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                   </Checkbox>
                 </div>
               )}
-            </div>
+            </div>}
           </Card>
         );
       })}

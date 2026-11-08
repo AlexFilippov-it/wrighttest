@@ -48,6 +48,7 @@ test('HTTP steps execute in the worker, preserve captured types, and render safe
   let checkId: string | undefined;
   let successorCheckId: string | undefined;
   let suiteId: string | undefined;
+  let scheduleId: string | undefined;
   let environmentId: string | undefined;
   let databaseConnectionId: string | undefined;
 
@@ -153,6 +154,54 @@ test('HTTP steps execute in the worker, preserve captured types, and render safe
     expect(JSON.stringify(run)).not.toContain('response-secret');
     expect(run?.stepResults?.[5].http?.url).not.toContain('api-e2e-42');
 
+    const scheduleResponse = await workspace.adminApi.post(`/projects/${workspace.projectId}/schedules`, {
+      data: {
+        name: `${name} scheduled HTTP check`,
+        cron: '*/5 * * * * *',
+        testId: checkId,
+        environmentId,
+        enabled: true
+      }
+    });
+    expect(scheduleResponse.status()).toBe(201);
+    scheduleId = (await scheduleResponse.json() as { id: string }).id;
+    const scheduleDeadline = Date.now() + 35_000;
+    let scheduledRunId: string | undefined;
+    let scheduledRun: {
+      id: string;
+      status: string;
+      stepResults?: Array<{
+        status: string;
+        http?: { captures?: Array<{ variableName: string; type: string; secret: boolean }> };
+      }>;
+    } | undefined;
+    while (Date.now() < scheduleDeadline) {
+      const history = await workspace.adminApi.get(`/schedules/${scheduleId}/history?limit=10`);
+      expect(history.ok()).toBeTruthy();
+      const historyBody = await history.json() as { batches: Array<{ runs: Array<{ id: string; status: string }> }> };
+      const scheduled = historyBody.batches.flatMap((batch) => batch.runs)[0];
+      if (scheduled) {
+        scheduledRunId = scheduled.id;
+        const disableSchedule = await workspace.adminApi.patch(`/schedules/${scheduleId}`, { data: { enabled: false } });
+        expect(disableSchedule.ok()).toBeTruthy();
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    expect(scheduledRunId, 'Schedule did not create a TestRun').toBeTruthy();
+    const scheduledRunDeadline = Date.now() + 30_000;
+    while (Date.now() < scheduledRunDeadline && scheduledRun?.status !== 'PASSED' && scheduledRun?.status !== 'FAILED') {
+      const scheduledResult = await workspace.adminApi.get(`/runs/${scheduledRunId}`);
+      expect(scheduledResult.ok()).toBeTruthy();
+      scheduledRun = await scheduledResult.json() as typeof scheduledRun;
+      if (scheduledRun?.status === 'PASSED' || scheduledRun?.status === 'FAILED') break;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    expect(scheduledRun?.status, 'Scheduled HTTP Check did not reach a terminal status').toBe('PASSED');
+    expect(scheduledRun?.stepResults?.[3].http?.captures).toContainEqual({ variableName: 'USER_ID', type: 'string', secret: true });
+    expect(JSON.stringify(scheduledRun)).not.toContain('e2e-token');
+    expect(JSON.stringify(scheduledRun)).not.toContain('response-secret');
+
     const successor = await workspace.adminApi.post(`/projects/${workspace.projectId}/tests`, {
       data: {
         name: `${name} handoff`,
@@ -230,9 +279,14 @@ test('HTTP steps execute in the worker, preserve captured types, and render safe
 
     await openAuthenticatedPage(page, workspace.owner, `/runs/${testRunId}`);
     await expect(page.getByRole('heading', { name: 'Run details' })).toBeVisible();
+    const mobileHttpResultCard = page.locator('.wt-run-step-card').filter({ hasText: 'HTTP Request' }).first();
+    await expect(mobileHttpResultCard).toBeVisible();
+    await mobileHttpResultCard.getByRole('button', { name: 'Show details' }).click();
+    await expect(mobileHttpResultCard.getByText('201', { exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 1000 });
     const httpResultRow = page.getByRole('row').filter({ hasText: 'HTTP Request' }).first();
     await httpResultRow.getByRole('button').first().click();
-    await expect(page.getByText('201', { exact: true })).toBeVisible();
+    await expect(page.locator('.wt-run-desktop-table').getByText('201', { exact: true }).first()).toBeVisible();
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.screenshot({ path: path.join(outputDir, 'api-run-desktop.png'), fullPage: true });
     for (const width of [320, 375, 390, 768]) {
@@ -243,6 +297,7 @@ test('HTTP steps execute in the worker, preserve captured types, and render safe
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: path.join(outputDir, 'api-run-mobile.png'), fullPage: true });
   } finally {
+    if (scheduleId) await workspace.adminApi.delete(`/schedules/${scheduleId}`).catch(() => undefined);
     if (suiteId) await workspace.adminApi.delete(`/suites/${suiteId}`).catch(() => undefined);
     if (successorCheckId) await workspace.adminApi.delete(`/tests/${successorCheckId}`).catch(() => undefined);
     if (checkId) await workspace.adminApi.delete(`/tests/${checkId}`).catch(() => undefined);

@@ -91,6 +91,15 @@ test('check opens in the editor and its fields can be edited without saving', as
   const stepsHeaderWidth = await stepsHeaderTitle.evaluate((element) => element.getBoundingClientRect().width);
   expect(stepsHeaderWidth).toBeGreaterThan(300);
 
+  for (const width of [320, 375, 390, 768]) {
+    await page.setViewportSize({ width, height: 844 });
+    const documentWidths = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      content: document.documentElement.scrollWidth
+    }));
+    expect(documentWidths.content, `check editor overflows at ${width}px`).toBeLessThanOrEqual(documentWidths.viewport);
+  }
+
   await page.setViewportSize({ width: 390, height: 844 });
   const testDataDescription = page.getByText(
     'Define scenario variables used anywhere in your browser flow, including inputs and expected results.',
@@ -109,6 +118,20 @@ test('check opens in the editor and its fields can be edited without saving', as
   expect(descriptionLayout.right).toBeLessThanOrEqual(390);
   expect(descriptionLayout.scrollWidth).toBeLessThanOrEqual(descriptionLayout.clientWidth);
   expect(descriptionLayout.lineHeight).toBeGreaterThan(0);
+
+  const stepCard = page.locator('.wt-editor-step-card').first();
+  await expect(stepCard.getByRole('button', { name: 'Collapse step' })).toHaveAttribute('aria-expanded', 'true');
+  await stepCard.getByRole('button', { name: 'Collapse step' }).click();
+  await expect(stepCard.locator('.wt-step-editor-row')).toHaveCount(0);
+  await expect(stepCard.locator('.wt-editor-step-card__summary')).toBeVisible();
+  await stepCard.getByRole('button', { name: 'Expand step' }).click();
+  await expect(stepCard.locator('.wt-step-editor-row')).toBeVisible();
+  if (process.env.PHASE7_SCREENSHOT_DIR) {
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    await fs.mkdir(process.env.PHASE7_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({ path: path.join(process.env.PHASE7_SCREENSHOT_DIR, 'check-editor-mobile.png'), fullPage: true, animations: 'disabled' });
+  }
 
   const checkName = page.getByLabel('Check name');
   const startUrl = page.getByLabel('Start URL');

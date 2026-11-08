@@ -57,7 +57,7 @@ test('sequential suite hands a captured secret output through three isolated che
     if (!start.ok()) throw new Error(await start.text());
     expect(start.status()).toBe(202);
     const { suiteRunId } = await start.json() as { suiteRunId: string };
-    let suiteRun: { status: string; error?: string | null; testRuns: Array<{ status: string; testId: string }>; outputMetadata: Array<{ secret: boolean }> } | undefined;
+    let suiteRun: { status: string; error?: string | null; testRuns: Array<{ id: string; status: string; testId: string }>; outputMetadata: Array<{ secret: boolean }> } | undefined;
     const deadline = Date.now() + 120_000;
     while (Date.now() < deadline) {
       const response = await workspace.adminApi.get(`/suite-runs/${suiteRunId}`);
@@ -73,6 +73,7 @@ test('sequential suite hands a captured secret output through three isolated che
     expect(suiteRun?.outputMetadata).toHaveLength(2);
     expect(suiteRun?.outputMetadata.every((item) => item.secret)).toBe(true);
     expect(JSON.stringify(suiteRun)).not.toContain('user-42');
+    if (!suiteRun) throw new Error('Suite run did not return a result payload.');
 
     await page.setViewportSize({ width: 1440, height: 960 });
     const suiteRunPageResponse = page.waitForResponse((response) =>
@@ -86,6 +87,28 @@ test('sequential suite hands a captured secret output through three isolated che
     await expect(page.locator('.wt-page-header__title')).toHaveText(/^(Suite Run|Sequential suite \d+)$/);
     await expect(page.locator('.wt-content-surface')).toHaveCount(3);
     await expect(page.locator('.wt-status-badge--passed').first()).toBeVisible();
+    await page.goto(`/runs/${suiteRun.testRuns[0].id}`);
+    await expect(page.getByRole('heading', { name: 'Run details' })).toBeVisible();
+    await expect(page.locator('.wt-run-desktop-table').last()).toBeVisible();
+    if (process.env.PHASE7_SCREENSHOT_DIR) {
+      await fs.mkdir(process.env.PHASE7_SCREENSHOT_DIR, { recursive: true });
+      await page.screenshot({ path: path.join(process.env.PHASE7_SCREENSHOT_DIR, 'run-results-desktop.png'), fullPage: true, animations: 'disabled' });
+    }
+    for (const width of [320, 375, 390, 768]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect(page.locator('.wt-run-step-mobile-cards')).toBeVisible();
+      await expect(page.locator('.wt-run-variable-mobile-cards')).toBeVisible();
+      await expect(page.locator('.wt-run-variable-card').getByText('••••••••')).toBeVisible();
+      await expect(page.locator('.wt-run-variable-mobile-cards')).not.toContainText('user-42');
+      const runWidths = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }));
+      expect(runWidths.content, `run result overflows at ${width}px`).toBeLessThanOrEqual(runWidths.viewport);
+    }
+    if (process.env.PHASE7_SCREENSHOT_DIR) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.screenshot({ path: path.join(process.env.PHASE7_SCREENSHOT_DIR, 'run-results-mobile.png'), fullPage: true, animations: 'disabled' });
+    }
+    await page.setViewportSize({ width: 1440, height: 960 });
+    await page.goto(`/projects/${workspace.projectId}/suite-runs/${suiteRunId}`);
     if (process.env.PHASE5_SCREENSHOT_DIR) {
       await fs.mkdir(process.env.PHASE5_SCREENSHOT_DIR, { recursive: true });
       await page.screenshot({ path: path.join(process.env.PHASE5_SCREENSHOT_DIR, 'suite-run-results-desktop.png'), fullPage: true, animations: 'disabled' });
@@ -108,7 +131,9 @@ test('sequential suite hands a captured secret output through three isolated che
   }
 });
 
-test('sequential suite stops after a failed check', async ({ workspace }) => {
+test('sequential suite stops after a failed check and links to its failed step', async ({ workspace, page }) => {
+  // The test polls the coordinator for up to 60 seconds; keep Playwright's outer test timeout above that bound.
+  test.setTimeout(90_000);
   const suffix = `${Date.now()}`;
   const checkIds: string[] = [];
   let suiteId: string | undefined;
@@ -149,7 +174,7 @@ test('sequential suite stops after a failed check', async ({ workspace }) => {
     const startResponse = await workspace.adminApi.post(`/suites/${suiteId}/run`, { data: {} });
     if (!startResponse.ok()) throw new Error(await startResponse.text());
     const { suiteRunId } = await startResponse.json() as { suiteRunId: string };
-    let suiteRun: { status: string; error?: string | null; testRuns: Array<{ status: string; testId: string }> } | undefined;
+    let suiteRun: { status: string; error?: string | null; testRuns: Array<{ id: string; status: string; testId: string }> } | undefined;
     const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
       const response = await workspace.adminApi.get(`/suite-runs/${suiteRunId}`);
@@ -162,6 +187,22 @@ test('sequential suite stops after a failed check', async ({ workspace }) => {
     expect(suiteRun?.status, JSON.stringify(suiteRun)).toBe('FAILED');
     expect(suiteRun?.testRuns.map((run) => run.testId)).toEqual([firstId, failingId]);
     expect(suiteRun?.testRuns.map((run) => run.status)).toEqual(['PASSED', 'FAILED']);
+    if (!suiteRun) throw new Error('Failed suite run did not return a result payload.');
+    const failedRunId = suiteRun.testRuns[1]?.id;
+    expect(failedRunId).toBeTruthy();
+    await openAuthenticatedPage(page, workspace.owner, `/runs/${failedRunId}`);
+    await expect(page.getByRole('button', { name: 'View failed step' })).toBeVisible();
+    await page.getByRole('button', { name: 'View failed step' }).click();
+    await expect(page.locator('tr.run-step-row-focused')).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const failedStepCard = page.locator('.wt-run-step-card[data-run-step="2"]');
+    await expect(failedStepCard).toHaveClass(/wt-run-step-card--highlighted/);
+    await expect(failedStepCard.locator('.wt-run-step-card__details')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    if (process.env.PHASE7_SCREENSHOT_DIR) {
+      await fs.mkdir(process.env.PHASE7_SCREENSHOT_DIR, { recursive: true });
+      await page.screenshot({ path: path.join(process.env.PHASE7_SCREENSHOT_DIR, 'run-results-failed-mobile.png'), fullPage: true, animations: 'disabled' });
+    }
   } finally {
     if (suiteId) await workspace.adminApi.delete(`/suites/${suiteId}`).catch(() => undefined);
     for (const id of checkIds) await workspace.adminApi.delete(`/tests/${id}`).catch(() => undefined);

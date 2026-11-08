@@ -495,6 +495,12 @@
   ,"step.moveUp": "Move up"
   ,"step.moveDown": "Move down"
   ,"step.more": "More"
+  ,"step.collapse": "Collapse step"
+  ,"step.expand": "Expand step"
+  ,"step.collapseAll": "Collapse all"
+  ,"step.expandAll": "Expand all"
+  ,"step.validation.invalid": "Needs attention"
+  ,"step.notConfigured": "Not configured"
   ,"step.numberedTitle": "Step {{number}}"
   ,"step.selectorAmbiguous": "selector ambiguous"
   ,"step.selectorNotFound": "selector not found"
@@ -701,6 +707,11 @@
   "runResult.stepResults": "Step results",
   "runResult.stepCount_one": "{{count}} step",
   "runResult.stepCount_other": "{{count}} steps",
+  "runResult.showDetails": "Show details",
+  "runResult.hideDetails": "Hide details",
+  "runResult.viewFailedStep": "View failed step",
+  "runResult.otherFailures_one": "{{count}} more failed step",
+  "runResult.otherFailures_other": "{{count}} more failed steps",
   "runResult.noStepResults": "No step results are available.",
   "runResult.step": "Step",
   "runResult.action": "Action",
@@ -1015,8 +1026,14 @@
   ,"connections.environmentBindingShort": "Connection is independent of environment"
   ,"connections.validation.saveColumnRequired": "Choose the result column to save."
   ,"connections.databaseResult": "Database result"
-  ,"connections.rowsReturned": "{{count}} rows returned"
-  ,"connections.rowsAffected": "{{count}} affected"
+  ,"connections.rowsReturned_one": "{{count}} row returned"
+  ,"connections.rowsReturned_other": "{{count}} rows returned"
+  ,"connections.rowsAffected_one": "{{count}} row affected"
+  ,"connections.rowsAffected_other": "{{count}} rows affected"
+  ,"connections.noRowCount": "Row count unavailable"
+  ,"connections.queryType": "Query type"
+  ,"connections.connection": "Connection"
+  ,"connections.saveResultAs": "Save as {{variable}}"
   ,"connections.assertionPassed": "Assertion passed"
   ,"connections.assertionFailed": "Assertion failed"
   ,"connections.notTestedYet": "Not tested yet"
@@ -1185,6 +1202,9 @@
   ,"projectVariables.updated": "Project variable updated"
   ,"projectVariables.deleted": "Project variable deleted"
   ,"capture.variableSource.project": "Project"
+  ,"capture.variableSource.runInput": "Suite Input"
+  ,"capture.variableSource.browser": "Browser Capture"
+  ,"capture.variableSource.http": "HTTP Capture"
   ,"testData.cellMode.literal": "Fixed value"
   ,"testData.cellMode.reference": "Variable reference"
   ,"testData.cellMode.generated": "Generate"
@@ -1255,6 +1275,12 @@
   ,"http.body": "Body"
   ,"http.assertions": "Assertions"
   ,"http.capture": "Capture"
+  ,"http.captureCount_one": "{{count}} capture"
+  ,"http.captureCount_other": "{{count}} captures"
+  ,"http.assertionCount_one": "{{count}} assertion"
+  ,"http.assertionCount_other": "{{count}} assertions"
+  ,"http.responseTime": "Response time"
+  ,"http.urlRequired": "URL not configured"
   ,"http.timeout": "Timeout (ms)"
   ,"http.followRedirects": "Follow redirects"
   ,"http.privateNetworkPolicy": "Private network access is controlled by the server."

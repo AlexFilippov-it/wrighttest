@@ -330,6 +330,174 @@
   padding: 4px 0;
 }
 
+.wt-editor-step-list__controls {
+  justify-content: flex-end;
+}
+
+.wt-editor-step-card__title {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wt-editor-step-card__summary {
+  max-width: min(70vw, 760px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wt-editor-step-card__actions {
+  flex-shrink: 0;
+}
+
+.wt-run-desktop-table,
+.wt-run-variable-mobile-cards,
+.wt-run-step-mobile-cards {
+  min-width: 0;
+}
+
+.wt-run-variable-mobile-cards,
+.wt-run-step-mobile-cards {
+  display: none;
+}
+
+.wt-run-variable-card,
+.wt-run-step-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.wt-run-variable-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.wt-run-variable-card dl > div {
+  display: grid;
+  grid-template-columns: minmax(78px, 0.35fr) minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.wt-run-variable-card dt,
+.wt-run-variable-card dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.wt-run-variable-card dt {
+  color: #64748b;
+}
+
+.wt-run-variable-card__name,
+.wt-run-step-card__topline,
+.wt-run-step-card__detail-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wt-run-step-card {
+  display: grid;
+  gap: 6px;
+  scroll-margin-top: 88px;
+}
+
+.wt-run-step-card--failed {
+  border-color: #fecaca;
+}
+
+.wt-run-step-card--highlighted {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.wt-run-step-card__action,
+.wt-run-step-card__target,
+.wt-run-breakable {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.wt-run-step-card__meta,
+.wt-run-step-card__details {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wt-run-step-card__meta {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.wt-run-step-card__error {
+  min-width: 0;
+}
+
+.wt-run-step-card__toggle {
+  justify-self: start;
+  padding-inline: 0;
+}
+
+.wt-run-step-card__browser-details {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 900px) {
+  .wt-run-desktop-table {
+    display: none;
+  }
+
+  .wt-run-variable-mobile-cards,
+  .wt-run-step-mobile-cards {
+    display: grid;
+    gap: 8px;
+  }
+
+  .wt-editor-step-list__controls {
+    justify-content: stretch;
+  }
+
+  .wt-editor-step-list__controls .ant-btn {
+    flex: 1 1 auto;
+  }
+
+  .wt-editor-step-card .ant-card-head {
+    padding-inline: 10px;
+  }
+
+  .wt-editor-step-card .ant-card-head-title {
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .wt-editor-step-card .ant-card-extra {
+    padding-inline-start: 4px;
+  }
+
+  .wt-editor-step-card__summary {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .wt-run-step-card__detail-line {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 640px) {
   .wt-step-editor-row {
     width: 100%;
