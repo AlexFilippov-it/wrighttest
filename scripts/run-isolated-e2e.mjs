@@ -42,6 +42,9 @@ const jwtSecret = randomBytes(48).toString('base64url');
 const environment = {
   ...process.env,
   NODE_ENV: 'test',
+  // The full browser suite can exceed the app-wide limit even with one worker. Keep this
+  // exception scoped to the disposable backend; route-specific authentication limits stay intact.
+  RATE_LIMIT_MAX: '1000',
   WRIGHTTEST_HTTP_TEST_ALLOW_LOOPBACK: '1',
   WRIGHTTEST_DATABASE_TEST_MODE: '1',
   DATABASE_URL: databaseUrl.toString(),
@@ -60,8 +63,8 @@ const environment = {
   E2E_STATE_DIR: path.join(tempRoot, 'state'),
   E2E_OUTPUT_DIR: path.join(tempRoot, 'results'),
   E2E_REPORT_DIR: path.join(tempRoot, 'report'),
-  PHASE5_SCREENSHOT_DIR: path.join(root, 'output', 'phase5-screenshots'),
-  PHASE6_SCREENSHOT_DIR: '/tmp/wrighttest-api-phase6',
+  PHASE5_SCREENSHOT_DIR: path.join(tempRoot, 'phase5-screenshots'),
+  PHASE6_SCREENSHOT_DIR: path.join(tempRoot, 'phase6-screenshots'),
   SCREENSHOTS_DIR: path.join(tempRoot, 'screenshots'),
   TRACES_DIR: path.join(tempRoot, 'traces'),
   AUTH_STATES_DIR: path.join(tempRoot, 'auth-states'),
@@ -136,7 +139,11 @@ try {
       await cleanupPrisma.$disconnect().catch(() => undefined);
     }
   }
-  await fs.rm(tempRoot, { recursive: true, force: true });
+  if (process.env.WRIGHTTEST_E2E_KEEP_ARTIFACTS === '1' && exitCode !== 0) {
+    console.error(`Preserving failed isolated E2E artifacts at ${tempRoot}`);
+  } else {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
 }
 
 process.exitCode = exitCode;

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
 import { once } from 'node:events';
 import test from 'node:test';
-import { executeHttpRequest, HttpRequestError } from '../src/services/http-request';
+import { createPinnedAddressLookup, executeHttpRequest, HttpRequestError } from '../src/services/http-request';
 import { VariableContext } from '../src/utils/variable-context';
 import type { Step } from '../src/types/step';
 import { StepSchema } from '../src/schemas/test.schema';
@@ -17,6 +17,19 @@ async function withServer(handler: Parameters<typeof createServer>[0], run: (url
   try { await run(`http://127.0.0.1:${address.port}`); }
   finally { await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
 }
+
+test('pinned DNS lookup supports Node single-address and all-address callback contracts', () => {
+  const lookup = createPinnedAddressLookup({ address: '192.0.2.10', family: 4 });
+  lookup('api.example.test', { all: true }, (error, addresses) => {
+    assert.ifError(error);
+    assert.deepEqual(addresses, [{ address: '192.0.2.10', family: 4 }]);
+  });
+  lookup('api.example.test', { all: false }, (error, address, family) => {
+    assert.ifError(error);
+    assert.equal(address, '192.0.2.10');
+    assert.equal(family, 4);
+  });
+});
 
 test('HTTP request resolves typed JSON variables, captures values and evaluates assertions', async () => {
   const previousNodeEnv = process.env.NODE_ENV;

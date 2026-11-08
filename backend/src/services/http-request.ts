@@ -14,6 +14,7 @@ const SENSITIVE_HEADER = /authorization|cookie|token|secret|api[-_]?key|credenti
 
 type HttpAssertion = NonNullable<NonNullable<Step['http']>['assertions']>[number];
 type HttpCapture = NonNullable<NonNullable<Step['http']>['capture']>[number];
+type ResolvedAddress = { address: string; family: number };
 
 export type HttpExecutionSummary = {
   method: string;
@@ -64,6 +65,17 @@ async function resolveAllowedAddress(hostname: string) {
     throw new HttpRequestError('The request target resolves to a private, local, or reserved address and is blocked.', 'HTTP_SECURITY');
   }
   return records[0];
+}
+
+export function createPinnedAddressLookup(address: ResolvedAddress): NonNullable<RequestOptions['lookup']> {
+  return (_hostname, options, callback) => {
+    if (typeof options === 'object' && options !== null && 'all' in options && options.all) {
+      callback(null, [address]);
+      return;
+    }
+
+    callback(null, address.address, address.family);
+  };
 }
 
 function parseUrl(rawUrl: string) {
@@ -207,9 +219,7 @@ async function sendOnce(url: URL, method: string, headers: Record<string, string
     headers,
     timeout: timeoutMs,
     ...(ipaddr.isValid(url.hostname) ? {} : { servername: url.hostname }),
-    lookup: ((_hostname: string, _options: unknown, callback: (error: NodeJS.ErrnoException | null, address: string, family: number) => void) => {
-      callback(null, address.address, address.family);
-    }) as RequestOptions['lookup']
+    lookup: createPinnedAddressLookup(address)
   };
   return new Promise<{ status: number; headers: Record<string, string | string[] | undefined>; body: Buffer; bytes: number; location?: string }>((resolve, reject) => {
     const req = transport(url, options, (res) => {

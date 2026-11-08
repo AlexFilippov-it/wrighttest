@@ -11,6 +11,7 @@ import StepEditor from '../components/StepEditor';
 import TestDataEditor from '../components/test-data/TestDataEditor';
 import VariableAutocompleteInput from '../components/VariableAutocompleteInput';
 import UserMenu from '../components/UserMenu';
+import { useAuth } from '../context/AuthContext';
 import type { DatabaseConnection, Environment, Step, StepValidationResult, Test } from '../types';
 import {
   hasTestDataValidationErrors,
@@ -228,6 +229,7 @@ function formatStepIssueSummary(step: Step, index: number, issue: StepIssue, t: 
 
 export default function TestEditorPage() {
   const { t } = useTranslation();
+  const { isSystemAdmin } = useAuth();
   const { projectId, testId } = useParams<{ projectId?: string; testId?: string }>();
   const { setProject: setShellProject } = useAppShell();
   const [form] = Form.useForm();
@@ -270,7 +272,7 @@ export default function TestEditorPage() {
   const [searchParams] = useSearchParams();
   const [confirmModal, confirmModalContextHolder] = Modal.useModal();
   const isEdit = Boolean(testId);
-  const isReadOnly = currentProjectRole === 'VIEWER';
+  const isReadOnly = !isSystemAdmin && currentProjectRole !== 'OWNER' && currentProjectRole !== 'EDITOR';
   const checkName = Form.useWatch('name', form);
   const selectedUrl = Form.useWatch('url', form);
   const selectedDevice = Form.useWatch('device', form);
@@ -288,7 +290,10 @@ export default function TestEditorPage() {
           setProjectName(project.name);
           setCurrentProjectRole(project.currentUserRole ?? null);
         })
-        .catch(() => setProjectName(''));
+        .catch(() => {
+          setProjectName('');
+          setCurrentProjectRole(null);
+        });
     }
 
     if (!testId) {

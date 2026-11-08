@@ -38,8 +38,8 @@ test('Viewer receives read-only controls in project and check editor', async ({ 
   await expect(page.getByText('You can view suites, but you cannot change or run them.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'New Suite' })).toHaveCount(0);
 
-  await page.goto(`/projects/${workspace.projectId}/checks`);
-  await page.getByRole('link', { name: workspace.checkName }).click();
+  await page.goto(`/tests/${workspace.checkId}/edit`);
+  await expect(page.getByRole('heading', { name: 'Edit Check' })).toBeVisible();
   await expect(page.getByText('You can view this check, but you cannot make changes.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run check' }).first()).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Start recording' }).first()).toBeDisabled();
