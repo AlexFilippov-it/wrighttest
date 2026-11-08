@@ -105,3 +105,63 @@ test('sequential suite hands a captured secret output through three isolated che
     for (const id of checkIds) await workspace.adminApi.delete(`/tests/${id}`).catch(() => undefined);
   }
 });
+
+test('sequential suite stops after a failed check', async ({ workspace }) => {
+  const suffix = `${Date.now()}`;
+  const checkIds: string[] = [];
+  let suiteId: string | undefined;
+  const createCheck = async (name: string, expectedTitle: string) => {
+    const response = await workspace.adminApi.post(`/projects/${workspace.projectId}/tests`, {
+      data: {
+        name,
+        url: 'data:text/html,%3Ctitle%3ESuite%20failure%20flow%3C%2Ftitle%3E',
+        steps: [
+          { action: 'goto', value: 'data:text/html,%3Ctitle%3ESuite%20failure%20flow%3C%2Ftitle%3E' },
+          { action: 'assertTitle', expected: expectedTitle }
+        ],
+        testData: [],
+        useProjectAuthentication: false
+      }
+    });
+    if (!response.ok()) throw new Error(await response.text());
+    const check = await response.json() as { id: string };
+    checkIds.push(check.id);
+    return check.id;
+  };
+
+  try {
+    const firstId = await createCheck(`Suite first ${suffix}`, 'Suite failure flow');
+    const failingId = await createCheck(`Suite failing ${suffix}`, 'Unexpected title');
+    const skippedId = await createCheck(`Suite must not run ${suffix}`, 'Suite failure flow');
+    const suiteResponse = await workspace.adminApi.post(`/projects/${workspace.projectId}/suites`, {
+      data: {
+        name: `Stop on failure ${suffix}`,
+        testIds: [firstId, failingId, skippedId],
+        executionMode: 'SEQUENTIAL',
+        executionConfig: { orderedTestIds: [firstId, failingId, skippedId], mappings: [], dataCaseIndexes: {} }
+      }
+    });
+    if (!suiteResponse.ok()) throw new Error(await suiteResponse.text());
+    suiteId = (await suiteResponse.json() as { id: string }).id;
+
+    const startResponse = await workspace.adminApi.post(`/suites/${suiteId}/run`, { data: {} });
+    if (!startResponse.ok()) throw new Error(await startResponse.text());
+    const { suiteRunId } = await startResponse.json() as { suiteRunId: string };
+    let suiteRun: { status: string; error?: string | null; testRuns: Array<{ status: string; testId: string }> } | undefined;
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      const response = await workspace.adminApi.get(`/suite-runs/${suiteRunId}`);
+      if (!response.ok()) throw new Error(await response.text());
+      suiteRun = await response.json() as NonNullable<typeof suiteRun>;
+      if (suiteRun.status === 'PASSED' || suiteRun.status === 'FAILED' || suiteRun.testRuns.some((run) => run.status === 'FAILED')) break;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    expect(suiteRun?.status, JSON.stringify(suiteRun)).toBe('FAILED');
+    expect(suiteRun?.testRuns.map((run) => run.testId)).toEqual([firstId, failingId]);
+    expect(suiteRun?.testRuns.map((run) => run.status)).toEqual(['PASSED', 'FAILED']);
+  } finally {
+    if (suiteId) await workspace.adminApi.delete(`/suites/${suiteId}`).catch(() => undefined);
+    for (const id of checkIds) await workspace.adminApi.delete(`/tests/${id}`).catch(() => undefined);
+  }
+});
