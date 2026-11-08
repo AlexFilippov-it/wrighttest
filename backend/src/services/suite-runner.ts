@@ -406,5 +406,19 @@ export async function getSafeSuiteRun(id: string) {
       }
     }
   });
-  return run;
+  if (!run) return null;
+  const config = run.configSnapshot as unknown as SuiteExecutionConfig;
+  const configuredTests = await prisma.test.findMany({
+    where: { id: { in: config.orderedTestIds }, projectId: run.projectId },
+    select: { id: true, name: true }
+  });
+  const testNames = new Map(configuredTests.map((test) => [test.id, test.name]));
+  return {
+    ...run,
+    orderedChecks: config.orderedTestIds.map((testId, order) => ({
+      testId,
+      name: testNames.get(testId) ?? testId,
+      order
+    }))
+  };
 }

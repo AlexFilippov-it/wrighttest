@@ -246,7 +246,9 @@ async function start() {
   await fastify.register(runRoutes);
   await fastify.register(webhookRoutes);
   await fastify.register(recordingRoutes);
-  await startTestWorker();
+  if (process.env.DISABLE_TEST_WORKER !== '1') {
+    await startTestWorker();
+  }
   await schedulerService.loadAll();
 
   fastify.get('/health', async () => ({ status: 'ok', port }));

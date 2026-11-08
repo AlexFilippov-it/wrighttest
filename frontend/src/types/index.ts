@@ -308,6 +308,7 @@ export interface SuiteRun {
   createdAt: string;
   currentOrder: number;
   outputMetadata: Array<{ sourceTestId: string; outputVariable: string; targetTestId: string; targetVariable: string; type: string; secret: boolean }>;
+  orderedChecks: Array<{ testId: string; name: string; order: number }>;
   testRuns: Array<{ id: string; testId: string; suiteOrder: number; status: string; startedAt: string; finishedAt: string | null; durationMs: number | null; error: string | null; dataCaseName: string | null; dataCaseIndex: number | null; test: { name: string } }>;
 }
 

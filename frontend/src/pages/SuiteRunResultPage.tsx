@@ -37,6 +37,51 @@ export default function SuiteRunResultPage() {
     finally { setCancelling(false); }
   };
 
+  const checkResults = run?.orderedChecks.map((check) => {
+    const testRun = run.testRuns.find((entry) => entry.testId === check.testId);
+    const notStartedStatus = run.status === 'CANCELLED'
+      ? 'CANCELLED'
+      : run.status === 'FAILED' && check.order > run.currentOrder
+        ? 'SKIPPED'
+        : 'PENDING';
+    return { ...check, testRun, status: testRun?.status ?? notStartedStatus };
+  }) ?? [];
+
+  const mobileResults = <div className="wt-suite-run-mobile-cards">
+    {checkResults.map((item) => <article className="wt-suite-run-mobile-card" key={item.testId}>
+      <div className="wt-suite-run-mobile-card__heading">
+        <span className="wt-suite-run-mobile-card__order">{t('suiteRun.order')} {item.order + 1}</span>
+        <StatusBadge status={item.status} label={t(`suiteRun.status.${item.status}`, item.status)} />
+      </div>
+      <Typography.Text strong className="wt-suite-run-mobile-card__check">{item.name}</Typography.Text>
+      <div className="wt-suite-run-mobile-card__details">
+        <div><span>{t('suiteRun.dataCase')}</span><strong>{item.testRun?.dataCaseName ?? '—'}</strong></div>
+        <div><span>{t('suiteRun.duration')}</span><strong>{item.testRun?.durationMs == null ? '—' : `${(item.testRun.durationMs / 1000).toFixed(2)}s`}</strong></div>
+      </div>
+      {item.testRun?.id
+        ? <Button className="wt-suite-run-mobile-card__action" onClick={() => navigate(`/runs/${item.testRun!.id}`)}>{t('suiteRun.openResult')}</Button>
+        : <Typography.Text type="secondary" className="wt-suite-run-mobile-card__waiting">{t('suiteRun.waitingToStart')}</Typography.Text>}
+    </article>)}
+  </div>;
+
+  const mobileHandoffs = <div className="wt-suite-run-mobile-cards">
+    {run?.outputMetadata.map((item) => {
+      const sourceName = run.orderedChecks.find((entry) => entry.testId === item.sourceTestId)?.name ?? item.sourceTestId;
+      const targetName = run.orderedChecks.find((entry) => entry.testId === item.targetTestId)?.name ?? item.targetTestId;
+      return <article className="wt-suite-run-mobile-card wt-suite-run-mobile-card--handoff" key={`${item.sourceTestId}-${item.outputVariable}-${item.targetTestId}-${item.targetVariable}`}>
+        <div className="wt-suite-run-mobile-card__details">
+          <div><span>{t('suiteRun.source')}</span><strong>{sourceName}</strong></div>
+          <div><span>{t('suiteRun.sourceVariable')}</span><strong>{item.outputVariable}</strong></div>
+          <div><span>{t('suiteRun.target')}</span><strong>{targetName}</strong></div>
+          <div><span>{t('suiteRun.targetVariable')}</span><strong>{item.targetVariable}</strong></div>
+          <div><span>{t('suiteRun.type')}</span><strong>{item.type}</strong></div>
+          <div><span>{t('suiteRun.secret')}</span><Tag>{item.secret ? t('suiteRun.secretYes') : t('suiteRun.secretNo')}</Tag></div>
+        </div>
+        <Typography.Text type="secondary">{t('suiteRun.valuesHidden')}</Typography.Text>
+      </article>;
+    })}
+  </div>;
+
   if (!run && !loading) return <Alert type="error" showIcon message={t('suiteRun.notFound')} />;
   return <Space direction="vertical" size="large" style={{ width: '100%' }}>
     <PageHeader
@@ -62,7 +107,7 @@ export default function SuiteRunResultPage() {
         {run.error ? <Alert style={{ marginTop: 16 }} type="error" showIcon message={run.error} /> : null}
       </Card>
       <Card className="wt-content-surface" title={t('suiteRun.checkResults')}>
-        <Table
+        <div className="wt-suite-run-desktop-table"><Table
           rowKey="id"
           pagination={false}
           scroll={{ x: 'max-content' }}
@@ -75,10 +120,12 @@ export default function SuiteRunResultPage() {
             { title: t('suiteRun.duration'), dataIndex: 'durationMs', width: 120, render: (value: number | null) => value === null ? '—' : `${(value / 1000).toFixed(2)}s` },
             { title: t('suiteRun.result'), render: (_: unknown, row: SuiteRun['testRuns'][number]) => <Button onClick={() => navigate(`/runs/${row.id}`)}>{t('suiteRun.openResult')}</Button> }
           ]}
-        />
+        /></div>
+        {mobileResults}
       </Card>
       {run.executionMode === 'SEQUENTIAL' ? <Card className="wt-content-surface" title={t('suiteRun.handoff')}>
-        {run.outputMetadata.length ? <Table
+        {run.outputMetadata.length ? <>
+        <div className="wt-suite-run-desktop-table"><Table
           rowKey={(item) => `${item.sourceTestId}-${item.outputVariable}-${item.targetTestId}-${item.targetVariable}`}
           pagination={false}
           scroll={{ x: 'max-content' }}
@@ -90,7 +137,9 @@ export default function SuiteRunResultPage() {
             { title: t('suiteRun.secret'), dataIndex: 'secret', width: 120, render: (value: boolean) => <Tag>{value ? t('suiteRun.secretYes') : t('suiteRun.secretNo')}</Tag> },
             { title: t('suiteRun.value'), width: 180, render: () => <Typography.Text type="secondary">{t('suiteRun.valuesHidden')}</Typography.Text> }
           ]}
-        /> : <Typography.Text type="secondary">{t('suiteRun.noHandoffs')}</Typography.Text>}
+        /></div>
+        {mobileHandoffs}
+        </> : <Typography.Text type="secondary">{t('suiteRun.noHandoffs')}</Typography.Text>}
       </Card> : null}
     </> : null}
   </Space>;

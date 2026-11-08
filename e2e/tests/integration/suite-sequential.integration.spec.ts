@@ -89,11 +89,17 @@ test('sequential suite hands a captured secret output through three isolated che
     if (process.env.PHASE5_SCREENSHOT_DIR) {
       await fs.mkdir(process.env.PHASE5_SCREENSHOT_DIR, { recursive: true });
       await page.screenshot({ path: path.join(process.env.PHASE5_SCREENSHOT_DIR, 'suite-run-results-desktop.png'), fullPage: true, animations: 'disabled' });
+      for (const width of [320, 375, 390, 768]) {
+        await page.setViewportSize({ width, height: 844 });
+        await expect(page.locator('.wt-suite-run-mobile-cards').first()).toBeVisible();
+        await expect(page.locator('.wt-suite-run-mobile-card')).toHaveCount(5);
+        await expect(page.locator('.wt-suite-run-mobile-card__action')).toHaveCount(3);
+        const viewportWidths = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }));
+        expect(viewportWidths.content, `document overflow at ${width}px`).toBeLessThanOrEqual(viewportWidths.viewport);
+      }
       await page.setViewportSize({ width: 390, height: 844 });
       await expect(page.locator('.wt-page-header__title')).toHaveText(/^(Suite Run|Sequential suite \d+)$/);
       await page.screenshot({ path: path.join(process.env.PHASE5_SCREENSHOT_DIR, 'suite-run-results-mobile.png'), fullPage: true, animations: 'disabled' });
-      const viewportWidths = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }));
-      expect(viewportWidths.content).toBeLessThanOrEqual(viewportWidths.viewport);
       await page.setViewportSize({ width: 1440, height: 960 });
     }
   } finally {
