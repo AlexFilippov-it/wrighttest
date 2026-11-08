@@ -16,7 +16,13 @@ export interface Step {
     | 'assertCount'
     | 'waitForSelector'
     | 'executeSql'
-    | 'assertDatabaseResult';
+    | 'assertDatabaseResult'
+    | 'generateData';
+  generator?: 'username' | 'email' | 'password' | 'uuid' | 'string' | 'number' | 'boolean' | 'date' | 'timestamp' | 'pattern';
+  generatorOptions?: Record<string, string | number | boolean>;
+  saveAs?: string;
+  secret?: boolean;
+  replace?: boolean;
   selector?: string;
   selectorCandidates?: string[];
   elementText?: string;

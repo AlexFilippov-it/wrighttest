@@ -18,9 +18,10 @@ import {
   HolderOutlined,
   CopyOutlined,
   TagOutlined,
-  UnorderedListOutlined
+  UnorderedListOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons';
-import { Alert, Button, Card, Checkbox, Dropdown, Input, InputNumber, Select, Space, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Collapse, Dropdown, Input, InputNumber, message, Select, Space, Tag, Tooltip, Typography } from 'antd';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +46,7 @@ type ActionOption = {
 };
 
 const ACTION_OPTIONS: ActionOption[] = [
+  { value: 'generateData', icon: <ThunderboltOutlined />, group: 'Actions', needsSelector: false, needsValue: false, needsExpected: false },
   { value: 'executeSql', icon: <DatabaseOutlined />, group: 'Database', needsSelector: false, needsValue: false, needsExpected: false },
   { value: 'assertDatabaseResult', icon: <DatabaseOutlined />, group: 'Database', needsSelector: false, needsValue: false, needsExpected: false },
   { value: 'goto', icon: <GlobalOutlined />, group: 'Actions', needsSelector: false, needsValue: true, needsExpected: false },
@@ -215,10 +217,20 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
           display: 'flex',
           alignItems: 'flex-start',
           gap: 12,
-          flexWrap: step.action === 'executeSql' || step.action === 'assertDatabaseResult' ? 'wrap' as const : 'nowrap' as const,
+          flexWrap: step.action === 'executeSql' || step.action === 'assertDatabaseResult' || step.action === 'generateData' ? 'wrap' as const : 'nowrap' as const,
           minWidth: 0
         };
         const isDatabaseStep = step.action === 'executeSql' || step.action === 'assertDatabaseResult';
+        const isGenerateDataStep = step.action === 'generateData';
+        const generatorOptions = step.generatorOptions ?? {};
+        const priorGeneratedNames = steps.slice(0, index).filter((candidate) => candidate.action === 'generateData' && candidate.saveAs).map((candidate) => candidate.saveAs!);
+        const availableVariableNames = [...new Set([...variableNames, ...priorGeneratedNames])];
+        const updateGeneratorOption = (name: string, value: string | number | boolean | undefined) => {
+          const next = { ...generatorOptions };
+          if (value === undefined) delete next[name];
+          else next[name] = value;
+          updateStep(index, { generatorOptions: next });
+        };
 
         return (
           <Card
@@ -288,6 +300,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                   disabled={readOnly}
                   onChange={(action) => updateStep(index, {
                     action,
+                    ...(action === 'generateData' && step.action !== 'generateData' ? { generator: 'username', generatorOptions: { prefix: 'user_', length: 16, charset: 'lowercase-digits' }, saveAs: 'USERNAME', secret: false, replace: false } : {}),
                     ...(action === 'executeSql' || action === 'assertDatabaseResult'
                       ? { databaseConnectionId: step.databaseConnectionId ?? defaultDatabaseConnectionId }
                       : {})
@@ -322,6 +335,95 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                   </Select.OptGroup>
                 </Select>
               </div>
+
+              {isGenerateDataStep && <div style={{ flex: '1 1 100%', minWidth: 0, display: 'grid', gap: 12 }}>
+                <Space wrap align="end">
+                  <div style={{ minWidth: 190 }}>
+                    <Text type="secondary">{t('testData.generator')}</Text>
+                    <Select
+                      style={{ width: '100%' }}
+                      value={step.generator ?? 'username'}
+                      disabled={readOnly}
+                      options={['username', 'email', 'password', 'uuid', 'string', 'number', 'boolean', 'date', 'timestamp', 'pattern'].map((generator) => ({ value: generator, label: t(`testData.generator.${generator}`) }))}
+                      onChange={(generator: NonNullable<Step['generator']>) => updateStep(index, {
+                        generator,
+                        generatorOptions: generator === 'username' ? { prefix: 'user_', length: 16, charset: 'lowercase-digits' }
+                          : generator === 'email' ? { prefix: 'user_', domain: 'example.test', length: 12 }
+                            : generator === 'password' ? { length: 16, uppercase: true, lowercase: true, digits: true, symbols: false }
+                              : generator === 'string' ? { length: 16, charset: 'alphanumeric' }
+                                : generator === 'number' ? { min: 0, max: 1_000_000, integer: true, precision: 2 }
+                                  : generator === 'date' ? { start: '2020-01-01', end: '2030-12-31', format: 'isoDate' }
+                                    : generator === 'timestamp' ? { format: 'unixMs' }
+                                      : generator === 'pattern' ? { pattern: 'user_XXXX_####' } : {}
+                      })}
+                    />
+                  </div>
+                  <div style={{ minWidth: 190 }}>
+                    <Text type="secondary">{t('testData.saveAs')}</Text>
+                    <Input
+                      value={step.saveAs ?? ''}
+                      placeholder="USERNAME"
+                      disabled={readOnly}
+                      status={step.saveAs && !/^[A-Z][A-Z0-9_]{0,99}$/.test(step.saveAs) ? 'error' : undefined}
+                      onChange={(event) => updateStep(index, { saveAs: event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}
+                    />
+                  </div>
+                  <Checkbox checked={step.generator === 'password' || Boolean(step.secret) || /(pass(word)?|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i.test(step.saveAs ?? '')} disabled={readOnly || step.generator === 'password' || /(pass(word)?|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i.test(step.saveAs ?? '')} onChange={(event) => updateStep(index, { secret: event.target.checked })}>
+                    {t('testData.secret')}
+                  </Checkbox>
+                </Space>
+
+                {step.generator === 'username' && <Space wrap>
+                  <Input aria-label={t('testData.prefix')} addonBefore={t('testData.prefix')} value={String(generatorOptions.prefix ?? 'user_')} disabled={readOnly} onChange={(event) => updateGeneratorOption('prefix', event.target.value)} />
+                  <Input aria-label={t('testData.suffix')} addonBefore={t('testData.suffix')} value={String(generatorOptions.suffix ?? '')} disabled={readOnly} onChange={(event) => updateGeneratorOption('suffix', event.target.value)} />
+                  <InputNumber aria-label={t('testData.length')} addonBefore={t('testData.length')} min={6} max={512} value={Number(generatorOptions.length ?? 16)} disabled={readOnly} onChange={(value) => updateGeneratorOption('length', value ?? 16)} />
+                  <Select aria-label={t('testData.charset')} value={String(generatorOptions.charset ?? 'lowercase-digits')} disabled={readOnly} options={['lowercase-digits', 'alphanumeric', 'hex', 'custom'].map((value) => ({ value, label: t(`testData.charset.${value}`) }))} onChange={(value) => updateGeneratorOption('charset', value)} />
+                  {generatorOptions.charset === 'custom' && <Input aria-label={t('testData.allowedCharacters')} value={String(generatorOptions.characters ?? '')} disabled={readOnly} onChange={(event) => updateGeneratorOption('characters', event.target.value)} />}
+                </Space>}
+                {step.generator === 'email' && <Space wrap>
+                  <Input aria-label={t('testData.prefix')} addonBefore={t('testData.prefix')} value={String(generatorOptions.prefix ?? 'user_')} disabled={readOnly} onChange={(event) => updateGeneratorOption('prefix', event.target.value)} />
+                  <Input aria-label={t('testData.domain')} addonBefore={t('testData.domain')} value={String(generatorOptions.domain ?? 'example.test')} disabled={readOnly} onChange={(event) => updateGeneratorOption('domain', event.target.value)} />
+                  <InputNumber aria-label={t('testData.length')} addonBefore={t('testData.length')} min={6} max={512} value={Number(generatorOptions.length ?? 12)} disabled={readOnly} onChange={(value) => updateGeneratorOption('length', value ?? 12)} />
+                </Space>}
+                {step.generator === 'password' && <Space wrap>
+                  <InputNumber aria-label={t('testData.length')} addonBefore={t('testData.length')} min={8} max={128} value={Number(generatorOptions.length ?? 16)} disabled={readOnly} onChange={(value) => updateGeneratorOption('length', value ?? 16)} />
+                  {(['uppercase', 'lowercase', 'digits', 'symbols'] as const).map((group) => <Checkbox key={group} checked={typeof generatorOptions[group] === 'boolean' ? Boolean(generatorOptions[group]) : group !== 'symbols'} disabled={readOnly} onChange={(event) => updateGeneratorOption(group, event.target.checked)}>{t(`testData.passwordGroup.${group}`)}</Checkbox>)}
+                  <Text type="secondary">{t('testData.passwordAlwaysSecret')}</Text>
+                </Space>}
+                {step.generator === 'string' && <Space wrap>
+                  <InputNumber aria-label={t('testData.length')} addonBefore={t('testData.length')} min={1} max={512} value={Number(generatorOptions.length ?? 16)} disabled={readOnly} onChange={(value) => updateGeneratorOption('length', value ?? 16)} />
+                  <Select aria-label={t('testData.charset')} value={String(generatorOptions.charset ?? 'alphanumeric')} disabled={readOnly} options={['alphanumeric', 'lowercase', 'uppercase', 'digits', 'hex', 'lowercase-digits', 'custom'].map((value) => ({ value, label: t(`testData.charset.${value}`) }))} onChange={(value) => updateGeneratorOption('charset', value)} />
+                  {generatorOptions.charset === 'custom' && <Input aria-label={t('testData.allowedCharacters')} value={String(generatorOptions.characters ?? '')} disabled={readOnly} onChange={(event) => updateGeneratorOption('characters', event.target.value)} />}
+                </Space>}
+                {step.generator === 'number' && <Space wrap>
+                  <InputNumber aria-label={t('testData.min')} addonBefore={t('testData.min')} value={Number(generatorOptions.min ?? 0)} disabled={readOnly} onChange={(value) => updateGeneratorOption('min', value ?? 0)} />
+                  <InputNumber aria-label={t('testData.max')} addonBefore={t('testData.max')} value={Number(generatorOptions.max ?? 1_000_000)} disabled={readOnly} onChange={(value) => updateGeneratorOption('max', value ?? 1_000_000)} />
+                  <Checkbox checked={generatorOptions.integer !== false} disabled={readOnly} onChange={(event) => updateGeneratorOption('integer', event.target.checked)}>{t('testData.integer')}</Checkbox>
+                  {generatorOptions.integer === false && <InputNumber aria-label={t('testData.precision')} addonBefore={t('testData.precision')} min={0} max={8} value={Number(generatorOptions.precision ?? 2)} disabled={readOnly} onChange={(value) => updateGeneratorOption('precision', value ?? 2)} />}
+                </Space>}
+                {step.generator === 'date' && <Space wrap>
+                  <Input type="date" aria-label={t('testData.startDate')} value={String(generatorOptions.start ?? '2020-01-01')} disabled={readOnly} onChange={(event) => updateGeneratorOption('start', event.target.value)} />
+                  <Input type="date" aria-label={t('testData.endDate')} value={String(generatorOptions.end ?? '2030-12-31')} disabled={readOnly} onChange={(event) => updateGeneratorOption('end', event.target.value)} />
+                  <Select aria-label={t('testData.format')} value={String(generatorOptions.format ?? 'isoDate')} disabled={readOnly} options={['isoDate', 'iso', 'us'].map((format) => ({ value: format, label: t(`testData.dateFormat.${format}`) }))} onChange={(value) => updateGeneratorOption('format', value)} />
+                </Space>}
+                {step.generator === 'timestamp' && <Select aria-label={t('testData.format')} style={{ maxWidth: 260 }} value={String(generatorOptions.format ?? 'unixMs')} disabled={readOnly} options={['unixMs', 'iso'].map((format) => ({ value: format, label: t(`testData.timestampFormat.${format}`) }))} onChange={(value) => updateGeneratorOption('format', value)} />}
+                {step.generator === 'pattern' && <Input.TextArea aria-label={t('testData.pattern')} value={String(generatorOptions.pattern ?? 'user_XXXX_####')} autoSize={{ minRows: 1, maxRows: 3 }} disabled={readOnly} onChange={(event) => updateGeneratorOption('pattern', event.target.value)} />}
+
+                <Space wrap align="center">
+                  <Tag color="blue">{t(`testData.generator.${step.generator ?? 'username'}`)}</Tag>
+                  <Text type="secondary">{t('testData.generatedEveryRun')}</Text>
+                  {step.saveAs && <>
+                    <Text type="secondary">{t('testData.availableAs', { variable: `{{${step.saveAs}}}` })}</Text>
+                    <Button size="small" icon={<CopyOutlined />} disabled={readOnly} onClick={() => navigator.clipboard.writeText(`{{${step.saveAs}}}`).then(() => message.success(t('testData.copied'))).catch(() => message.error(t('testData.copyFailed')))}>{t('testData.copyVariable')}</Button>
+                  </>}
+                </Space>
+                <Collapse size="small" items={[{
+                  key: 'advanced',
+                  label: t('testData.advancedSettings'),
+                  children: <Checkbox checked={Boolean(step.replace)} disabled={readOnly} onChange={(event) => updateStep(index, { replace: event.target.checked })}>{t('testData.replaceRuntimeVariable')}</Checkbox>
+                }]} />
+                {fieldIssue?.message && <Text type="danger">{fieldIssue.message}</Text>}
+              </div>}
 
               {isDatabaseStep && <div className="wt-sql-step-fields">
                 <div>
@@ -456,7 +558,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                           value={typeof value === 'string' ? value : ''}
                           placeholder={t('connections.parameterValuePlaceholder')}
                           disabled={readOnly}
-                          variableNames={variableNames}
+                          variableNames={availableVariableNames}
                           onValueChange={(nextValue) => updateParameters(index, { ...(step.parameters ?? {}), [key]: nextValue })}
                         />}
                         <Select
@@ -543,7 +645,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                     disabled={readOnly}
                     status={fieldIssue?.selector ? 'error' : undefined}
                     suffix={variableHint(step.selector, t)}
-                    variableNames={variableNames}
+                    variableNames={availableVariableNames}
                     onValueChange={(nextValue) => updateStep(index, { selector: nextValue })}
                   />
                   {fieldIssue?.selector ? (
@@ -578,7 +680,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                       disabled={readOnly}
                       status={fieldIssue?.value ? 'error' : undefined}
                       suffix={variableHint(step.value, t)}
-                      variableNames={variableNames}
+                      variableNames={availableVariableNames}
                       onValueChange={(nextValue) => updateStep(index, { value: nextValue })}
                     />
                   )}
@@ -603,7 +705,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                     disabled={readOnly}
                     status={fieldIssue?.expected ? 'error' : undefined}
                     suffix={variableHint(step.expected, t)}
-                    variableNames={variableNames}
+                    variableNames={availableVariableNames}
                     onValueChange={(nextValue) => updateStep(index, { expected: nextValue })}
                   />
                   {fieldIssue?.expected ? (

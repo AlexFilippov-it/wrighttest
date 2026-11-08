@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { GENERATORS, validateGeneratorOptions } from '../services/test-data-generators';
 
 const TEST_DATA_CASE_LIMIT = 100;
 const TEST_DATA_VARIABLE_LIMIT = 100;
@@ -37,8 +38,14 @@ export const StepSchema = z.object({
     'assertCount',
     'waitForSelector',
     'executeSql',
-    'assertDatabaseResult'
+    'assertDatabaseResult',
+    'generateData'
   ]),
+  generator: z.enum(GENERATORS).optional(),
+  generatorOptions: z.record(z.string().max(64), z.union([z.string().max(512), z.number().finite(), z.boolean()])).refine((options) => Object.keys(options).length <= 20).optional(),
+  saveAs: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/).optional(),
+  secret: z.boolean().optional(),
+  replace: z.boolean().optional(),
   selector: z.string().optional(),
   selectorCandidates: z.array(z.string()).optional(),
   elementText: z.string().optional(),
@@ -70,6 +77,15 @@ export const StepSchema = z.object({
     })
     .optional()
 }).superRefine((step, ctx) => {
+  if (step.action === 'generateData') {
+    if (!step.generator) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Generator is required', path: ['generator'] });
+    if (!step.saveAs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Runtime variable name is required', path: ['saveAs'] });
+    try {
+      validateGeneratorOptions(step.generator, step.generatorOptions);
+    } catch (error) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: error instanceof Error ? error.message : 'Generator settings are invalid', path: ['generatorOptions'] });
+    }
+  }
   if (step.action === 'executeSql' || step.action === 'assertDatabaseResult') {
     if (!step.databaseConnectionId) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Database connection is required', path: ['databaseConnectionId'] });
     if (!step.sql?.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'SQL query is required', path: ['sql'] });

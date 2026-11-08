@@ -43,6 +43,7 @@ type StepResultRow = {
   screenshot?: string | null;
   error?: string | null;
   database?: NonNullable<NonNullable<TestRun['stepResults']>[number]['database']>;
+  generated?: NonNullable<NonNullable<TestRun['stepResults']>[number]['generated']>;
   stepDefinition?: Step;
 };
 
@@ -103,6 +104,7 @@ function buildStepRows(run: TestRun, t: (key: string) => string): StepResultRow[
       screenshot: stepResult.screenshot ?? undefined,
       error: stepResult.error ?? undefined,
       database: stepResult.database,
+      generated: stepResult.generated,
       stepDefinition: run.test?.steps?.[stepResult.index]
     }));
   }
@@ -425,7 +427,7 @@ export default function RunResultPage() {
                   </Space>
                 }
               >
-                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                   <Title level={4} style={{ margin: 0 }}>
                     {t('runResult.failedAtStep', { step: failedStepIndex ?? run.currentStep ?? '—' })} —{' '}
                     {humanizeAction(failedStep?.action ?? failedTestStep?.action ?? 'step', t)}
@@ -509,6 +511,16 @@ export default function RunResultPage() {
                         children: typeof value === 'string' && /^\{\{[A-Z][A-Z0-9_]*\}\}$/.test(value) ? value : '••••••'
                       }));
                       return <div className="wt-run-sql-details">
+                        {record.generated && <div>
+                          <Text type="secondary">{t('testData.generatedDetails')}</Text>
+                          <Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[
+                            { key: 'variable', label: t('testData.variable'), children: `{{${record.generated.variableName}}}` },
+                            { key: 'generator', label: t('testData.generatorLabel'), children: t(`testData.generator.${record.generated.generator}`) },
+                            { key: 'scope', label: t('testData.scope'), children: t('testData.currentRun') },
+                            { key: 'secret', label: t('testData.secret'), children: record.generated.secret ? t('testData.yes') : t('testData.no') },
+                            { key: 'value', label: t('testData.value'), children: record.generated.secret ? '••••••••' : String(record.generated.value ?? '—') }
+                          ]} />
+                        </div>}
                         {step?.sql && <div>
                           <Text type="secondary">{t('connections.sqlQuery')}</Text>
                           <pre className="wt-run-sql-query">{step.sql}</pre>

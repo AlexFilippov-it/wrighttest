@@ -1,6 +1,6 @@
 # Test Data and Variables: Architecture
 
-Status: Phase 1 Variable Engine is implemented in the backend. Generators, general browser capture, persistent Project Variables, and Suite variable sharing remain future work.
+Status: Phase 1 Variable Engine and Phase 2 runtime `generateData` steps are implemented. General browser capture, persistent Project Variables, and Suite variable sharing remain future work.
 
 ## 1. Existing behavior in this checkout
 
@@ -31,7 +31,7 @@ Status: Phase 1 Variable Engine is implemented in the backend. Generators, gener
 
 ### MCP and Database Testing
 
-- MCP already supports Check CRUD, `testData` in Check creation/update, selecting `dataCaseIndex` for `run_check`, run status/results, SQL steps in step schemas, and safe metadata-only tools `list_database_connections` and `get_database_connection`.
+- MCP supports Check CRUD, `testData` in Check creation/update, selecting `dataCaseIndex` for `run_check`, run status/results, SQL and `generateData` steps in step schemas, and safe metadata-only tools `list_database_connections` and `get_database_connection`.
 - No project-variable CRUD, generator-specific MCP tool, or test-data listing/updating tool exists. Existing Check tools can already author static test data and `saveResultAs` SQL steps.
 - Database credentials are not returned by connection APIs. SQL inputs and outputs must continue through parameter binding and current redaction. MCP's `safeRunPayload` attempts to redact known environment and selected data-case values; it has no persistent captured-runtime-values surface today.
 
@@ -102,26 +102,17 @@ Do not introduce “last writer wins” for cross-check parallel runs. Scenario 
 - Run temporary values are never copied to Project scope; no Project Variable persistence or promotion exists in this phase.
 - Set a bounded retention policy for transient outputs and delete encrypted values with their owning run. Keep only masked/provenance metadata afterward if needed.
 
-## 4. Future phase: generators
+## 4. Phase 2: runtime generators
 
-Implement deterministic, bounded generators as pure functions in the worker, without `eval`, `Function`, arbitrary regex execution, network calls, or database writes.
+`backend/src/services/test-data-generators.ts` provides bounded runtime generators for username, email, password, UUID v4, random string, number, boolean, date, timestamp, and a small custom-pattern syntax. The worker executes `generateData` for each step, validates the destination with `VariableContext.assertRuntimeWritable`, and stores it using `setRuntime({ source: 'generated', createdByStep, secret, replace })`. The context belongs to one worker invocation, so separate runs and each data-driven TestRun get independent generated values.
 
-Suggested schema:
+- `generatorOptions` is separate from the existing assertion `options` (`exact`, `timeout`, `nth`). Backend Zod validation and the generator validate types, ranges, generator-specific keys, and size limits before generation.
+- Passwords use Node crypto randomness, require length 8-128 and at least two selected character groups, and are always treated as secret. Sensitive variable names are secret even when the explicit flag is false. Secret values are omitted from persisted step-result metadata and masked in the Run Results UI. To prevent values typed into a page from leaking through browser artifacts, screenshots and traces are not captured for runs that generate secret values; the run result includes the reason.
+- Non-secret output is retained in the existing TestRun step result for diagnosis. MCP returns safe generation metadata and omits screenshots/trace links from runs containing generated secrets. Ordinary runs generate new values; exact secret replay is not implemented.
+- `.spec.ts` export emits a local crypto-based helper, and the importer recognizes the generated assignment so action/options/save-as/secret/replace round-trip through the existing import/export path. The helper is not shared with the application worker and should remain behaviorally aligned with the runtime generator.
+- Custom patterns support `X` (lowercase alphanumeric), `#` (digit), `{{TIMESTAMP}}` (epoch milliseconds), and backslash escaping for special characters. No arbitrary regular expression, JavaScript evaluation, network call, or database write is performed by a generator.
 
-```ts
-type GenerateData = {
-  kind: 'username' | 'email' | 'password' | 'uuid' | 'string' | 'number' | 'integer' | 'decimal' | 'boolean' | 'date' | 'timestamp' | 'alphanumeric' | 'pattern' | 'sequence';
-  saveAs: string;
-  secret?: boolean;
-  options?: Record<string, string | number | boolean>;
-};
-```
-
-Use Node `crypto` for secret/random material. For reproducibility record the resolved value encrypted/masked in the TestRun rather than expecting to regenerate the same random value. A supplied deterministic seed can be used only for non-secret values or explicit test-only runs; it must not make password generation predictable.
-
-“Unique” should mean collision-resistant within defined bounds, not globally guaranteed. For a resource that must be unique according to the target system, include a run identifier/cryptographic suffix and let the application's unique constraint be the final authority. A sequence/counter is unique only with an atomic persistent reservation service, not a local counter across workers.
-
-Custom pattern syntax should be a small parser: `X` = random allowed char, `#` = digit, `{{TIMESTAMP}}` = UTC epoch/ISO token. Escape literal markers explicitly. Reject unknown tokens, excessive output length, unsupported character sets, and invalid ranges before execution.
+“Unique” means collision-resistant within the configured length and alphabet, not globally guaranteed. Target-system unique constraints remain authoritative. No persistent sequence/counter is provided.
 
 ## 5. Current SQL capture and future capture sources
 

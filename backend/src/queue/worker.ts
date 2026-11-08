@@ -21,6 +21,7 @@ import {
   resolveAuthStateForExecution
 } from '../services/auth-state';
 import { executeDatabaseStep, openDatabaseConnection, type SqlExecutionSummary, type SqlSession } from '../services/database-connections';
+import { generateTestDataValue, isSecretGeneratorStep } from '../services/test-data-generators';
 import {
   buildActionCandidates,
   dedupe,
@@ -40,6 +41,7 @@ function escapeRegExp(value: string) {
 }
 
 function getStepTarget(step: Step) {
+  if (step.action === 'generateData') return step.saveAs ? `{{${step.saveAs}}}` : '';
   if (step.action === 'goto') return step.value ?? '';
   if (step.action === 'press' || step.action === 'keyboardPress' || step.action === 'selectOption') return step.value ?? '';
   if ('selector' in step && step.selector) return step.selector;
@@ -180,6 +182,7 @@ type RunStepResult = {
   screenshot?: string | null;
   error?: string | null;
   database?: SqlExecutionSummary;
+  generated?: { variableName: string; generator: string; secret: boolean; value?: string | number | boolean };
   variableError?: {
     code: string;
     variableName?: string;
@@ -250,6 +253,10 @@ async function runTest(job: Job<TestJobData>) {
   let tracePath: string | null = null;
   let traceUnavailableReason: string | null = null;
   let runError: Error | null = null;
+  const containsGeneratedSecret = steps.some((step) => step.action === 'generateData' && isSecretGeneratorStep(step));
+  if (containsGeneratedSecret) {
+    traceUnavailableReason = 'Trace and screenshots are omitted for runs that generate secret values.';
+  }
   const databaseSessions = new Map<string, { session: SqlSession; name: string; accessMode: 'READ_ONLY' | 'READ_WRITE' }>();
 
   console.log(`[Worker] Using ${getBrowserName()} for test run ${testRunId}`);
@@ -285,8 +292,10 @@ async function runTest(job: Job<TestJobData>) {
       ...deviceConfig,
       ...(storageState ? { storageState } : {})
     });
-    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
-    traceStarted = true;
+    if (!containsGeneratedSecret) {
+      await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+      traceStarted = true;
+    }
 
     const page = await context.newPage();
 
@@ -296,6 +305,7 @@ async function runTest(job: Job<TestJobData>) {
       const stepStartedAt = Date.now();
       let stepError: Error | null = null;
       let databaseSummary: SqlExecutionSummary | undefined;
+      let generatedSummary: RunStepResult['generated'];
 
       await prisma.testRun.update({
         where: { id: testRunId },
@@ -312,6 +322,25 @@ async function runTest(job: Job<TestJobData>) {
         }
 
         switch (step.action) {
+          case 'generateData': {
+            const variableName = step.saveAs!;
+            const secret = isSecretGeneratorStep(step);
+            variableContext.assertRuntimeWritable(variableName, step.replace, index);
+            const generatedValue = generateTestDataValue(step.generator, step.generatorOptions);
+            variableContext.setRuntime(variableName, generatedValue, {
+              source: 'generated',
+              secret,
+              createdByStep: index + 1,
+              replace: step.replace
+            });
+            generatedSummary = {
+              variableName,
+              generator: step.generator!,
+              secret,
+              ...(!secret ? { value: generatedValue } : {})
+            };
+            break;
+          }
           case 'executeSql':
           case 'assertDatabaseResult': {
             if (step.saveResultAs) variableContext.assertRuntimeWritable(step.saveResultAs, false, index);
@@ -451,7 +480,7 @@ async function runTest(job: Job<TestJobData>) {
           : new Error(variableContext.redact(message));
       } finally {
         let screenshot: string | null = null;
-        if (!['executeSql', 'assertDatabaseResult'].includes(step.action)) {
+        if (!containsGeneratedSecret && !['executeSql', 'assertDatabaseResult'].includes(step.action)) {
           const screenshotName = `${testRunId}_step${index + 1}${stepError ? '_failed' : ''}.png`;
           const screenshotPath = path.join(SCREENSHOTS_DIR, screenshotName);
           try {
@@ -480,6 +509,7 @@ async function runTest(job: Job<TestJobData>) {
             }
           } : {}),
           ...(databaseSummary ? { database: databaseSummary } : {}),
+          ...(generatedSummary ? { generated: generatedSummary } : {}),
           ...(stepError && 'databaseSummary' in stepError && typeof stepError.databaseSummary === 'object'
             ? { database: stepError.databaseSummary as SqlExecutionSummary }
             : {})
@@ -523,7 +553,7 @@ async function runTest(job: Job<TestJobData>) {
         console.error(`[Worker] Failed to save trace for ${testRunId}:`, traceError);
       }
     } else if (context && !traceStarted) {
-      traceUnavailableReason = 'Trace was not created because browser context failed before tracing started.';
+      traceUnavailableReason ??= 'Trace was not created because browser context failed before tracing started.';
     } else if (!context) {
       traceUnavailableReason = 'Trace was not created because browser context could not be initialized.';
     }

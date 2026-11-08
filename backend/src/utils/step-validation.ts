@@ -77,6 +77,10 @@ export function validateStepRequirements(step: Step): StepRequirementIssue | nul
       return buildIssue({
         ...(step.value?.trim() ? {} : { value: required('Key') })
       });
+    case 'generateData':
+      if (!step.generator) return { message: required('Generator'), fields: { value: required('Generator') } };
+      if (!step.saveAs?.trim()) return { message: required('Runtime variable name'), fields: { value: required('Runtime variable name') } };
+      return null;
     case 'selectOption':
       return buildIssue({
         ...(step.selector?.trim() ? {} : { selector: required('Target') }),

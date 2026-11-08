@@ -18,6 +18,8 @@ function unquote(value: string) {
 function expressionToTemplate(expression: string): string {
   const normalized = expression
     .replace(/\s+/g, ' ')
+    .replace(/String\(__wtRuntime\[\["']([A-Z][A-Z0-9_]*)["']\]\)/g, '{{$1}}')
+    .replace(/String\(__wtRuntime\["([A-Z][A-Z0-9_]*)"\]\)/g, '{{$1}}')
     .replace(/escapeRegExp\((process\.env\.\w+\s*\?\?\s*'')\)/g, '$1')
     .replace(/escapeRegExp\((process\.env\.\w+\s*\?\?\s*"")\)/g, '$1')
     .replace(/escapeRegExp\((process\.env\.\w+)\)/g, '$1')
@@ -53,8 +55,7 @@ function extractArgument(expression: string) {
 }
 
 function parseLocatorExpression(expression: string) {
-  const trimmed = stripSemicolon(expression);
-  return trimmed;
+  return stripSemicolon(expression).replace(/__wtTemplate\(("(?:\\.|[^"\\])*")\)/g, (_match, literal: string) => JSON.stringify(JSON.parse(literal)));
 }
 
 function parseMaybeRegexOrString(expression: string) {
@@ -77,6 +78,27 @@ export function parsePlaywrightSpec(code: string): { testName: string; steps: St
 
   for (const line of lines) {
     const t = line.trim();
+    const generatedMatch = t.match(/^__wtRuntime\["([A-Z][A-Z0-9_]*)"\]\s*=\s*__wtGenerate\("(username|email|password|uuid|string|number|boolean|date|timestamp|pattern)",\s*(\{.*\})\);?$/);
+    if (generatedMatch) {
+      try {
+        const options = JSON.parse(generatedMatch[3]) as Record<string, string | number | boolean>;
+        const secret = options.__wtSecret === true || generatedMatch[2] === 'password';
+        const replace = options.__wtReplace === true;
+        delete options.__wtSecret;
+        delete options.__wtReplace;
+        steps.push({
+          action: 'generateData',
+          generator: generatedMatch[2] as Step['generator'],
+          generatorOptions: options,
+          saveAs: generatedMatch[1],
+          secret,
+          replace
+        });
+      } catch {
+        // Ignore malformed generated-step syntax rather than importing partial configuration.
+      }
+      continue;
+    }
     if (!t.startsWith('await ')) continue;
 
     const gotoMatch = t.match(/await page\.goto\((.+)\);?$/);

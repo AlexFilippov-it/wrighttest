@@ -19,10 +19,16 @@ export type StepAction =
   | 'assertCount'
   | 'waitForSelector'
   | 'executeSql'
-  | 'assertDatabaseResult';
+  | 'assertDatabaseResult'
+  | 'generateData';
 
 export interface Step {
   action: StepAction;
+  generator?: 'username' | 'email' | 'password' | 'uuid' | 'string' | 'number' | 'boolean' | 'date' | 'timestamp' | 'pattern';
+  generatorOptions?: Record<string, string | number | boolean>;
+  saveAs?: string;
+  secret?: boolean;
+  replace?: boolean;
   selector?: string;
   selectorCandidates?: string[];
   elementText?: string;
@@ -438,6 +444,7 @@ export interface TestRun {
     durationMs: number;
     screenshot?: string | null;
     error?: string | null;
+    generated?: { variableName: string; generator: string; secret: boolean; value?: string | number | boolean };
     database?: {
       connectionName: string;
       rowCount: number;

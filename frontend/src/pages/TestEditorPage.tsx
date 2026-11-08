@@ -135,6 +135,10 @@ function validateRequiredStepFields(step: Step, t: (key: string) => string): Ste
   }
 
   switch (step.action) {
+    case 'generateData':
+      if (!step.generator) return { message: t('testData.validation.generatorRequired') };
+      if (!step.saveAs || !/^[A-Z][A-Z0-9_]{0,99}$/.test(step.saveAs)) return { message: t('testData.validation.variableName') };
+      return null;
     case 'goto':
       if (!step.value?.trim()) {
         return { message: t('step.validation.urlRequired'), value: t('step.validation.urlRequired') };

@@ -99,6 +99,20 @@ test('create_check delegates to the API and returns its sanitized check payload'
   await server.close();
 });
 
+test('create_check accepts Generate Test Data steps without a dedicated MCP generator tool', async () => {
+  const generatedStep = { action: 'generateData', generator: 'username', saveAs: 'USERNAME', generatorOptions: { prefix: 'qa_', length: 16 } };
+  let received: unknown;
+  const { client, server } = await connectedClient(async (_input, init) => {
+    received = JSON.parse(String(init?.body));
+    return Response.json({ id: 'check-1', projectId: 'project-1', name: 'Generated user', url: 'https://example.test', steps: [generatedStep] }, { status: 201 });
+  });
+  const response = await client.callTool({ name: 'create_check', arguments: { projectId: 'project-1', name: 'Generated user', url: 'https://example.test', steps: [generatedStep] } });
+  assert.equal(response.isError, undefined);
+  assert.deepEqual((received as Record<string, unknown>).steps, [generatedStep]);
+  await client.close();
+  await server.close();
+});
+
 test('update_check accepts and forwards a partial patch', async () => {
   let requestPath = '';
   let requestMethod = '';
@@ -155,6 +169,21 @@ test('run results omit environment data and redact known environment and test-da
   const text = firstText(response);
   assert.doesNotMatch(text, /secret-value|code-12345|PASSWORD|AUTH_CODE|environment|dataCaseVariables/);
   assert.match(text, /\[REDACTED\]/);
+  await client.close();
+  await server.close();
+});
+
+test('run results never expose generated secret values even if a backend payload contains one', async () => {
+  const { client, server } = await connectedClient(async () => Response.json({
+    id: 'run-2', status: 'PASSED',
+    stepResults: [{ index: 0, action: 'generateData', status: 'passed', durationMs: 1, error: null, generated: { variableName: 'PASSWORD', generator: 'password', secret: false, value: 'synthetic-secret-value' } }]
+  }));
+  const response = await client.callTool({ name: 'get_run_results', arguments: { runId: 'run-2' } });
+  const text = firstText(response);
+  assert.doesNotMatch(text, /synthetic-secret-value/);
+  assert.match(text, /"secret":true/);
+  assert.match(text, /"artifactsOmittedForSecrets":true/);
+  assert.match(text, /"available":false/);
   await client.close();
   await server.close();
 });

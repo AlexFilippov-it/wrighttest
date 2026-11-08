@@ -13,6 +13,7 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
     import('../src/queue/worker')
   ]);
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const fixtureTable = `wrighttest_db_worker_${suffix.replace(/[^a-zA-Z0-9_]/g, '_')}`;
   const previousKey = process.env.DATABASE_CREDENTIALS_ENCRYPTION_KEY;
   process.env.DATABASE_CREDENTIALS_ENCRYPTION_KEY = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
   const host = process.env.WRIGHTTEST_PG_TEST_HOST ?? '127.0.0.1';
@@ -31,9 +32,8 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
 
   try {
     await fixtureClient.connect();
-    await fixtureClient.query('DROP TABLE IF EXISTS wrighttest_db_worker_fixture');
-    await fixtureClient.query('CREATE TABLE wrighttest_db_worker_fixture(id integer primary key, status text, api_token text)');
-    await fixtureClient.query("INSERT INTO wrighttest_db_worker_fixture(id, status, api_token) VALUES (1, 'ready', 'synthetic-secret')");
+    await fixtureClient.query(`CREATE TABLE ${fixtureTable}(id integer primary key, status text, api_token text)`);
+    await fixtureClient.query(`INSERT INTO ${fixtureTable}(id, status, api_token) VALUES (1, 'ready', 'synthetic-secret')`);
 
     const connection = await prisma.databaseConnection.create({
       data: {
@@ -60,10 +60,11 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
         steps: [
           { action: 'goto', value: url },
           { action: 'assertTitle', expected: 'Database Worker Integration', options: { exact: true } },
+          { action: 'generateData', generator: 'number', generatorOptions: { min: 1, max: 1, integer: true }, saveAs: 'USER_ID' },
           {
             action: 'executeSql', databaseConnectionId: connection.id,
-            sql: 'SELECT id, status, api_token FROM wrighttest_db_worker_fixture WHERE id = :id',
-            parameters: { id: 1 }, captureRows: true,
+            sql: `SELECT id, status, api_token FROM ${fixtureTable} WHERE id = :id`,
+            parameters: { id: '{{USER_ID}}' }, captureRows: true,
             assertion: { type: 'columnEquals', column: 'status', expected: 'ready' },
             saveResultAs: 'ORDER_ID', saveColumn: 'id'
           },
@@ -71,12 +72,12 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
           { action: 'assertValue', selector: "page.locator('#order-id')", expected: '{{ORDER_ID}}' },
           {
             action: 'executeSql', databaseConnectionId: connection.id,
-            sql: 'UPDATE wrighttest_db_worker_fixture SET status = :status WHERE id = :id',
+            sql: `UPDATE ${fixtureTable} SET status = :status WHERE id = :id`,
             parameters: { status: 'verified', id: '{{ORDER_ID}}' }
           },
           {
             action: 'assertDatabaseResult', databaseConnectionId: connection.id,
-            sql: 'SELECT status FROM wrighttest_db_worker_fixture WHERE id = :id',
+            sql: `SELECT status FROM ${fixtureTable} WHERE id = :id`,
             parameters: { id: '{{ORDER_ID}}' },
             assertion: { type: 'columnEquals', column: 'status', expected: 'verified' },
             waitForResult: { timeoutMs: 1_000, pollIntervalMs: 250 }
@@ -99,14 +100,16 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
     assert.equal(completed?.status, 'PASSED', completed?.error ?? 'Worker run did not reach a terminal state');
-    const results = completed?.stepResults as Array<{ status: string; action: string; screenshot?: string | null; database?: { rows?: Array<Record<string, unknown>>; assertion?: { passed: boolean } } }>;
-    assert.equal(results.length, 8);
-    assert.equal(results[2].database?.rows?.[0]?.api_token, '[REDACTED]');
-    assert.equal(results[6].database?.assertion?.passed, true);
-    assert.equal(results[2].screenshot, null);
+    const results = completed?.stepResults as Array<{ status: string; action: string; screenshot?: string | null; generated?: { variableName: string; value?: string | number | boolean }; database?: { rows?: Array<Record<string, unknown>>; assertion?: { passed: boolean } } }>;
+    assert.equal(results.length, 9);
+    assert.equal(results[3].database?.rows?.[0]?.api_token, '[REDACTED]');
+    assert.equal(results[7].database?.assertion?.passed, true);
+    assert.equal(results[3].screenshot, null);
+    assert.equal(results[2].generated?.variableName, 'USER_ID');
+    assert.equal(results[2].generated?.value, 1);
     assert.equal(results[0].status, 'passed');
-    assert.equal(results[3].status, 'passed');
     assert.equal(results[4].status, 'passed');
+    assert.equal(results[5].status, 'passed');
     assert.equal(results[7].status, 'passed');
   } finally {
     await stopTestWorker();
@@ -115,7 +118,7 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
     if (connectionId) await prisma.databaseConnection.delete({ where: { id: connectionId } }).catch(() => undefined);
     await prisma.project.delete({ where: { id: project.id } }).catch(() => undefined);
     await prisma.user.delete({ where: { id: user.id } }).catch(() => undefined);
-    await fixtureClient.query('DROP TABLE IF EXISTS wrighttest_db_worker_fixture').catch(() => undefined);
+    await fixtureClient.query(`DROP TABLE IF EXISTS ${fixtureTable}`).catch(() => undefined);
     await fixtureClient.end().catch(() => undefined);
     await testQueue.close().catch(() => undefined);
     redis.disconnect();
