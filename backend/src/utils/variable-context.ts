@@ -252,6 +252,10 @@ export class VariableContext {
     return result.sort((left, right) => left.name.localeCompare(right.name));
   }
 
+  getRuntimeEntries(): VariableEntry[] {
+    return [...this.runtime.values()].map((entry) => ({ ...entry, value: cloneAndValidateValue(entry.value, entry.name) }));
+  }
+
   redact(text: string) {
     let result = text;
     const secrets = this.getAllEntries()

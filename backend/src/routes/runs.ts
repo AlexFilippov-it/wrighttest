@@ -30,13 +30,14 @@ export async function runRoutes(fastify: FastifyInstance) {
     if (!value) return undefined;
     const snapshot = decryptRunVariablesSnapshot(value) as {
       projectVariables?: Record<string, unknown>; environmentVariables?: Record<string, unknown>;
-      testDataVariables?: Record<string, unknown>; secretNames?: string[]; sources?: Record<string, string>;
+      testDataVariables?: Record<string, unknown>; runInputs?: Record<string, unknown>; secretNames?: string[]; sources?: Record<string, string>;
     };
     const secretNames = new Set(snapshot.secretNames ?? []);
     const items = [
       ...Object.entries(snapshot.projectVariables ?? {}).map(([name, item]) => ({ name, value: item, source: 'project' })),
       ...Object.entries(snapshot.environmentVariables ?? {}).map(([name, item]) => ({ name, value: item, source: 'environment' })),
-      ...Object.entries(snapshot.testDataVariables ?? {}).map(([name, item]) => ({ name, value: item, source: snapshot.sources?.[name] ?? 'testData' }))
+      ...Object.entries(snapshot.testDataVariables ?? {}).map(([name, item]) => ({ name, value: item, source: snapshot.sources?.[name] ?? 'testData' })),
+      ...Object.entries(snapshot.runInputs ?? {}).map(([name, item]) => ({ name, value: item, source: 'runInput' }))
     ];
     const deduped = new Map<string, typeof items[number]>();
     for (const item of items) deduped.set(item.name, item);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Checkbox, Form, Input, message, Modal, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd';
+import { Button, Card, Checkbox, Form, Input, message, Modal, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useOutletContext, useParams } from 'react-router-dom';
@@ -112,28 +112,44 @@ export default function ProjectVariablesPage() {
     catch { message.error(t('projectVariables.deleteFailed')); }
   };
 
+  const renderActions = (row: ProjectVariable) => {
+    const canManageRow = canEdit && (role === 'OWNER' || !row.secret);
+    return canManageRow ? <Space>
+      <Button aria-label={t('projectVariables.edit')} icon={<EditOutlined />} onClick={() => openEdit(row)} />
+      <Popconfirm title={t('projectVariables.deleteConfirm')} onConfirm={() => void remove(row)} okButtonProps={{ danger: true }}>
+        <Button aria-label={t('projectVariables.delete')} danger icon={<DeleteOutlined />} />
+      </Popconfirm>
+    </Space> : <Text type="secondary">{t('common.noActions')}</Text>;
+  };
+
   const columns = [
     { title: t('projectVariables.name'), dataIndex: 'name', key: 'name', render: (name: string) => <Text code>{name}</Text> },
     { title: t('projectVariables.type'), dataIndex: 'type', key: 'type', render: (type: string) => <Tag>{type}</Tag> },
     { title: t('projectVariables.value'), key: 'value', render: (_: unknown, row: ProjectVariable) => row.secret ? <Text type="secondary">••••••</Text> : <Text>{serializeValue(row.value)}</Text> },
     { title: t('projectVariables.description'), dataIndex: 'description', key: 'description' },
     { title: t('projectVariables.lastUpdated'), dataIndex: 'updatedAt', key: 'updatedAt', render: (value: string) => new Date(value).toLocaleDateString() },
-    { title: t('projectVariables.actions'), key: 'actions', render: (_: unknown, row: ProjectVariable) => {
-      const canManageRow = canEdit && (role === 'OWNER' || !row.secret);
-      return canManageRow ? <Space>
-        <Button aria-label={t('projectVariables.edit')} icon={<EditOutlined />} onClick={() => openEdit(row)} />
-        <Popconfirm title={t('projectVariables.deleteConfirm')} onConfirm={() => void remove(row)} okButtonProps={{ danger: true }}>
-          <Button aria-label={t('projectVariables.delete')} danger icon={<DeleteOutlined />} />
-        </Popconfirm>
-      </Space> : <Text type="secondary">{t('common.noActions')}</Text>;
-    } }
+    { title: t('projectVariables.actions'), key: 'actions', render: (_: unknown, row: ProjectVariable) => renderActions(row) }
   ];
 
   return <Space direction="vertical" size="large" style={{ width: '100%' }}>
     <PageHeader title={t('projectVariables.title')} description={t('projectVariables.subtitle')} actions={canEdit ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('projectVariables.add')}</Button> : undefined} />
     <SectionCard title={t('projectVariables.section')}>
       <Text type="secondary">{t('projectVariables.help')}</Text>
-      <Table rowKey="id" loading={loading} columns={columns} dataSource={variables} pagination={{ pageSize: 10 }} scroll={{ x: 760 }} locale={{ emptyText: t('projectVariables.empty') }} />
+      <div className="wt-project-variable-desktop">
+        <Table rowKey="id" loading={loading} columns={columns} dataSource={variables} pagination={{ pageSize: 10 }} scroll={{ x: 760 }} locale={{ emptyText: t('projectVariables.empty') }} />
+      </div>
+      <div className="wt-project-variable-mobile">
+        {loading ? <Text type="secondary">{t('common.loading')}</Text> : variables.length === 0 ? <Text type="secondary">{t('projectVariables.empty')}</Text> : <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          {variables.map((variable) => <Card size="small" key={variable.id} className="wt-project-variable-mobile-card" title={<Text code>{variable.name}</Text>} extra={renderActions(variable)}>
+            <dl>
+              <div><dt>{t('projectVariables.type')}</dt><dd><Tag>{variable.type}</Tag></dd></div>
+              <div><dt>{t('projectVariables.value')}</dt><dd>{variable.secret ? <Text type="secondary">••••••</Text> : <Text>{serializeValue(variable.value)}</Text>}</dd></div>
+              <div><dt>{t('projectVariables.description')}</dt><dd>{variable.description || '—'}</dd></div>
+              <div><dt>{t('projectVariables.lastUpdated')}</dt><dd>{new Date(variable.updatedAt).toLocaleDateString()}</dd></div>
+            </dl>
+          </Card>)}
+        </Space>}
+      </div>
     </SectionCard>
     <Modal title={t(editing ? 'projectVariables.editTitle' : 'projectVariables.createTitle')} open={open} onCancel={close} onOk={() => void form.submit()} confirmLoading={saving} destroyOnHidden>
       <Form form={form} layout="vertical" onFinish={(values: FormValues) => void submit(values)}>

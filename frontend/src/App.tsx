@@ -22,6 +22,7 @@ import NotFoundPage from './shell/NotFoundPage';
 import InstanceLanguagePage from './pages/InstanceLanguagePage';
 import ConnectionsPage from './pages/ConnectionsPage';
 import ProjectVariablesPage from './pages/ProjectVariablesPage';
+import SuiteRunResultPage from './pages/SuiteRunResultPage';
 import { loadInstanceLocale } from './localization/i18n';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -71,6 +72,7 @@ function LocalizedRoutes() {
             <Route path="overview" element={<ProjectPage />} />
             <Route path="checks" element={<ProjectPage />} />
             <Route path="suites" element={<SuitesPage />} />
+            <Route path="suite-runs/:suiteRunId" element={<SuiteRunResultPage />} />
             <Route path="runs" element={<ProjectPage />} />
             <Route path="schedules" element={<ProjectPage />} />
             <Route path="environments" element={<ProjectPage />} />

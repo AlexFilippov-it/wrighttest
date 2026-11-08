@@ -1,5 +1,5 @@
 import prisma from '../prisma';
-import { decryptProjectVariableValue, encryptRunVariablesSnapshot } from '../services/project-variable-crypto';
+import { decryptProjectVariableValue, decryptRunVariablesSnapshot, encryptRunVariablesSnapshot } from '../services/project-variable-crypto';
 import { generateTestDataValue } from '../services/test-data-generators';
 import { testQueue } from './queue';
 
@@ -31,6 +31,10 @@ export async function prepareRunVariableSnapshot(runId: string) {
   });
   if (!run) throw new Error(`TestRun ${runId} not found.`);
   if (run.variablesSnapshot) return;
+
+  const runInputsSnapshot = run.runInputsSnapshot
+    ? decryptRunVariablesSnapshot(run.runInputsSnapshot) as { runInputs?: Record<string, unknown>; secretNames?: string[] }
+    : {};
 
   const projectVariables: Record<string, unknown> = {};
   const secretNames: string[] = [];
@@ -79,11 +83,18 @@ export async function prepareRunVariableSnapshot(runId: string) {
     name,
     secretNames.includes(name) || secretName(name) ? '••••••' : value
   ]));
-  const snapshot = encryptRunVariablesSnapshot({ projectVariables, environmentVariables, testDataVariables, secretNames: [...new Set(secretNames)], sources });
+  const completeSnapshot = encryptRunVariablesSnapshot({
+    projectVariables,
+    environmentVariables,
+    testDataVariables,
+    runInputs: runInputsSnapshot.runInputs ?? {},
+    secretNames: [...new Set([...secretNames, ...(runInputsSnapshot.secretNames ?? [])])],
+    sources
+  });
   await prisma.testRun.update({
     where: { id: run.id },
     data: {
-      variablesSnapshot: snapshot,
+      variablesSnapshot: completeSnapshot,
       ...(run.dataCaseVariables === null ? {} : { dataCaseVariables: safeDataCaseVariables as object })
     }
   });

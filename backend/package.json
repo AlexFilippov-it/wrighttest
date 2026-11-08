@@ -8,7 +8,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "dotenv -e ../.env -- prisma studio",
     "test:trace": "dotenv -e ../.env -- tsx --test tests/failed-run-trace.test.ts",
-    "test:unit": "dotenv -e ../.env -- tsx --test tests/*.test.ts",
+    "test:unit": "node scripts/test-with-isolated-db.mjs",
+    "test:unit:isolated": "tsx --test tests/*.test.ts",
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "prisma": {

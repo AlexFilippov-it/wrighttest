@@ -11,7 +11,6 @@ import {
 } from '../src/queue/batch-sequencer';
 import { runRoutes } from '../src/routes/runs';
 import { suiteRoutes } from '../src/routes/suites';
-import { DATA_DRIVEN_CASE_REQUIRED_ERROR } from '../src/utils/test-data';
 import { mergeRuntimeVariables } from '../src/utils/runtime-variables';
 import { decryptRunVariablesSnapshot } from '../src/services/project-variable-crypto';
 
@@ -695,7 +694,7 @@ test('run batch detail API enforces access and returns ordered runs without data
   }
 });
 
-test('suite run marks data-driven tests as failed without explicit selected case', async () => {
+test('suite run rejects data-driven checks without an explicitly selected enabled case', async () => {
   const { user, project } = await createProjectAccess();
   const app = await buildApp(user.id, user.email);
 
@@ -723,13 +722,9 @@ test('suite run marks data-driven tests as failed without explicit selected case
       payload: {}
     });
 
-    assert.equal(response.statusCode, 202);
-    const run = await prisma.testRun.findFirst({
-      where: { testId: dataDrivenTest.id },
-      orderBy: { startedAt: 'desc' }
-    });
-    assert.equal(run?.status, 'FAILED');
-    assert.equal(run?.error, DATA_DRIVEN_CASE_REQUIRED_ERROR);
+    assert.equal(response.statusCode, 400);
+    assert.match(response.json().error, /Choose an enabled Test Data case/);
+    assert.equal(await prisma.testRun.count({ where: { testId: dataDrivenTest.id } }), 0);
   } finally {
     await app.close();
     await cleanup(project.id, user.id);

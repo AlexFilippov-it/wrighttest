@@ -281,9 +281,34 @@ export interface Suite {
   name: string;
   projectId: string;
   testIds: string[];
+  executionMode: 'INDEPENDENT' | 'SEQUENTIAL';
+  executionConfig: {
+    orderedTestIds: string[];
+    mappings: Array<{
+      sourceTestId: string; outputVariable: string; targetTestId: string;
+      targetVariable: string; required: boolean; expectedType?: 'string' | 'number' | 'boolean' | 'json' | 'null';
+    }>;
+    dataCaseIndexes: Record<string, number>;
+  };
   createdAt: string;
   updatedAt: string;
   _count?: { schedules: number };
+}
+
+export interface SuiteRun {
+  id: string;
+  suiteId: string;
+  projectId: string;
+  suiteName: string;
+  executionMode: 'INDEPENDENT' | 'SEQUENTIAL';
+  status: 'PENDING' | 'RUNNING' | 'PASSED' | 'FAILED' | 'CANCELLED';
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  currentOrder: number;
+  outputMetadata: Array<{ sourceTestId: string; outputVariable: string; targetTestId: string; targetVariable: string; type: string; secret: boolean }>;
+  testRuns: Array<{ id: string; testId: string; suiteOrder: number; status: string; startedAt: string; finishedAt: string | null; durationMs: number | null; error: string | null; dataCaseName: string | null; dataCaseIndex: number | null; test: { name: string } }>;
 }
 
 export interface Environment {

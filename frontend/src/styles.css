@@ -132,3 +132,16 @@ a {
     padding-top: 4px;
   }
 }
+ .wt-project-variable-mobile { display: none; }
+
+@media (max-width: 767px) {
+  .wt-project-variable-desktop { display: none; }
+  .wt-project-variable-mobile { display: block; }
+  .wt-project-variable-mobile-card { width: 100%; min-width: 0; }
+  .wt-project-variable-mobile-card .ant-card-head-title { min-width: 0; overflow-wrap: anywhere; }
+  .wt-project-variable-mobile-card .ant-card-extra { max-width: 60%; padding-inline-start: 8px; }
+  .wt-project-variable-mobile-card dl { display: grid; gap: 12px; margin: 0; }
+  .wt-project-variable-mobile-card dl > div { min-width: 0; }
+  .wt-project-variable-mobile-card dt { color: var(--wt-color-text-muted, #667085); font-size: 12px; }
+  .wt-project-variable-mobile-card dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+}

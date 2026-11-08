@@ -13,6 +13,7 @@ import type { Step } from '../types/step';
 import { resolveBrowserUrl } from '../utils/runtime-url';
 import { resolveLocator } from '../utils/locator';
 import { isSecretVariableName, VariableContext, VariableEngineError } from '../utils/variable-context';
+import { completeSuiteChild, expireSuiteHandoffs, recoverSuiteRuns } from '../services/suite-runner';
 import { notifyRunResult } from '../services/notifier';
 import { getBrowserName, launchChromium } from '../utils/browser';
 import { hasAssertionSteps, validateStepRequirements } from '../utils/step-validation';
@@ -197,6 +198,7 @@ type RunStepResult = {
 
 let started = false;
 let testWorker: Worker<TestJobData> | null = null;
+let suiteRunCleanupTimer: NodeJS.Timeout | null = null;
 
 async function ensureDirectories() {
   await fs.mkdir(SCREENSHOTS_DIR, { recursive: true });
@@ -205,11 +207,22 @@ async function ensureDirectories() {
 
 async function runTest(job: Job<TestJobData>) {
   const { testRunId, testId } = job.data;
+  const runSnapshot = await prisma.testRun.findUnique({ where: { id: testRunId }, include: { suiteRun: { select: { status: true } } } });
+  if (!runSnapshot) throw new Error(`TestRun ${testRunId} not found`);
+  if (runSnapshot.status === 'PASSED' || runSnapshot.status === 'FAILED') return;
+  if (runSnapshot.suiteRun?.status === 'CANCELLED') {
+    await prisma.testRun.updateMany({
+      where: { id: testRunId, status: 'PENDING' },
+      data: { status: 'FAILED', error: 'Not started because the Suite Run was cancelled.', finishedAt: new Date(), durationMs: 0 }
+    });
+    return;
+  }
 
-  await prisma.testRun.update({
-    where: { id: testRunId },
-    data: { status: 'RUNNING' }
-  });
+  const claimed = await prisma.testRun.updateMany({ where: { id: testRunId, status: 'PENDING' }, data: { status: 'RUNNING' } });
+  if (claimed.count === 0) {
+    const latest = await prisma.testRun.findUnique({ where: { id: testRunId }, select: { status: true } });
+    if (latest?.status !== 'RUNNING') return;
+  }
   await markBatchRunning(testRunId);
 
   const test = await prisma.test.findUnique({ where: { id: testId } });
@@ -217,12 +230,7 @@ async function runTest(job: Job<TestJobData>) {
     throw new Error(`Test ${testId} not found`);
   }
 
-  const runSnapshot = await prisma.testRun.findUnique({ where: { id: testRunId } });
-  if (!runSnapshot) {
-    throw new Error(`TestRun ${testRunId} not found`);
-  }
-
-  let variableSnapshot: { projectVariables?: Record<string, unknown>; environmentVariables?: Record<string, unknown>; testDataVariables?: Record<string, unknown>; secretNames?: string[] } = {};
+  let variableSnapshot: { projectVariables?: Record<string, unknown>; environmentVariables?: Record<string, unknown>; testDataVariables?: Record<string, unknown>; runInputs?: Record<string, unknown>; secretNames?: string[] } = {};
   variableSnapshot.testDataVariables = (runSnapshot.dataCaseVariables ?? {}) as Record<string, unknown>;
   if (runSnapshot.variablesSnapshot) {
     variableSnapshot = decryptRunVariablesSnapshot(runSnapshot.variablesSnapshot) as typeof variableSnapshot;
@@ -280,6 +288,7 @@ async function runTest(job: Job<TestJobData>) {
       projectVariables: variableSnapshot.projectVariables,
       environmentVariables: variableSnapshot.environmentVariables,
       testDataVariables: variableSnapshot.testDataVariables,
+      runInputs: variableSnapshot.runInputs,
       secretNames: variableSnapshot.secretNames
     });
     if (variableContext.getMetadata().some((entry) => entry.secret)) {
@@ -619,9 +628,7 @@ async function runTest(job: Job<TestJobData>) {
     });
   }
 
-  await prisma.testRun.update({
-    where: { id: testRunId },
-    data: {
+  const completionData = {
       status: runError ? 'FAILED' : 'PASSED',
       finishedAt: new Date(),
       durationMs: Date.now() - startedAt,
@@ -632,8 +639,8 @@ async function runTest(job: Job<TestJobData>) {
       error: runError ? runError.message : null,
       tracePath: tracePath ? `${testRunId}.zip` : null,
       traceUnavailableReason
-    }
-  });
+    } as const;
+  await completeSuiteChild(testRunId, completionData.status, variableContext.getRuntimeEntries(), completionData);
 
   const finalRun = await prisma.testRun.findUnique({ where: { id: testRunId } });
   if (finalRun && !isAuthRefresh) {
@@ -656,6 +663,11 @@ export async function startTestWorker() {
   started = true;
 
   await ensureDirectories();
+  await recoverSuiteRuns();
+  suiteRunCleanupTimer = setInterval(() => {
+    void expireSuiteHandoffs().catch((error) => console.error('[Worker] Could not expire suite handoff values:', error));
+  }, 10 * 60 * 1000);
+  suiteRunCleanupTimer.unref();
 
   testWorker = new Worker<TestJobData>('test-runs', runTest, {
     connection: redis,
@@ -674,6 +686,8 @@ export async function startTestWorker() {
 
 export async function stopTestWorker() {
   if (!testWorker) return;
+  if (suiteRunCleanupTimer) clearInterval(suiteRunCleanupTimer);
+  suiteRunCleanupTimer = null;
   await testWorker.close();
   testWorker = null;
   started = false;

@@ -382,10 +382,25 @@ export function registerWrightTestTools(server: McpServer, api: WrightTestApi) {
   });
 
   server.registerTool('create_suite', {
-    description: `Create a suite with one or more project check IDs. Requires ${WRITE_ROLES}.`,
-    inputSchema: { projectId: z.string().min(1), name: z.string().min(1).max(100), checkIds: z.array(z.string().min(1)).min(1) }
-  }, async ({ projectId, name, checkIds }) => {
-    try { return result(await api.request(`/projects/${encodeURIComponent(projectId)}/suites`, { method: 'POST', body: jsonBody({ name, testIds: checkIds }) })); }
+    description: `Create a suite with ordered checks, execution mode, explicit output mappings, and optional Test Data case selections. Requires ${WRITE_ROLES}.`,
+    inputSchema: {
+      projectId: z.string().min(1), name: z.string().min(1).max(100), checkIds: z.array(z.string().min(1)).min(1),
+      executionMode: z.enum(['INDEPENDENT', 'SEQUENTIAL']).optional(),
+      orderedCheckIds: z.array(z.string().min(1)).optional(),
+      dataCaseIndexes: z.record(z.string(), z.number().int().nonnegative()).optional(),
+      mappings: z.array(z.object({
+        sourceTestId: z.string().min(1), outputVariable: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/),
+        targetTestId: z.string().min(1), targetVariable: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/),
+        required: z.boolean().default(true), expectedType: z.enum(['string', 'number', 'boolean', 'json', 'null']).optional()
+      })).optional()
+    }
+  }, async ({ projectId, name, checkIds, executionMode, orderedCheckIds, dataCaseIndexes, mappings }) => {
+    try {
+      const testIds = orderedCheckIds ?? checkIds;
+      return result(await api.request(`/projects/${encodeURIComponent(projectId)}/suites`, {
+        method: 'POST', body: jsonBody({ name, testIds, executionMode: executionMode ?? 'INDEPENDENT', executionConfig: { orderedTestIds: testIds, mappings: mappings ?? [], dataCaseIndexes: dataCaseIndexes ?? {} } })
+      }));
+    }
     catch (error) { return fail(error); }
   });
 
@@ -394,11 +409,15 @@ export function registerWrightTestTools(server: McpServer, api: WrightTestApi) {
     inputSchema: { projectId: z.string().min(1), suiteId: z.string().min(1), checkId: z.string().min(1) }
   }, async ({ projectId, suiteId, checkId }) => {
     try {
-      const suites = await api.request<{ id: string; testIds: unknown }[]>(`/projects/${encodeURIComponent(projectId)}/suites`);
+      const suites = await api.request<{ id: string; testIds: unknown; executionConfig?: { orderedTestIds?: string[]; mappings?: unknown[]; dataCaseIndexes?: Record<string, number> } }[]>(`/projects/${encodeURIComponent(projectId)}/suites`);
       const suite = suites.find((item) => item.id === suiteId);
       if (!suite) throw new Error('Suite not found in project');
       const testIds = Array.isArray(suite.testIds) ? suite.testIds.filter((id): id is string => typeof id === 'string') : [];
-      const updated = await api.request(`/suites/${encodeURIComponent(suiteId)}`, { method: 'PATCH', body: jsonBody({ testIds: [...new Set([...testIds, checkId])] }) });
+      const orderedTestIds = [...new Set([...(suite.executionConfig?.orderedTestIds ?? testIds), checkId])];
+      const updated = await api.request(`/suites/${encodeURIComponent(suiteId)}`, { method: 'PATCH', body: jsonBody({
+        testIds: orderedTestIds,
+        executionConfig: { orderedTestIds, mappings: suite.executionConfig?.mappings ?? [], dataCaseIndexes: suite.executionConfig?.dataCaseIndexes ?? {} }
+      }) });
       return result(updated);
     } catch (error) { return fail(error); }
   });
@@ -412,10 +431,26 @@ export function registerWrightTestTools(server: McpServer, api: WrightTestApi) {
   });
 
   server.registerTool('run_suite', {
-    description: `Queue a suite run and return immediately with run IDs. Requires ${WRITE_ROLES}.`,
-    inputSchema: { suiteId: z.string().min(1), environmentId: z.string().optional() }
-  }, async ({ suiteId, environmentId }) => {
-    try { return result(await api.request(`/suites/${encodeURIComponent(suiteId)}/run`, { method: 'POST', body: jsonBody({ environmentId }) })); }
+    description: `Queue a suite run and return its suiteRunId immediately. Sequential suites use their saved explicit variable mappings and data case selections. Requires ${WRITE_ROLES}.`,
+    inputSchema: { suiteId: z.string().min(1), environmentId: z.string().optional(), dataCaseIndexes: z.record(z.string(), z.number().int().nonnegative()).optional() }
+  }, async ({ suiteId, environmentId, dataCaseIndexes }) => {
+    try { return result(await api.request(`/suites/${encodeURIComponent(suiteId)}/run`, { method: 'POST', body: jsonBody({ environmentId, dataCaseIndexes }) })); }
+    catch (error) { return fail(error); }
+  });
+
+  server.registerTool('get_suite_run', {
+    description: `Get suite run state, ordered child check runs, safe handoff metadata, and errors. Variable values, including secrets, are never returned. Requires ${READ_ROLES}.`,
+    inputSchema: { suiteRunId: z.string().min(1) }
+  }, async ({ suiteRunId }) => {
+    try { return result(await api.request(`/suite-runs/${encodeURIComponent(suiteRunId)}`)); }
+    catch (error) { return fail(error); }
+  });
+
+  server.registerTool('cancel_suite_run', {
+    description: `Cancel a pending or running suite. An already-running check may finish, but no subsequent sequential check will be started. Requires ${WRITE_ROLES}.`,
+    inputSchema: { suiteRunId: z.string().min(1) }
+  }, async ({ suiteRunId }) => {
+    try { return result(await api.request(`/suite-runs/${encodeURIComponent(suiteRunId)}/cancel`, { method: 'POST', body: jsonBody({}) })); }
     catch (error) { return fail(error); }
   });
 
