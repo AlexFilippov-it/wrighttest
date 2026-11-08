@@ -25,6 +25,7 @@ import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import UserMenu from '../components/UserMenu';
 import RunStatusBadge from '../components/RunStatusBadge';
+import StatusBadge from '../design-system/StatusBadge';
 import '../components/database-testing.css';
 import type { RunStatus, Step, StepAction, TestRun } from '../types';
 import { BACKEND_URL } from '../utils/runtimeConfig';
@@ -670,11 +671,9 @@ export default function RunResultPage() {
                       dataIndex: 'status',
                       width: 120,
                       render: (status: StepResultRow['status']) => {
-                        const color =
-                          status === 'passed' ? 'green' : status === 'failed' ? 'red' : 'default';
                         const label =
                           status === 'passed' ? t('common.passed') : status === 'failed' ? t('common.failed') : t('status.pending');
-                        return <Tag color={color}>{label}</Tag>;
+                        return <StatusBadge status={status} label={label} />;
                       }
                     },
                     {

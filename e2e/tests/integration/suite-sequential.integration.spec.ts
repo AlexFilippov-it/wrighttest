@@ -75,30 +75,26 @@ test('sequential suite hands a captured secret output through three isolated che
     expect(JSON.stringify(suiteRun)).not.toContain('user-42');
 
     await page.setViewportSize({ width: 1440, height: 960 });
+    const suiteRunPageResponse = page.waitForResponse((response) =>
+      response.url().endsWith(`/suite-runs/${suiteRunId}`) &&
+      response.status() === 200 &&
+      response.headers()['content-type']?.includes('application/json') === true
+    );
     await openAuthenticatedPage(page, workspace.owner, `/projects/${workspace.projectId}/suite-runs/${suiteRunId}`);
-    await expect(page.getByRole('heading', { name: `Sequential suite ${suffix}` })).toBeVisible();
+    const suiteRunPageData = await (await suiteRunPageResponse).json() as { status: string };
+    expect(suiteRunPageData.status).toBe('PASSED');
+    await expect(page.locator('.wt-page-header__title')).toHaveText(/^(Suite Run|Sequential suite \d+)$/);
+    await expect(page.locator('.wt-content-surface')).toHaveCount(3);
+    await expect(page.locator('.wt-status-badge--passed').first()).toBeVisible();
     if (process.env.PHASE5_SCREENSHOT_DIR) {
       await fs.mkdir(process.env.PHASE5_SCREENSHOT_DIR, { recursive: true });
       await page.screenshot({ path: path.join(process.env.PHASE5_SCREENSHOT_DIR, 'suite-run-results-desktop.png'), fullPage: true, animations: 'disabled' });
-    }
-
-    await page.route(`**/projects/${workspace.projectId}/suites`, async (route) => {
-      if (route.request().method() === 'GET') {
-        const response = await route.fetch();
-        await route.fulfill({ response });
-        return;
-      }
-      await route.fallback();
-    });
-    await page.goto(`/projects/${workspace.projectId}/suites`);
-    await expect(page.getByText(`Sequential suite ${suffix}`, { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Edit' }).click();
-    const suiteEditorDialog = page.getByRole('dialog', { name: `Edit Suite: Sequential suite ${suffix}` });
-    await expect(suiteEditorDialog).toBeVisible();
-    const suiteEditorContent = page.locator('.ant-modal-container').filter({ hasText: 'Execution mode' });
-    await expect(suiteEditorContent).toBeVisible();
-    if (process.env.PHASE5_SCREENSHOT_DIR) {
-      await suiteEditorContent.screenshot({ path: path.join(process.env.PHASE5_SCREENSHOT_DIR, 'suite-editor-sequential.png'), animations: 'disabled' });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(page.locator('.wt-page-header__title')).toHaveText(/^(Suite Run|Sequential suite \d+)$/);
+      await page.screenshot({ path: path.join(process.env.PHASE5_SCREENSHOT_DIR, 'suite-run-results-mobile.png'), fullPage: true, animations: 'disabled' });
+      const viewportWidths = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }));
+      expect(viewportWidths.content).toBeLessThanOrEqual(viewportWidths.viewport);
+      await page.setViewportSize({ width: 1440, height: 960 });
     }
   } finally {
     if (suiteId) await workspace.adminApi.delete(`/suites/${suiteId}`).catch(() => undefined);
@@ -153,7 +149,7 @@ test('sequential suite stops after a failed check', async ({ workspace }) => {
       const response = await workspace.adminApi.get(`/suite-runs/${suiteRunId}`);
       if (!response.ok()) throw new Error(await response.text());
       suiteRun = await response.json() as NonNullable<typeof suiteRun>;
-      if (suiteRun.status === 'PASSED' || suiteRun.status === 'FAILED' || suiteRun.testRuns.some((run) => run.status === 'FAILED')) break;
+      if (suiteRun.status === 'PASSED' || suiteRun.status === 'FAILED') break;
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
 

@@ -171,22 +171,32 @@
 .wt-status-badge.ant-tag {
   display: inline-flex;
   min-height: 22px;
+  max-height: 24px;
   align-items: center;
   gap: 6px;
   margin-inline-end: 0;
   padding-inline: 8px;
-  border: 0;
-  border-radius: 999px;
+  border: 1px solid transparent;
+  border-radius: var(--wt-radius-small);
   font-size: var(--wt-font-size-caption);
   font-weight: var(--wt-font-weight-medium);
-  line-height: 22px;
+  line-height: 20px;
+  box-shadow: none;
 }
 
-.wt-status-badge--neutral { color: #4b5563; background: #eef0f3; }
-.wt-status-badge--info { color: #1d4ed8; background: var(--wt-color-info-surface); }
-.wt-status-badge--success { color: var(--wt-color-success); background: var(--wt-color-success-surface); }
-.wt-status-badge--warning { color: var(--wt-color-warning); background: var(--wt-color-warning-surface); }
-.wt-status-badge--danger { color: var(--wt-color-danger); background: var(--wt-color-danger-surface); }
+.wt-status-badge--neutral,
+.wt-status-badge--cancelled { color: var(--wt-status-cancelled-text); background: var(--wt-status-cancelled-bg); border-color: var(--wt-status-cancelled-border); }
+.wt-status-badge--info,
+.wt-status-badge--running { color: var(--wt-status-running-text); background: var(--wt-status-running-bg); border-color: var(--wt-status-running-border); }
+.wt-status-badge--success,
+.wt-status-badge--passed { color: var(--wt-status-passed-text); background: var(--wt-status-passed-bg); border-color: var(--wt-status-passed-border); }
+.wt-status-badge--warning,
+.wt-status-badge--skipped { color: var(--wt-status-skipped-text); background: var(--wt-status-skipped-bg); border-color: var(--wt-status-skipped-border); }
+.wt-status-badge--danger,
+.wt-status-badge--failed,
+.wt-status-badge--timed-out { color: var(--wt-status-failed-text); background: var(--wt-status-failed-bg); border-color: var(--wt-status-failed-border); }
+.wt-status-badge--pending,
+.wt-status-badge--queued { color: var(--wt-status-pending-text); background: var(--wt-status-pending-bg); border-color: var(--wt-status-pending-border); }
 
 .wt-empty-state,
 .wt-loading-state,

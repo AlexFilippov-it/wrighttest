@@ -24,6 +24,25 @@
   --wt-color-disabled: #aab2bd;
   --wt-color-disabled-surface: #f1f3f5;
 
+  --wt-status-passed-bg: #ECFDF3;
+  --wt-status-passed-text: #15803D;
+  --wt-status-passed-border: #BBF7D0;
+  --wt-status-failed-bg: #FEF2F2;
+  --wt-status-failed-text: #B91C1C;
+  --wt-status-failed-border: #FECACA;
+  --wt-status-running-bg: #EFF6FF;
+  --wt-status-running-text: #1D4ED8;
+  --wt-status-running-border: #BFDBFE;
+  --wt-status-pending-bg: #F8FAFC;
+  --wt-status-pending-text: #64748B;
+  --wt-status-pending-border: #E2E8F0;
+  --wt-status-cancelled-bg: #F3F4F6;
+  --wt-status-cancelled-text: #6B7280;
+  --wt-status-cancelled-border: #D1D5DB;
+  --wt-status-skipped-bg: #FFFBEB;
+  --wt-status-skipped-text: #B45309;
+  --wt-status-skipped-border: #FDE68A;
+
   --wt-font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --wt-font-size-caption: 12px;
   --wt-font-size-small: 13px;
