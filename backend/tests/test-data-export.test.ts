@@ -24,3 +24,16 @@ test('export/import preserves runtime generator steps and downstream variable re
     { action: 'click', selector: 'page.getByRole(\'button\', { name: "Continue as {{USERNAME}}" })' }
   ]);
 });
+
+test('export/import round-trips browser capture and SQL capture configuration without runtime values', () => {
+  const source: Step[] = [
+    { action: 'captureValue', captureSource: 'attribute', selector: '#account', attributeName: 'data-id', saveAs: 'ACCOUNT_ID', secret: false, replace: true },
+    { action: 'executeSql', databaseConnectionId: 'db-1', sql: 'SELECT id FROM accounts WHERE id = :id', parameters: { id: '{{ACCOUNT_ID}}' }, saveResultAs: 'DB_ID', saveResultType: 'column', saveRowIndex: 0, saveColumn: 'id', secret: true }
+  ];
+  const spec = exportToSpec(source, { testName: 'capture flow' });
+  assert.match(spec, /__wtCapture/);
+  assert.match(spec, /WRIGHTTEST_STEP/);
+  const parsed = parsePlaywrightSpec(spec);
+  assert.deepEqual(parsed.steps, source);
+  assert.doesNotMatch(spec, /captured runtime value/i);
+});

@@ -280,5 +280,5 @@ export function generateTestDataValue(generator: string | undefined, options: Ge
 }
 
 export function isSecretGeneratorStep(step: Pick<Step, 'generator' | 'secret' | 'saveAs'>) {
-  return step.generator === 'password' || Boolean(step.secret) || /(pass(word)?|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i.test(step.saveAs ?? '');
+  return step.generator === 'password' || Boolean(step.secret) || /(pass(word)?|secret|token|api[_-]?key|authorization|auth[_-]?code|verification[_-]?code|otp|cookie|credential|private[_-]?key)/i.test(step.saveAs ?? '');
 }

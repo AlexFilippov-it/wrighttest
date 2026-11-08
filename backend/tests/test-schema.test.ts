@@ -43,3 +43,17 @@ test('database result can save the first returned column or an explicitly select
   assert.equal(StepSchema.safeParse({ ...base, saveResultAs: 'ORDER_ID', saveColumn: 'id' }).success, true);
   assert.equal(StepSchema.safeParse({ ...base, saveResultAs: 'ORDER_ID', saveColumn: '' }).success, false);
 });
+
+test('capture value validates source, selector, attribute and runtime variable name', () => {
+  assert.equal(StepSchema.safeParse({ action: 'captureValue', captureSource: 'url', saveAs: 'CURRENT_URL' }).success, true);
+  assert.equal(StepSchema.safeParse({ action: 'captureValue', captureSource: 'text', selector: '#order-id', saveAs: 'ORDER_ID' }).success, true);
+  assert.equal(StepSchema.safeParse({ action: 'captureValue', captureSource: 'attribute', selector: '#order', saveAs: 'ORDER_ID' }).success, false);
+  assert.equal(StepSchema.safeParse({ action: 'captureValue', captureSource: 'text', saveAs: 'bad-name' }).success, false);
+});
+
+test('SQL save modes accept row count and affected rows while preserving legacy fields', () => {
+  const base = { action: 'executeSql', databaseConnectionId: 'connection-1', sql: 'SELECT id FROM orders' };
+  assert.equal(StepSchema.safeParse({ ...base, saveResultAs: 'ROW_COUNT', saveResultType: 'rowCount' }).success, true);
+  assert.equal(StepSchema.safeParse({ ...base, saveResultAs: 'CHANGED', saveResultType: 'affectedRows' }).success, true);
+  assert.equal(StepSchema.safeParse({ ...base, saveResultAs: 'ORDER_ID', saveColumn: 'id', saveRowIndex: 2 }).success, true);
+});

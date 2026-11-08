@@ -135,6 +135,12 @@ function validateRequiredStepFields(step: Step, t: (key: string) => string): Ste
   }
 
   switch (step.action) {
+    case 'captureValue':
+      if (!step.captureSource) return { message: t('capture.validation.sourceRequired') };
+      if (!step.saveAs || !/^[A-Z][A-Z0-9_]{0,99}$/.test(step.saveAs)) return { message: t('testData.validation.variableName') };
+      if (step.captureSource !== 'url' && !step.selector?.trim()) return { message: t('step.validation.targetRequired'), selector: t('step.validation.targetRequired') };
+      if (step.captureSource === 'attribute' && !step.attributeName?.trim()) return { message: t('capture.validation.attributeRequired') };
+      return null;
     case 'generateData':
       if (!step.generator) return { message: t('testData.validation.generatorRequired') };
       if (!step.saveAs || !/^[A-Z][A-Z0-9_]{0,99}$/.test(step.saveAs)) return { message: t('testData.validation.variableName') };
@@ -1034,6 +1040,12 @@ export default function TestEditorPage() {
     () => getEnabledTestDataCaseOptions(currentApiTestData),
     [currentApiTestData]
   );
+  const testDataVariableNames = useMemo(() => {
+    if (!useTestData || dataCaseOptions.length === 0) return [];
+    const enabledCases = editableTestData.filter((testCase) => testCase.enabled);
+    const firstCaseNames = new Set(enabledCases[0]?.variables.map((variable) => variable.key).filter(Boolean) ?? []);
+    return [...firstCaseNames].filter((name) => enabledCases.every((testCase) => testCase.variables.some((variable) => variable.key === name)));
+  }, [dataCaseOptions.length, editableTestData, useTestData]);
   const effectiveSelectedDataCaseIndex = dataCaseOptions.length === 1
     ? dataCaseOptions[0].value
     : selectedDataCaseIndex;
@@ -1399,6 +1411,7 @@ export default function TestEditorPage() {
                     projectId={currentProjectId}
                     defaultDatabaseConnectionId={!isEdit ? searchParams.get('databaseConnectionId') ?? undefined : undefined}
                     steps={steps}
+                    testDataVariableNames={testDataVariableNames}
                     onChange={handleStepsChange}
                     readOnly={isReadOnly}
                     stepIssues={stepIssues}

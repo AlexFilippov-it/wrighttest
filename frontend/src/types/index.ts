@@ -20,13 +20,16 @@ export type StepAction =
   | 'waitForSelector'
   | 'executeSql'
   | 'assertDatabaseResult'
-  | 'generateData';
+  | 'generateData'
+  | 'captureValue';
 
 export interface Step {
   action: StepAction;
   generator?: 'username' | 'email' | 'password' | 'uuid' | 'string' | 'number' | 'boolean' | 'date' | 'timestamp' | 'pattern';
   generatorOptions?: Record<string, string | number | boolean>;
   saveAs?: string;
+  captureSource?: 'text' | 'input' | 'attribute' | 'url' | 'count';
+  attributeName?: string;
   secret?: boolean;
   replace?: boolean;
   selector?: string;
@@ -46,6 +49,7 @@ export interface Step {
   };
   waitForResult?: { timeoutMs: number; pollIntervalMs: number };
   saveResultAs?: string;
+  saveResultType?: 'column' | 'rowCount' | 'affectedRows';
   saveRowIndex?: number;
   saveColumn?: string;
   captureRows?: boolean;
@@ -445,10 +449,11 @@ export interface TestRun {
     screenshot?: string | null;
     error?: string | null;
     generated?: { variableName: string; generator: string; secret: boolean; value?: string | number | boolean };
+    captured?: { variableName: string; source: string; type: string; secret: boolean; createdByStep: number; value?: string | number | boolean | null | Record<string, unknown> | unknown[] };
     database?: {
       connectionName: string;
       rowCount: number;
-      affectedRows: number;
+      affectedRows?: number;
       rowLimitReached: boolean;
       columns: string[];
       rows?: Record<string, string | number | boolean | null>[];

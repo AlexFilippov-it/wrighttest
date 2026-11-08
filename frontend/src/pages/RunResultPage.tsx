@@ -29,6 +29,7 @@ import '../components/database-testing.css';
 import type { RunStatus, Step, StepAction, TestRun } from '../types';
 import { BACKEND_URL } from '../utils/runtimeConfig';
 import { useAppShell } from '../shell/ShellContext';
+import { isSecretVariableName } from '../utils/secret-variable';
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -44,6 +45,7 @@ type StepResultRow = {
   error?: string | null;
   database?: NonNullable<NonNullable<TestRun['stepResults']>[number]['database']>;
   generated?: NonNullable<NonNullable<TestRun['stepResults']>[number]['generated']>;
+  captured?: NonNullable<NonNullable<TestRun['stepResults']>[number]['captured']>;
   stepDefinition?: Step;
 };
 
@@ -105,6 +107,7 @@ function buildStepRows(run: TestRun, t: (key: string) => string): StepResultRow[
       error: stepResult.error ?? undefined,
       database: stepResult.database,
       generated: stepResult.generated,
+      captured: stepResult.captured,
       stepDefinition: run.test?.steps?.[stepResult.index]
     }));
   }
@@ -219,6 +222,36 @@ export default function RunResultPage() {
     : undefined;
 
   const stepRows = useMemo(() => (run ? buildStepRows(run, t) : []), [run, t]);
+  const variableRows = useMemo(() => {
+    if (!run) return [];
+    const rows: Array<{ key: string; name: string; source: string; type: string; step?: number; secret: boolean; value?: string }> = [];
+    if (run.dataCaseName) rows.push({ key: 'case', name: t('capture.results.dataCase'), source: run.dataCaseName, type: '—', secret: false });
+    for (const [name, value] of Object.entries(run.dataCaseVariables ?? {})) {
+      const secret = isSecretVariableName(name);
+      rows.push({ key: `data:${name}`, name, source: t('capture.results.dataCase'), type: value === null ? 'null' : typeof value, secret, value: secret ? '••••••••' : String(value ?? '—') });
+    }
+    for (const result of run.stepResults ?? []) {
+      if (result.generated) rows.push({
+        key: `generated:${result.index}:${result.generated.variableName}`,
+        name: result.generated.variableName,
+        source: t('capture.results.generated'),
+        type: typeof result.generated.value,
+        step: result.index + 1,
+        secret: result.generated.secret,
+        value: result.generated.secret ? '••••••••' : String(result.generated.value ?? '—')
+      });
+      if (result.captured) rows.push({
+        key: `captured:${result.index}:${result.captured.variableName}`,
+        name: result.captured.variableName,
+        source: result.captured.source === 'sql' ? t('connections.sqlQuery') : t(`capture.source.${result.captured.source}`),
+        type: result.captured.type,
+        step: result.captured.createdByStep,
+        secret: result.captured.secret,
+        value: result.captured.secret ? '••••••••' : result.captured.value === null ? 'null' : typeof result.captured.value === 'object' ? JSON.stringify(result.captured.value) : String(result.captured.value ?? '—')
+      });
+    }
+    return rows;
+  }, [run, t]);
 
   const failedStepIndex = useMemo(() => {
     if (!run) return null;
@@ -397,6 +430,26 @@ export default function RunResultPage() {
             </Row>
           </Col>
 
+          {variableRows.length > 0 && <Col span={24}>
+            <Card title={t('capture.results.title')}>
+              <Table
+                size="small"
+                pagination={false}
+                rowKey="key"
+                dataSource={variableRows}
+                scroll={{ x: true }}
+                columns={[
+                  { title: t('capture.results.name'), dataIndex: 'name' },
+                  { title: t('capture.results.source'), dataIndex: 'source' },
+                  { title: t('capture.results.type'), dataIndex: 'type' },
+                  { title: t('capture.results.step'), dataIndex: 'step', render: (value?: number) => value ?? '—' },
+                  { title: t('capture.results.secret'), dataIndex: 'secret', render: (value: boolean) => value ? t('testData.yes') : t('testData.no') },
+                  { title: t('capture.results.value'), dataIndex: 'value', render: (value?: string) => value ?? '—' }
+                ]}
+              />
+            </Card>
+          </Col>}
+
           {run?.status === 'FAILED' && (
             <Col span={24}>
               <Card
@@ -521,6 +574,17 @@ export default function RunResultPage() {
                             { key: 'value', label: t('testData.value'), children: record.generated.secret ? '••••••••' : String(record.generated.value ?? '—') }
                           ]} />
                         </div>}
+                        {record.captured && <div>
+                          <Text type="secondary">{t('capture.results.captured')}</Text>
+                          <Descriptions size="small" column={{ xs: 1, sm: 2 }} items={[
+                            { key: 'variable', label: t('capture.results.name'), children: `{{${record.captured.variableName}}}` },
+                            { key: 'source', label: t('capture.results.source'), children: record.captured.source === 'sql' ? t('connections.sqlQuery') : t(`capture.source.${record.captured.source}`) },
+                            { key: 'type', label: t('capture.results.type'), children: record.captured.type },
+                            { key: 'step', label: t('capture.results.step'), children: record.captured.createdByStep },
+                            { key: 'secret', label: t('capture.results.secret'), children: record.captured.secret ? t('testData.yes') : t('testData.no') },
+                            { key: 'value', label: t('capture.results.value'), children: record.captured.secret ? '••••••••' : record.captured.value === null ? 'null' : typeof record.captured.value === 'object' ? JSON.stringify(record.captured.value) : String(record.captured.value ?? '—') }
+                          ]} />
+                        </div>}
                         {step?.sql && <div>
                           <Text type="secondary">{t('connections.sqlQuery')}</Text>
                           <pre className="wt-run-sql-query">{step.sql}</pre>
@@ -556,7 +620,7 @@ export default function RunResultPage() {
                         {record.error && <Alert type="error" showIcon message={record.error} />}
                       </div>;
                     },
-                    rowExpandable: (record) => Boolean(record && (record.stepDefinition?.action === 'executeSql' || record.database || record.stepDefinition?.sql))
+                    rowExpandable: (record) => Boolean(record && (record.captured || record.stepDefinition?.action === 'executeSql' || record.database || record.stepDefinition?.sql))
                   }}
                   columns={[
                     {

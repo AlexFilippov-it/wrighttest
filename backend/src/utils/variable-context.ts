@@ -37,9 +37,13 @@ export type VariableEngineErrorOptions = {
 const VARIABLE_NAME = /^\w{1,100}$/;
 const TEMPLATE = /(\\)?\{\{(\w+)\}\}/g;
 const EXACT_TEMPLATE = /^\{\{(\w+)\}\}$/;
-const SECRET_NAME = /(pass(word)?|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i;
+const SECRET_NAME = /(pass(word)?|secret|token|api[_-]?key|authorization|auth[_-]?code|verification[_-]?code|otp|cookie|credential|private[_-]?key)/i;
 const MAX_VALUE_LENGTH = 10_000;
 const RESERVED_RUNTIME_NAMES = new Set(['RUN_ID', 'SUITE_RUN_ID', 'CURRENT_DATE']);
+
+export function isSecretVariableName(name: string) {
+  return SECRET_NAME.test(name);
+}
 
 export class VariableEngineError extends Error {
   readonly code: VariableEngineErrorCode;

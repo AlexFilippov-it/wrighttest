@@ -17,10 +17,13 @@ export interface Step {
     | 'waitForSelector'
     | 'executeSql'
     | 'assertDatabaseResult'
-    | 'generateData';
+    | 'generateData'
+    | 'captureValue';
   generator?: 'username' | 'email' | 'password' | 'uuid' | 'string' | 'number' | 'boolean' | 'date' | 'timestamp' | 'pattern';
   generatorOptions?: Record<string, string | number | boolean>;
   saveAs?: string;
+  captureSource?: 'text' | 'input' | 'attribute' | 'url' | 'count';
+  attributeName?: string;
   secret?: boolean;
   replace?: boolean;
   selector?: string;
@@ -43,6 +46,7 @@ export interface Step {
     pollIntervalMs: number;
   };
   saveResultAs?: string;
+  saveResultType?: 'column' | 'rowCount' | 'affectedRows';
   saveRowIndex?: number;
   saveColumn?: string;
   captureRows?: boolean;

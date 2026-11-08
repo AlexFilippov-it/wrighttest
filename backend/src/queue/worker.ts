@@ -1,5 +1,6 @@
 import '../setup-playwright-env';
 import { Worker, Job } from 'bullmq';
+import type { Prisma } from '@prisma/client';
 import { devices, type Page } from 'playwright';
 import { expect } from '@playwright/test';
 import path from 'node:path';
@@ -11,7 +12,7 @@ import { getTestWorkerConcurrency, markBatchRunning, updateBatchAfterRun } from 
 import type { Step } from '../types/step';
 import { resolveBrowserUrl } from '../utils/runtime-url';
 import { resolveLocator } from '../utils/locator';
-import { VariableContext, VariableEngineError } from '../utils/variable-context';
+import { isSecretVariableName, VariableContext, VariableEngineError } from '../utils/variable-context';
 import { notifyRunResult } from '../services/notifier';
 import { getBrowserName, launchChromium } from '../utils/browser';
 import { hasAssertionSteps, validateStepRequirements } from '../utils/step-validation';
@@ -21,6 +22,7 @@ import {
   resolveAuthStateForExecution
 } from '../services/auth-state';
 import { executeDatabaseStep, openDatabaseConnection, type SqlExecutionSummary, type SqlSession } from '../services/database-connections';
+import { captureBrowserValue } from '../services/value-capture';
 import { generateTestDataValue, isSecretGeneratorStep } from '../services/test-data-generators';
 import {
   buildActionCandidates,
@@ -183,6 +185,7 @@ type RunStepResult = {
   error?: string | null;
   database?: SqlExecutionSummary;
   generated?: { variableName: string; generator: string; secret: boolean; value?: string | number | boolean };
+  captured?: { variableName: string; source: NonNullable<Step['captureSource']> | 'sql'; type: string; secret: boolean; createdByStep: number; value?: string | number | boolean | null | Record<string, unknown> | unknown[] };
   variableError?: {
     code: string;
     variableName?: string;
@@ -253,10 +256,14 @@ async function runTest(job: Job<TestJobData>) {
   let tracePath: string | null = null;
   let traceUnavailableReason: string | null = null;
   let runError: Error | null = null;
-  const containsGeneratedSecret = steps.some((step) => step.action === 'generateData' && isSecretGeneratorStep(step));
-  if (containsGeneratedSecret) {
-    traceUnavailableReason = 'Trace and screenshots are omitted for runs that generate secret values.';
-  }
+  let omitArtifactsForSecrets = steps.some((step) =>
+    (step.action === 'generateData' && (isSecretGeneratorStep(step) || isSecretVariableName(step.saveAs ?? ''))) ||
+    step.action === 'captureValue' ||
+    (step.action === 'executeSql' && Boolean(step.saveResultAs)) ||
+    step.secret === true ||
+    (Boolean(step.saveResultAs) && isSecretVariableName(step.saveResultAs ?? ''))
+  );
+  if (omitArtifactsForSecrets) traceUnavailableReason = 'Trace and screenshots are omitted for runs that may capture secret values.';
   const databaseSessions = new Map<string, { session: SqlSession; name: string; accessMode: 'READ_ONLY' | 'READ_WRITE' }>();
 
   console.log(`[Worker] Using ${getBrowserName()} for test run ${testRunId}`);
@@ -275,6 +282,10 @@ async function runTest(job: Job<TestJobData>) {
       environmentVariables,
       testDataVariables: dataCaseVariables
     });
+    if (variableContext.getMetadata().some((entry) => entry.secret)) {
+      omitArtifactsForSecrets = true;
+      traceUnavailableReason = 'Trace and screenshots are omitted for runs containing secret variables.';
+    }
     if (isAuthRefresh && !hasAssertionSteps(steps)) {
       throw new Error(
         'Authentication check must contain at least one assertion that confirms login succeeded, such as Assert URL or Assert visible.'
@@ -292,7 +303,7 @@ async function runTest(job: Job<TestJobData>) {
       ...deviceConfig,
       ...(storageState ? { storageState } : {})
     });
-    if (!containsGeneratedSecret) {
+    if (!omitArtifactsForSecrets) {
       await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
       traceStarted = true;
     }
@@ -306,6 +317,7 @@ async function runTest(job: Job<TestJobData>) {
       let stepError: Error | null = null;
       let databaseSummary: SqlExecutionSummary | undefined;
       let generatedSummary: RunStepResult['generated'];
+      let capturedSummary: RunStepResult['captured'];
 
       await prisma.testRun.update({
         where: { id: testRunId },
@@ -341,9 +353,29 @@ async function runTest(job: Job<TestJobData>) {
             };
             break;
           }
+          case 'captureValue': {
+            const variableName = step.saveAs!;
+            variableContext.assertRuntimeWritable(variableName, step.replace, index);
+            const { value: capturedValue, secret: sourceSecret } = await captureBrowserValue(page, step);
+            variableContext.setRuntime(variableName, capturedValue, {
+              source: 'captured',
+              secret: Boolean(step.secret || sourceSecret || isSecretVariableName(variableName)),
+              createdByStep: index + 1, replace: step.replace
+            });
+            const entry = variableContext.resolve(variableName)!;
+            capturedSummary = {
+              variableName,
+              source: step.captureSource!,
+              type: entry.type,
+              secret: entry.secret,
+              createdByStep: index + 1,
+              ...(!entry.secret ? { value: capturedValue } : {})
+            };
+            break;
+          }
           case 'executeSql':
           case 'assertDatabaseResult': {
-            if (step.saveResultAs) variableContext.assertRuntimeWritable(step.saveResultAs, false, index);
+            if (step.saveResultAs) variableContext.assertRuntimeWritable(step.saveResultAs, step.replace, index);
             const connectionId = step.databaseConnectionId!;
             let databaseSession = databaseSessions.get(connectionId);
             if (!databaseSession) {
@@ -364,11 +396,20 @@ async function runTest(job: Job<TestJobData>) {
               variableContext
             );
             databaseSummary = execution.summary;
-            if (step.saveResultAs && execution.savedValue !== undefined) {
+            if (step.saveResultAs && Object.prototype.hasOwnProperty.call(execution, 'savedValue')) {
               variableContext.setRuntime(step.saveResultAs, execution.savedValue, {
-                source: 'captured',
-                createdByStep: index + 1
+                source: 'captured', secret: Boolean(step.secret || execution.savedValueSecret || isSecretVariableName(step.saveResultAs)),
+                createdByStep: index + 1, replace: step.replace
               });
+              const entry = variableContext.resolve(step.saveResultAs)!;
+              capturedSummary = {
+                variableName: step.saveResultAs,
+                source: 'sql',
+                type: entry.type,
+                secret: entry.secret,
+                createdByStep: index + 1,
+                ...(!entry.secret ? { value: execution.savedValue } : {})
+              };
             }
             break;
           }
@@ -480,7 +521,7 @@ async function runTest(job: Job<TestJobData>) {
           : new Error(variableContext.redact(message));
       } finally {
         let screenshot: string | null = null;
-        if (!containsGeneratedSecret && !['executeSql', 'assertDatabaseResult'].includes(step.action)) {
+        if (!omitArtifactsForSecrets && !['executeSql', 'assertDatabaseResult'].includes(step.action)) {
           const screenshotName = `${testRunId}_step${index + 1}${stepError ? '_failed' : ''}.png`;
           const screenshotPath = path.join(SCREENSHOTS_DIR, screenshotName);
           try {
@@ -510,6 +551,7 @@ async function runTest(job: Job<TestJobData>) {
           } : {}),
           ...(databaseSummary ? { database: databaseSummary } : {}),
           ...(generatedSummary ? { generated: generatedSummary } : {}),
+          ...(capturedSummary ? { captured: capturedSummary } : {}),
           ...(stepError && 'databaseSummary' in stepError && typeof stepError.databaseSummary === 'object'
             ? { database: stepError.databaseSummary as SqlExecutionSummary }
             : {})
@@ -586,7 +628,7 @@ async function runTest(job: Job<TestJobData>) {
       currentStep: runError ? currentStep : steps.length,
       totalSteps: steps.length,
       screenshots,
-      stepResults,
+      stepResults: JSON.parse(JSON.stringify(stepResults)) as Prisma.InputJsonValue,
       error: runError ? runError.message : null,
       tracePath: tracePath ? `${testRunId}.zip` : null,
       traceUnavailableReason

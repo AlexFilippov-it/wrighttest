@@ -78,6 +78,16 @@ export function parsePlaywrightSpec(code: string): { testName: string; steps: St
 
   for (const line of lines) {
     const t = line.trim();
+    const exportedStep = t.match(/^\/\/ WRIGHTTEST_STEP (\{.*\})$/);
+    if (exportedStep) {
+      try {
+        const step = JSON.parse(exportedStep[1]) as Step;
+        steps.push(step);
+      } catch {
+        // Ignore malformed WrightTest metadata rather than importing a partial step.
+      }
+      continue;
+    }
     const generatedMatch = t.match(/^__wtRuntime\["([A-Z][A-Z0-9_]*)"\]\s*=\s*__wtGenerate\("(username|email|password|uuid|string|number|boolean|date|timestamp|pattern)",\s*(\{.*\})\);?$/);
     if (generatedMatch) {
       try {

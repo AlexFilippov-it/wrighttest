@@ -238,7 +238,7 @@ function createEnvRow(key = '', value = ''): EnvironmentRowState {
 }
 
 function isSecretKey(key: string) {
-  return /password|token|secret|api_key|key/i.test(key);
+  return /password|token|secret|api[_-]?key|auth[_-]?code|verification[_-]?code|otp|authorization|cookie|credential|private[_-]?key|key/i.test(key);
 }
 
 function isEmptyEnvRow(row: EnvironmentRowState) {

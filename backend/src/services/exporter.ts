@@ -136,7 +136,12 @@ function stepToCode(step: Step, variables: Record<string, string>, useEnvVars: b
 
   switch (step.action) {
     case 'generateData':
-      return `${indent}__wtRuntime[${JSON.stringify(step.saveAs ?? 'GENERATED_VALUE')}] = __wtGenerate(${JSON.stringify(step.generator ?? 'string')}, ${JSON.stringify({ ...(step.generatorOptions ?? {}), __wtSecret: step.generator === 'password' || Boolean(step.secret) || /(pass(word)?|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i.test(step.saveAs ?? ''), __wtReplace: Boolean(step.replace) })});`;
+      return `${indent}__wtRuntime[${JSON.stringify(step.saveAs ?? 'GENERATED_VALUE')}] = __wtGenerate(${JSON.stringify(step.generator ?? 'string')}, ${JSON.stringify({ ...(step.generatorOptions ?? {}), __wtSecret: step.generator === 'password' || Boolean(step.secret) || /(pass(word)?|secret|token|api[_-]?key|authorization|auth[_-]?code|verification[_-]?code|otp|cookie|credential|private[_-]?key)/i.test(step.saveAs ?? ''), __wtReplace: Boolean(step.replace) })});`;
+    case 'captureValue':
+      return `${indent}// WRIGHTTEST_STEP ${JSON.stringify(step)}\n${indent}__wtRuntime[${JSON.stringify(step.saveAs ?? 'CAPTURED_VALUE')}] = await __wtCapture(page, ${JSON.stringify(step.captureSource ?? 'text')}, ${selectorExpr || 'undefined'}, ${JSON.stringify(step.attributeName ?? '')});`;
+    case 'executeSql':
+    case 'assertDatabaseResult':
+      return `${indent}// WRIGHTTEST_STEP ${JSON.stringify(step)}`;
     case 'goto':
       return `${indent}await page.goto(${valueExpr});`;
     case 'click':
@@ -178,6 +183,20 @@ function stepToCode(step: Step, variables: Record<string, string>, useEnvVars: b
   }
 }
 
+function captureHelper() {
+  return `async function __wtCapture(page: import('@playwright/test').Page, source: string, locator: import('@playwright/test').Locator | undefined, attribute: string): Promise<string | number> {
+  if (source === 'url') return page.url();
+  if (!locator) throw new Error('Capture target is required.');
+  if (source === 'count') return locator.count();
+  if (await locator.count() !== 1) throw new Error('Capture target must match exactly one element.');
+  await locator.waitFor({ state: 'attached', timeout: 10000 });
+  if (source === 'text') { const value = await locator.textContent(); if (value === null) throw new Error('Element text is unavailable.'); return value; }
+  if (source === 'input') return locator.inputValue();
+  if (source === 'attribute') { const value = await locator.getAttribute(attribute); if (value === null) throw new Error('Captured attribute is unavailable.'); return value; }
+  throw new Error('Unsupported capture source: ' + source);
+}`;
+}
+
 function generateDataHelper() {
   return `import { randomInt, randomUUID } from 'node:crypto';
 const __wtRuntime: Record<string, string | number | boolean> = {};
@@ -209,15 +228,19 @@ export function exportToSpec(steps: Step[], opts: ExportOptions): string {
   const hasAssertions = steps.some((step) => step.action.startsWith('assert'));
   const generatedNames = new Set(steps.filter((step) => step.action === 'generateData' && step.saveAs).map((step) => step.saveAs!));
   const hasGenerators = generatedNames.size > 0;
+  const hasCaptureSteps = steps.some((step) => step.action === 'captureValue');
+  const hasSqlSteps = steps.some((step) => step.action === 'executeSql' || step.action === 'assertDatabaseResult');
   const usesTemplates = useEnvVars && steps.some((step) => JSON.stringify(step).includes('{{'));
   const needsEscapeRegExpHelper = (useEnvVars || hasGenerators) && steps.some((step) => step.action === 'assertURL' || step.action === 'assertTitle');
 
   const lines = steps.map((step) => stepToCode(step, variables, useEnvVars, generatedNames)).join('\n');
 
-  const helper = usesTemplates || hasGenerators
+  const helper = usesTemplates || hasGenerators || hasCaptureSteps
     ? [
         usesTemplates ? 'const env = (name: string) => process.env[name] ?? \'\';' : '',
+        !hasGenerators && hasCaptureSteps ? 'const __wtRuntime: Record<string, string | number | boolean> = {};' : '',
         hasGenerators ? generateDataHelper().replace('__WT_GENERATED_NAMES__', JSON.stringify([...generatedNames])) : '',
+        hasCaptureSteps ? captureHelper() : '',
         needsEscapeRegExpHelper
           ? [
               '',
@@ -236,6 +259,7 @@ export function exportToSpec(steps: Step[], opts: ExportOptions): string {
       : "import { test } from '@playwright/test';",
     helper,
     `test(${JSON.stringify(testName)}, async ({ page }) => {`,
+    hasSqlSteps ? '  // SQL steps are preserved for WrightTest import but require a configured database connection to execute.' : '',
     lines,
     '});',
     ''

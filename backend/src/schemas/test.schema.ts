@@ -39,11 +39,14 @@ export const StepSchema = z.object({
     'waitForSelector',
     'executeSql',
     'assertDatabaseResult',
-    'generateData'
+    'generateData',
+    'captureValue'
   ]),
   generator: z.enum(GENERATORS).optional(),
   generatorOptions: z.record(z.string().max(64), z.union([z.string().max(512), z.number().finite(), z.boolean()])).refine((options) => Object.keys(options).length <= 20).optional(),
   saveAs: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/).optional(),
+  captureSource: z.enum(['text', 'input', 'attribute', 'url', 'count']).optional(),
+  attributeName: z.string().max(256).optional(),
   secret: z.boolean().optional(),
   replace: z.boolean().optional(),
   selector: z.string().optional(),
@@ -66,6 +69,7 @@ export const StepSchema = z.object({
     pollIntervalMs: z.number().int().min(250).max(5_000)
   }).optional(),
   saveResultAs: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/).optional(),
+  saveResultType: z.enum(['column', 'rowCount', 'affectedRows']).optional(),
   saveRowIndex: z.number().int().nonnegative().max(100).optional(),
   saveColumn: z.string().max(256).optional(),
   captureRows: z.boolean().optional(),
@@ -84,6 +88,16 @@ export const StepSchema = z.object({
       validateGeneratorOptions(step.generator, step.generatorOptions);
     } catch (error) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: error instanceof Error ? error.message : 'Generator settings are invalid', path: ['generatorOptions'] });
+    }
+  }
+  if (step.action === 'captureValue') {
+    if (!step.captureSource) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Capture source is required', path: ['captureSource'] });
+    if (!step.saveAs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Runtime variable name is required', path: ['saveAs'] });
+    if (step.captureSource !== 'url' && !step.selector?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Target selector is required', path: ['selector'] });
+    }
+    if (step.captureSource === 'attribute' && !step.attributeName?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Attribute name is required', path: ['attributeName'] });
     }
   }
   if (step.action === 'executeSql' || step.action === 'assertDatabaseResult') {

@@ -113,6 +113,20 @@ test('create_check accepts Generate Test Data steps without a dedicated MCP gene
   await server.close();
 });
 
+test('create_check accepts browser Capture Value steps through the existing tool', async () => {
+  const captureStep = { action: 'captureValue', captureSource: 'text', selector: "page.getByTestId('account-id')", saveAs: 'ACCOUNT_ID' };
+  let received: unknown;
+  const { client, server } = await connectedClient(async (_input, init) => {
+    received = JSON.parse(String(init?.body));
+    return Response.json({ id: 'check-capture', projectId: 'project-1', name: 'Capture account ID', url: 'https://example.test', steps: [captureStep] }, { status: 201 });
+  });
+  const response = await client.callTool({ name: 'create_check', arguments: { projectId: 'project-1', name: 'Capture account ID', url: 'https://example.test', steps: [captureStep] } });
+  assert.equal(response.isError, undefined);
+  assert.deepEqual((received as Record<string, unknown>).steps, [captureStep]);
+  await client.close();
+  await server.close();
+});
+
 test('update_check accepts and forwards a partial patch', async () => {
   let requestPath = '';
   let requestMethod = '';
@@ -157,7 +171,7 @@ test('invalid tool arguments are rejected before reaching the backend', async ()
   await server.close();
 });
 
-test('run results omit environment data and redact known environment and test-data secrets', async () => {
+test('run results mask environment and test-data secrets while preserving safe variable metadata', async () => {
   const { client, server } = await connectedClient(async () => Response.json({
     id: 'run-1', status: 'FAILED', durationMs: 400, error: 'Login rejected for secret-value',
     environment: { variables: { PASSWORD: 'secret-value' } },
@@ -167,8 +181,32 @@ test('run results omit environment data and redact known environment and test-da
   }));
   const response = await client.callTool({ name: 'get_run_results', arguments: { runId: 'run-1' } });
   const text = firstText(response);
-  assert.doesNotMatch(text, /secret-value|code-12345|PASSWORD|AUTH_CODE|environment|dataCaseVariables/);
+  assert.doesNotMatch(text, /secret-value|code-12345/);
+  assert.match(text, /"AUTH_CODE":"••••••"/);
+  assert.match(text, /dataCaseVariables/);
   assert.match(text, /\[REDACTED\]/);
+  await client.close();
+  await server.close();
+});
+
+test('run results mask explicitly secret captured values and preserve non-secret captures', async () => {
+  const { client, server } = await connectedClient(async () => Response.json({
+    id: 'run-capture', status: 'PASSED',
+    stepResults: [
+      { index: 0, action: 'captureValue', status: 'passed', captured: { variableName: 'ACCOUNT_ID', source: 'text', type: 'string', secret: false, createdByStep: 1, value: 'account-42' } },
+      { index: 1, action: 'captureValue', status: 'passed', captured: { variableName: 'SESSION_VALUE', source: 'input', type: 'string', secret: true, createdByStep: 2, value: 'private-session-value' } }
+    ],
+    screenshots: ['run-capture_step1.png'], trace: { available: true, downloadUrl: '/api/traces/run-capture.zip' }
+  }));
+  const response = await client.callTool({ name: 'get_run_results', arguments: { runId: 'run-capture' } });
+  const text = firstText(response);
+  assert.match(text, /account-42/);
+  assert.doesNotMatch(text, /private-session-value/);
+  assert.match(text, /"SESSION_VALUE"/);
+  assert.match(text, /"secret":true/);
+  assert.match(text, /"artifactsOmittedForSafety":true/);
+  assert.doesNotMatch(text, /run-capture_step1\.png/);
+  assert.match(text, /"available":false/);
   await client.close();
   await server.close();
 });
@@ -182,7 +220,7 @@ test('run results never expose generated secret values even if a backend payload
   const text = firstText(response);
   assert.doesNotMatch(text, /synthetic-secret-value/);
   assert.match(text, /"secret":true/);
-  assert.match(text, /"artifactsOmittedForSecrets":true/);
+  assert.match(text, /"artifactsOmittedForSafety":true/);
   assert.match(text, /"available":false/);
   await client.close();
   await server.close();

@@ -94,8 +94,11 @@ export async function validateSteps(
 
   try {
     console.log(`[Validator] Using ${getBrowserName()}`);
-    await context.tracing.start({ screenshots: true, snapshots: true });
-    tracingStarted = true;
+    // A later capture may prove sensitive; do not create validation artifacts for capture flows.
+    if (!steps.some((step) => step.action === 'captureValue')) {
+      await context.tracing.start({ screenshots: true, snapshots: true });
+      tracingStarted = true;
+    }
 
     if (canNavigateInitialUrl) {
       await page.goto(resolveBrowserUrl(url), { waitUntil: 'domcontentloaded', timeout: 15000 });

@@ -72,6 +72,7 @@ function normalizeWhitespace(value: string) {
 
 function formatStepAction(action?: string) {
   switch (action) {
+    case 'captureValue': return 'Capture Value';
     case 'goto':
       return 'Navigate to URL';
     case 'click':

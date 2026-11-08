@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { jsonBody, redactStrings, WrightTestApi } from './api.js';
 
 const StepSchema = z.object({
-  action: z.enum(['goto', 'click', 'fill', 'press', 'keyboardPress', 'selectOption', 'assertVisible', 'assertHidden', 'assertText', 'assertValue', 'assertURL', 'assertTitle', 'assertChecked', 'assertCount', 'waitForSelector', 'executeSql', 'assertDatabaseResult', 'generateData']),
+  action: z.enum(['goto', 'click', 'fill', 'press', 'keyboardPress', 'selectOption', 'assertVisible', 'assertHidden', 'assertText', 'assertValue', 'assertURL', 'assertTitle', 'assertChecked', 'assertCount', 'waitForSelector', 'executeSql', 'assertDatabaseResult', 'generateData', 'captureValue']),
   generator: z.enum(['username', 'email', 'password', 'uuid', 'string', 'number', 'boolean', 'date', 'timestamp', 'pattern']).optional(),
   generatorOptions: z.record(z.string().max(64), z.union([z.string().max(512), z.number().finite(), z.boolean()])).refine((options) => Object.keys(options).length <= 20).optional(),
   saveAs: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/).optional(),
+  captureSource: z.enum(['text', 'input', 'attribute', 'url', 'count']).optional(),
+  attributeName: z.string().max(256).optional(),
   secret: z.boolean().optional(),
   replace: z.boolean().optional(),
   selector: z.string().optional(),
@@ -21,6 +23,7 @@ const StepSchema = z.object({
   assertion: z.object({ type: z.enum(['rowCountEquals', 'rowCountGreaterThan', 'empty', 'notEmpty', 'columnEquals', 'columnContains', 'columnNotNull', 'affectedRowsEquals']), expected: z.string().optional(), column: z.string().max(256).optional(), rowIndex: z.number().int().nonnegative().max(100).optional() }).optional(),
   waitForResult: z.object({ timeoutMs: z.number().int().min(250).max(30_000), pollIntervalMs: z.number().int().min(250).max(5_000) }).optional(),
   saveResultAs: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/).optional(),
+  saveResultType: z.enum(['column', 'rowCount', 'affectedRows']).optional(),
   saveRowIndex: z.number().int().nonnegative().max(100).optional(),
   saveColumn: z.string().max(256).optional(),
   captureRows: z.boolean().optional(),
@@ -120,36 +123,62 @@ function checkView(check: Record<string, unknown>) {
 async function safeRunPayload(api: WrightTestApi, run: RunPayload) {
   const environmentVariables = run.environment?.variables;
   const dataCaseVariables = run.dataCaseVariables;
+  const secretName = /(pass(word)?|secret|token|api[_-]?key|authorization|auth[_-]?code|verification[_-]?code|otp|cookie|credential|private[_-]?key)/i;
   const secrets = [environmentVariables, dataCaseVariables]
     .filter((value): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value)))
-    .flatMap((variables) => Object.values(variables).filter((value): value is string => typeof value === 'string'));
-  const hasShortSecret = secrets.some((secret) => secret.length > 0 && secret.length < 3);
+    .flatMap((variables) => Object.entries(variables)
+      .filter(([name]) => secretName.test(name))
+      .map(([, value]) => value)
+      .filter((value): value is string => typeof value === 'string'));
+  const isSensitiveVariableName = (value: unknown) => typeof value === 'string' && secretName.test(value);
   const rawStepResults = Array.isArray(run.stepResults) ? run.stepResults : [];
+  const captureArtifactsOmitted = rawStepResults.some((step) => {
+    if (!step || typeof step !== 'object' || Array.isArray(step)) return false;
+    return Boolean((step as Record<string, unknown>).captured);
+  }) || /omitted/i.test(run.trace?.reason ?? '');
   const hasGeneratedSecrets = rawStepResults.some((step) => {
     if (!step || typeof step !== 'object' || Array.isArray(step)) return false;
     const generated = (step as Record<string, unknown>).generated;
-    if (!generated || typeof generated !== 'object' || Array.isArray(generated)) return false;
-    const entry = generated as Record<string, unknown>;
-    return entry.secret === true || entry.generator === 'password' ||
-      (typeof entry.variableName === 'string' && /(pass(word)?|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i.test(entry.variableName));
+    const captured = (step as Record<string, unknown>).captured;
+    const sensitiveName = (entry: unknown) => Boolean(entry && typeof entry === 'object' && !Array.isArray(entry) &&
+      isSensitiveVariableName((entry as Record<string, unknown>).variableName));
+    if (generated && typeof generated === 'object' && !Array.isArray(generated)) {
+      const entry = generated as Record<string, unknown>;
+      if (entry.secret === true || entry.generator === 'password' || sensitiveName(entry)) return true;
+    }
+    if (captured && typeof captured === 'object' && !Array.isArray(captured)) {
+      const entry = captured as Record<string, unknown>;
+      return entry.secret === true || sensitiveName(entry);
+    }
+    return false;
   });
   for (const step of rawStepResults) {
     if (!step || typeof step !== 'object' || Array.isArray(step)) continue;
-    const generated = (step as Record<string, unknown>).generated;
+    const record = step as Record<string, unknown>;
+    const generated = record.generated;
     if (generated && typeof generated === 'object' && !Array.isArray(generated)) {
       const entry = generated as Record<string, unknown>;
       if (entry.secret === true && typeof entry.value === 'string' && entry.value.length > 0) secrets.push(entry.value);
     }
+    const captured = record.captured;
+    if (captured && typeof captured === 'object' && !Array.isArray(captured)) {
+      const entry = captured as Record<string, unknown>;
+      if ((entry.secret === true || isSensitiveVariableName(entry.variableName)) && typeof entry.value === 'string' && entry.value.length > 0) secrets.push(entry.value);
+    }
   }
+  const hasShortSecret = secrets.some((secret) => secret.length > 0 && secret.length < 3);
   const stepResults = rawStepResults.map((step) => {
     if (!step || typeof step !== 'object' || Array.isArray(step)) return null;
     const record = step as Record<string, unknown>;
     const generatedRecord = record.generated && typeof record.generated === 'object' && !Array.isArray(record.generated)
       ? record.generated as Record<string, unknown>
       : undefined;
+    const capturedRecord = record.captured && typeof record.captured === 'object' && !Array.isArray(record.captured)
+      ? record.captured as Record<string, unknown>
+      : undefined;
     const generatedSecret = generatedRecord && (
       generatedRecord.secret === true || generatedRecord.generator === 'password' ||
-      (typeof generatedRecord.variableName === 'string' && /(pass(word)?|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i.test(generatedRecord.variableName))
+      (typeof generatedRecord.variableName === 'string' && /(pass(word)?|secret|token|api[_-]?key|authorization|auth[_-]?code|verification[_-]?code|otp|cookie|credential|private[_-]?key)/i.test(generatedRecord.variableName))
     );
     return {
       index: record.index,
@@ -164,14 +193,28 @@ async function safeRunPayload(api: WrightTestApi, run: RunPayload) {
         secret: Boolean(generatedSecret),
         ...(generatedSecret ? {} : { value: generatedRecord.value })
       } : undefined
+      ,captured: capturedRecord ? {
+        variableName: capturedRecord.variableName,
+        source: capturedRecord.source,
+        type: capturedRecord.type,
+        createdByStep: capturedRecord.createdByStep,
+        secret: Boolean(capturedRecord.secret || (typeof capturedRecord.variableName === 'string' && /(pass(word)?|secret|token|api[_-]?key|authorization|auth[_-]?code|verification[_-]?code|otp|cookie|credential|private[_-]?key)/i.test(capturedRecord.variableName))),
+        ...((capturedRecord.secret !== true && typeof capturedRecord.variableName === 'string' && !/(pass(word)?|secret|token|api[_-]?key|authorization|auth[_-]?code|verification[_-]?code|otp|cookie|credential|private[_-]?key)/i.test(capturedRecord.variableName)) ? { value: capturedRecord.value } : {})
+      } : undefined
     };
   }).filter(Boolean);
-  const screenshots = !hasGeneratedSecrets && Array.isArray(run.screenshots)
+  const safeDataCaseVariables = run.dataCaseVariables && typeof run.dataCaseVariables === 'object' && !Array.isArray(run.dataCaseVariables)
+    ? Object.fromEntries(Object.entries(run.dataCaseVariables as Record<string, unknown>).map(([name, value]) => [
+        name,
+        secretName.test(name) ? '••••••' : value
+      ]))
+    : undefined;
+  const screenshots = !hasGeneratedSecrets && !captureArtifactsOmitted && Array.isArray(run.screenshots)
     ? run.screenshots.filter((name): name is string => typeof name === 'string' && name.length > 0 && !name.includes('..'))
       .map((name) => ({ name, url: api.absoluteUrl(`/screenshots/${encodeURIComponent(name)}`) }))
     : [];
-  const trace = hasGeneratedSecrets
-    ? { available: false, reason: 'Trace links are omitted for runs containing generated secrets.' }
+  const trace = hasGeneratedSecrets || captureArtifactsOmitted
+    ? { available: false, reason: captureArtifactsOmitted ? 'Trace links are omitted for runs that may capture secret values.' : 'Trace links are omitted for runs containing generated secrets.' }
     : run.trace?.available
     ? {
         available: true,
@@ -189,10 +232,12 @@ async function safeRunPayload(api: WrightTestApi, run: RunPayload) {
     currentStep: run.currentStep,
     totalSteps: run.totalSteps,
     error: hasShortSecret ? undefined : run.error,
+    dataCaseName: run.dataCaseName,
+    dataCaseVariables: safeDataCaseVariables,
     stepResults,
     screenshots,
     trace,
-    ...(hasGeneratedSecrets ? { artifactsOmittedForSecrets: true } : {})
+    ...(hasGeneratedSecrets || captureArtifactsOmitted ? { artifactsOmittedForSafety: true } : {})
   }, secrets);
 }
 

@@ -7,6 +7,7 @@ import { Parser } from 'node-sql-parser';
 import type { DatabaseConnection } from '@prisma/client';
 import type { Step } from '../types/step';
 import { VariableContext, type VariableValue } from '../utils/variable-context';
+import { selectSqlCaptureValue } from './value-capture';
 
 const parser = new Parser();
 const CONNECT_TIMEOUT_MS = 5_000;
@@ -23,7 +24,7 @@ type SqlRows = Record<string, unknown>[];
 export type SqlExecutionSummary = {
   connectionName: string;
   rowCount: number;
-  affectedRows: number;
+  affectedRows?: number;
   rowLimitReached: boolean;
   columns: string[];
   rows?: Record<string, string | number | boolean | null>[];
@@ -311,15 +312,16 @@ export async function executeDatabaseStep(
   connectionAccessMode: 'READ_ONLY' | 'READ_WRITE',
   step: Step,
   variables: VariableContext | Record<string, unknown>
-): Promise<{ summary: SqlExecutionSummary; savedValue?: VariableValue }> {
+): Promise<{ summary: SqlExecutionSummary; savedValue?: VariableValue; savedValueSecret?: boolean }> {
   const provider = session.provider as 'POSTGRESQL' | 'MYSQL';
   const variableContext = variables instanceof VariableContext ? variables : new VariableContext({ runInputs: variables });
   const statementType = validateSqlStatement(step.sql ?? '', provider, connectionAccessMode);
   if (step.waitForResult && statementType !== 'select') throw new Error('Wait for Result can only be used with SELECT statements.');
+  if (step.assertion?.type === 'affectedRowsEquals' && statementType === 'select') {
+    throw new Error('Affected-row assertions can only be used with write statements.');
+  }
 
-  const params = variables instanceof VariableContext
-    ? (step.parameters ?? {})
-    : Object.fromEntries(Object.entries(step.parameters ?? {}).map(([key, value]) => [
+  const params = Object.fromEntries(Object.entries(step.parameters ?? {}).map(([key, value]) => [
       key,
       variableContext.resolveSqlParameter(value)
     ]));
@@ -327,7 +329,7 @@ export async function executeDatabaseStep(
     ...step,
     assertion: step.assertion ? {
       ...step.assertion,
-      ...(step.assertion.expected && !(variables instanceof VariableContext) ? {
+      ...(step.assertion.expected ? {
         expected: variableContext.interpolate(step.assertion.expected)
       } : {})
     } : undefined
@@ -400,26 +402,20 @@ export async function executeDatabaseStep(
   const summary: SqlExecutionSummary = {
     connectionName,
     rowCount: rows.length,
-    affectedRows,
     rowLimitReached,
     columns: fields.slice(0, 50),
+    ...(statementType === 'select' ? {} : { affectedRows }),
     ...(step.captureRows ? { rows: maskCapturedRows(rows) } : {}),
     ...(resolvedStep.assertion ? { assertion: { type: resolvedStep.assertion.type, passed: assertionPassed } } : {})
   };
 
   if (!assertionPassed) throw Object.assign(new Error('Database result assertion failed.'), { databaseSummary: summary });
   let savedValue: VariableValue | undefined;
+  let savedValueSecret = false;
   if (step.saveResultAs) {
-    const row = rows[step.saveRowIndex ?? 0];
-    const column = step.saveColumn?.trim() || (row ? Object.keys(row)[0] : undefined);
-    const value = column ? row?.[column] : undefined;
-    if (value === undefined) throw new Error(`Cannot save SQL result: row ${step.saveRowIndex ?? 0} or result column is missing.`);
-    if (value instanceof Date) savedValue = value.toISOString();
-    else if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') savedValue = value;
-    else if (Array.isArray(value) || (typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype)) savedValue = value as Record<string, unknown> | unknown[];
-    else throw new Error('Cannot save SQL result: the selected column is not a supported value.');
+    ({ value: savedValue, secret: savedValueSecret } = selectSqlCaptureValue({ step, statementType, rows, affectedRows, rowLimitReached }));
   }
-  return { summary, savedValue };
+  return { summary, savedValue, savedValueSecret };
 }
 
 export function publicDatabaseConnection(connection: DatabaseConnection) {

@@ -61,10 +61,12 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
           { action: 'goto', value: url },
           { action: 'assertTitle', expected: 'Database Worker Integration', options: { exact: true } },
           { action: 'generateData', generator: 'number', generatorOptions: { min: 1, max: 1, integer: true }, saveAs: 'USER_ID' },
+          { action: 'fill', selector: "page.locator('#order-id')", value: '{{USER_ID}}' },
+          { action: 'captureValue', captureSource: 'input', selector: "page.locator('#order-id')", saveAs: 'FORM_USER_ID' },
           {
             action: 'executeSql', databaseConnectionId: connection.id,
             sql: `SELECT id, status, api_token FROM ${fixtureTable} WHERE id = :id`,
-            parameters: { id: '{{USER_ID}}' }, captureRows: true,
+            parameters: { id: '{{FORM_USER_ID}}' }, captureRows: true,
             assertion: { type: 'columnEquals', column: 'status', expected: 'ready' },
             saveResultAs: 'ORDER_ID', saveColumn: 'id'
           },
@@ -81,6 +83,12 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
             parameters: { id: '{{ORDER_ID}}' },
             assertion: { type: 'columnEquals', column: 'status', expected: 'verified' },
             waitForResult: { timeoutMs: 1_000, pollIntervalMs: 250 }
+          },
+          {
+            action: 'executeSql', databaseConnectionId: connection.id,
+            sql: `SELECT api_token FROM ${fixtureTable} WHERE id = :id`,
+            parameters: { id: '{{ORDER_ID}}' },
+            saveResultAs: 'QUERY_RESULT', saveColumn: 'api_token'
           },
           { action: 'assertTitle', expected: 'Database Worker Integration', options: { exact: true } }
         ]
@@ -100,17 +108,24 @@ test('isolated worker run interleaves browser and SQL steps and stores safe resu
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
     assert.equal(completed?.status, 'PASSED', completed?.error ?? 'Worker run did not reach a terminal state');
-    const results = completed?.stepResults as Array<{ status: string; action: string; screenshot?: string | null; generated?: { variableName: string; value?: string | number | boolean }; database?: { rows?: Array<Record<string, unknown>>; assertion?: { passed: boolean } } }>;
-    assert.equal(results.length, 9);
-    assert.equal(results[3].database?.rows?.[0]?.api_token, '[REDACTED]');
-    assert.equal(results[7].database?.assertion?.passed, true);
-    assert.equal(results[3].screenshot, null);
+    const results = completed?.stepResults as Array<{ status: string; action: string; screenshot?: string | null; generated?: { variableName: string; value?: string | number | boolean }; captured?: { variableName: string; value?: string | number | boolean; secret: boolean }; database?: { rows?: Array<Record<string, unknown>>; assertion?: { passed: boolean } } }>;
+    assert.equal(results.length, 12);
+    assert.equal(results[5].database?.rows?.[0]?.api_token, '[REDACTED]');
+    assert.equal(results[9].database?.assertion?.passed, true);
+    assert.equal(results[10].captured?.variableName, 'QUERY_RESULT');
+    assert.equal(results[10].captured?.secret, true);
+    assert.equal('value' in results[10].captured!, false);
+    assert.equal(completed?.tracePath, null);
+    assert.equal(results[5].screenshot, null);
     assert.equal(results[2].generated?.variableName, 'USER_ID');
     assert.equal(results[2].generated?.value, 1);
+    assert.equal(results[4].captured?.variableName, 'FORM_USER_ID');
+    assert.equal(results[4].captured?.value, '1');
     assert.equal(results[0].status, 'passed');
-    assert.equal(results[4].status, 'passed');
+    assert.equal(results[3].status, 'passed');
     assert.equal(results[5].status, 'passed');
     assert.equal(results[7].status, 'passed');
+    assert.equal(results[9].status, 'passed');
   } finally {
     await stopTestWorker();
     if (testRunId) await prisma.testRun.delete({ where: { id: testRunId } }).catch(() => undefined);

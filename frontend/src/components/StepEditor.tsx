@@ -19,7 +19,8 @@ import {
   CopyOutlined,
   TagOutlined,
   UnorderedListOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  SaveOutlined
 } from '@ant-design/icons';
 import { Alert, Button, Card, Checkbox, Collapse, Dropdown, Input, InputNumber, message, Select, Space, Tag, Tooltip, Typography } from 'antd';
 import { useState, type ReactNode } from 'react';
@@ -29,6 +30,7 @@ import type { TFunction } from 'i18next';
 import type { Step, StepAction, StepValidationResult } from '../types';
 import type { DatabaseConnection } from '../types';
 import VariableAutocompleteInput from './VariableAutocompleteInput';
+import { isSecretVariableName } from '../utils/secret-variable';
 import SqlCodeEditor from './SqlCodeEditor';
 import './database-testing.css';
 
@@ -47,6 +49,7 @@ type ActionOption = {
 
 const ACTION_OPTIONS: ActionOption[] = [
   { value: 'generateData', icon: <ThunderboltOutlined />, group: 'Actions', needsSelector: false, needsValue: false, needsExpected: false },
+  { value: 'captureValue', icon: <SaveOutlined />, group: 'Actions', needsSelector: false, needsValue: false, needsExpected: false },
   { value: 'executeSql', icon: <DatabaseOutlined />, group: 'Database', needsSelector: false, needsValue: false, needsExpected: false },
   { value: 'assertDatabaseResult', icon: <DatabaseOutlined />, group: 'Database', needsSelector: false, needsValue: false, needsExpected: false },
   { value: 'goto', icon: <GlobalOutlined />, group: 'Actions', needsSelector: false, needsValue: true, needsExpected: false },
@@ -78,6 +81,7 @@ interface Props {
     expected?: string;
   } | undefined>;
   variableNames?: string[];
+  testDataVariableNames?: string[];
   databaseConnections?: DatabaseConnection[];
   projectId?: string;
   defaultDatabaseConnectionId?: string;
@@ -156,7 +160,7 @@ function parameterType(value: SqlParameterValue): SqlParameterType {
   return /^\{\{[A-Z][A-Z0-9_]*\}\}$/.test(value) ? 'variable' : 'string';
 }
 
-export default function StepEditor({ steps, onChange, readOnly = false, validationResults, stepIssues = [], variableNames = [], databaseConnections = [], projectId, defaultDatabaseConnectionId }: Props) {
+export default function StepEditor({ steps, onChange, readOnly = false, validationResults, stepIssues = [], variableNames = [], testDataVariableNames = [], databaseConnections = [], projectId, defaultDatabaseConnectionId }: Props) {
   const { t } = useTranslation();
   const [parameterDrafts, setParameterDrafts] = useState<Record<number, string>>({});
   const [rawParameterIndex, setRawParameterIndex] = useState<number | null>(null);
@@ -217,14 +221,31 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
           display: 'flex',
           alignItems: 'flex-start',
           gap: 12,
-          flexWrap: step.action === 'executeSql' || step.action === 'assertDatabaseResult' || step.action === 'generateData' ? 'wrap' as const : 'nowrap' as const,
+          flexWrap: 'wrap' as const,
           minWidth: 0
         };
         const isDatabaseStep = step.action === 'executeSql' || step.action === 'assertDatabaseResult';
+        const isWriteSql = /^(insert|update|delete)\b/i.test(step.sql?.trim() ?? '');
+        const isSelectSql = /^(?:--[^\n]*\n\s*|\/\*[\s\S]*?\*\/\s*)*select\b/i.test(step.sql?.trim() ?? '');
         const isGenerateDataStep = step.action === 'generateData';
+        const isCaptureValueStep = step.action === 'captureValue';
         const generatorOptions = step.generatorOptions ?? {};
         const priorGeneratedNames = steps.slice(0, index).filter((candidate) => candidate.action === 'generateData' && candidate.saveAs).map((candidate) => candidate.saveAs!);
-        const availableVariableNames = [...new Set([...variableNames, ...priorGeneratedNames])];
+        const priorCapturedNames = steps.slice(0, index).filter((candidate) =>
+          (candidate.action === 'captureValue' && candidate.saveAs) ||
+          ((candidate.action === 'executeSql' || candidate.action === 'assertDatabaseResult') && candidate.saveResultAs)
+        ).map((candidate) => candidate.saveAs ?? candidate.saveResultAs!);
+        const availableVariableNames = [...new Set([...variableNames, ...testDataVariableNames, ...priorGeneratedNames, ...priorCapturedNames])];
+        const availableVariableDetails = [
+          ...variableNames.map((name) => ({ name, source: t('capture.variableSource.environment'), type: 'string', secret: isSecretVariableName(name) })),
+          ...testDataVariableNames.map((name) => ({ name, source: t('capture.variableSource.testData'), type: 'string', secret: isSecretVariableName(name) })),
+          ...steps.slice(0, index).flatMap((candidate) => {
+            if (candidate.action === 'generateData' && candidate.saveAs) return [{ name: candidate.saveAs, source: t('capture.variableSource.generated'), type: candidate.generator === 'number' ? 'number' : candidate.generator === 'boolean' ? 'boolean' : 'string', secret: Boolean(candidate.secret || candidate.generator === 'password' || isSecretVariableName(candidate.saveAs)) }];
+            if (candidate.action === 'captureValue' && candidate.saveAs) return [{ name: candidate.saveAs, source: t('capture.variableSource.captured'), type: candidate.captureSource === 'count' ? 'number' : 'string', secret: Boolean(candidate.secret || isSecretVariableName(candidate.saveAs)) }];
+            if ((candidate.action === 'executeSql' || candidate.action === 'assertDatabaseResult') && candidate.saveResultAs) return [{ name: candidate.saveResultAs, source: t('capture.variableSource.sql'), type: t('capture.type.runtime'), secret: Boolean(candidate.secret || isSecretVariableName(candidate.saveResultAs)) }];
+            return [];
+          })
+        ];
         const updateGeneratorOption = (name: string, value: string | number | boolean | undefined) => {
           const next = { ...generatorOptions };
           if (value === undefined) delete next[name];
@@ -301,6 +322,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                   onChange={(action) => updateStep(index, {
                     action,
                     ...(action === 'generateData' && step.action !== 'generateData' ? { generator: 'username', generatorOptions: { prefix: 'user_', length: 16, charset: 'lowercase-digits' }, saveAs: 'USERNAME', secret: false, replace: false } : {}),
+                    ...(action === 'captureValue' && step.action !== 'captureValue' ? { captureSource: 'text', selector: '', saveAs: 'CAPTURED_VALUE', secret: false, replace: false } : {}),
                     ...(action === 'executeSql' || action === 'assertDatabaseResult'
                       ? { databaseConnectionId: step.databaseConnectionId ?? defaultDatabaseConnectionId }
                       : {})
@@ -368,7 +390,7 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                       onChange={(event) => updateStep(index, { saveAs: event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}
                     />
                   </div>
-                  <Checkbox checked={step.generator === 'password' || Boolean(step.secret) || /(pass(word)?|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i.test(step.saveAs ?? '')} disabled={readOnly || step.generator === 'password' || /(pass(word)?|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)/i.test(step.saveAs ?? '')} onChange={(event) => updateStep(index, { secret: event.target.checked })}>
+                  <Checkbox checked={step.generator === 'password' || Boolean(step.secret) || isSecretVariableName(step.saveAs ?? '')} disabled={readOnly || step.generator === 'password' || isSecretVariableName(step.saveAs ?? '')} onChange={(event) => updateStep(index, { secret: event.target.checked })}>
                     {t('testData.secret')}
                   </Checkbox>
                 </Space>
@@ -423,6 +445,63 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                   children: <Checkbox checked={Boolean(step.replace)} disabled={readOnly} onChange={(event) => updateStep(index, { replace: event.target.checked })}>{t('testData.replaceRuntimeVariable')}</Checkbox>
                 }]} />
                 {fieldIssue?.message && <Text type="danger">{fieldIssue.message}</Text>}
+              </div>}
+
+              {isCaptureValueStep && <div style={{ flex: '1 1 100%', minWidth: 0, display: 'grid', gap: 12 }}>
+                <Space wrap align="end">
+                  <div style={{ minWidth: 190 }}>
+                    <Text type="secondary">{t('capture.source')}</Text>
+                    <Select
+                      style={{ width: '100%' }}
+                      value={step.captureSource ?? 'text'}
+                      disabled={readOnly}
+                      options={(['text', 'input', 'attribute', 'url', 'count'] as const).map((source) => ({ value: source, label: t(`capture.source.${source}`) }))}
+                      onChange={(captureSource: NonNullable<Step['captureSource']>) => updateStep(index, { captureSource, ...(captureSource === 'url' ? { selector: undefined } : {}), ...(captureSource !== 'attribute' ? { attributeName: undefined } : {}) })}
+                    />
+                  </div>
+                  {step.captureSource !== 'url' && <div style={{ minWidth: 260, flex: '1 1 320px' }}>
+                    <Text type="secondary">{t('capture.selector')}</Text>
+                    <VariableAutocompleteInput
+                      value={step.selector ?? ''}
+                      variableNames={availableVariableNames}
+                      placeholder={t('step.selectorPlaceholder')}
+                      disabled={readOnly}
+                      onValueChange={(selector) => updateStep(index, { selector })}
+                    />
+                  </div>}
+                  {step.captureSource === 'attribute' && <div style={{ minWidth: 180 }}>
+                    <Text type="secondary">{t('capture.attribute')}</Text>
+                    <Input value={step.attributeName ?? ''} placeholder={t('capture.attributePlaceholder')} disabled={readOnly} onChange={(event) => updateStep(index, { attributeName: event.target.value })} />
+                  </div>}
+                  <div style={{ minWidth: 190 }}>
+                    <Text type="secondary">{t('testData.saveAs')}</Text>
+                    <Input
+                      value={step.saveAs ?? ''}
+                      placeholder={t('capture.variablePlaceholder')}
+                      disabled={readOnly}
+                      status={step.saveAs && !/^[A-Z][A-Z0-9_]{0,99}$/.test(step.saveAs) ? 'error' : undefined}
+                      onChange={(event) => updateStep(index, { saveAs: event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}
+                    />
+                  </div>
+                  <Checkbox checked={Boolean(step.secret) || isSecretVariableName(step.saveAs ?? '')} disabled={readOnly || isSecretVariableName(step.saveAs ?? '')} onChange={(event) => updateStep(index, { secret: event.target.checked })}>{t('capture.secret')}</Checkbox>
+                </Space>
+                <Space wrap align="center">
+                  <Tag color="blue">{t(`capture.source.${step.captureSource ?? 'text'}`)}</Tag>
+                  {step.saveAs && <Text type="secondary">{t('testData.availableAs', { variable: `{{${step.saveAs}}}` })}</Text>}
+                  {step.saveAs && <Button size="small" icon={<CopyOutlined />} disabled={readOnly} onClick={() => navigator.clipboard.writeText(`{{${step.saveAs}}}`).then(() => message.success(t('testData.copied'))).catch(() => message.error(t('testData.copyFailed')))}>{t('testData.copyVariable')}</Button>}
+                </Space>
+                <Collapse size="small" items={[{
+                  key: 'advanced', label: t('testData.advancedSettings'),
+                  children: <Checkbox checked={Boolean(step.replace)} disabled={readOnly} onChange={(event) => updateStep(index, { replace: event.target.checked })}>{t('testData.replaceRuntimeVariable')}</Checkbox>
+                }]} />
+                <Text type="secondary">{t('capture.artifactsNote')}</Text>
+                {availableVariableDetails.length > 0 && <Space wrap size={[4, 4]}>
+                  {availableVariableDetails.map((variable) => <Tooltip key={variable.name} title={t('capture.variableMetadata', { source: variable.source, type: variable.type, secret: variable.secret ? t('testData.yes') : t('testData.no'), available: t('capture.availableNow') })}>
+                    <Tag>{`{{${variable.name}}}`}</Tag>
+                  </Tooltip>)}
+                </Space>}
+                {fieldIssue?.message && <Text type="danger">{fieldIssue.message}</Text>}
+                {fieldIssue?.selector && <Text type="danger">{fieldIssue.selector}</Text>}
               </div>}
 
               {isDatabaseStep && <div className="wt-sql-step-fields">
@@ -609,17 +688,19 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                   <div className="wt-sql-subsection-heading"><Text strong>{t('connections.saveResult')}</Text><Text type="secondary">{t('connections.saveResultHelp')}</Text></div>
                   <Space wrap>
                     <Select
-                      value={!step.saveResultAs ? 'none' : step.saveColumn ? 'column' : 'first'}
+                      value={!step.saveResultAs ? 'none' : ((step.saveResultType === 'rowCount' && isSelectSql) || (step.saveResultType === 'affectedRows' && isWriteSql) ? step.saveResultType : step.saveColumn !== undefined ? 'column' : 'first')}
                       disabled={readOnly}
                       style={{ minWidth: 190 }}
                       options={[
                         { value: 'none', label: t('connections.saveMode.none') },
                         { value: 'first', label: t('connections.saveMode.first') },
-                        { value: 'column', label: t('connections.saveMode.column') }
+                        { value: 'column', label: t('connections.saveMode.column') },
+                        ...(isSelectSql ? [{ value: 'rowCount', label: t('connections.saveMode.rowCount') }] : []),
+                        ...(isWriteSql ? [{ value: 'affectedRows', label: t('connections.saveMode.affectedRows') }] : [])
                       ]}
-                      onChange={(mode: 'none' | 'first' | 'column') => updateStep(index, mode === 'none'
-                        ? { saveResultAs: undefined, saveColumn: undefined, saveRowIndex: undefined }
-                        : { saveResultAs: step.saveResultAs ?? 'RESULT', saveColumn: mode === 'column' ? (step.saveColumn ?? '') : undefined, saveRowIndex: step.saveRowIndex ?? 0 })}
+                      onChange={(mode: 'none' | 'first' | 'column' | 'rowCount' | 'affectedRows') => updateStep(index, mode === 'none'
+                        ? { saveResultAs: undefined, saveResultType: undefined, saveColumn: undefined, saveRowIndex: undefined }
+                        : { saveResultAs: step.saveResultAs ?? 'RESULT', saveResultType: mode === 'first' || mode === 'column' ? 'column' : mode, saveColumn: mode === 'column' ? (step.saveColumn ?? '') : undefined, saveRowIndex: mode === 'first' || mode === 'column' ? (step.saveRowIndex ?? 0) : undefined })}
                     />
                     {step.saveResultAs && <Input
                       aria-label={t('connections.variableName')}
@@ -629,8 +710,9 @@ export default function StepEditor({ steps, onChange, readOnly = false, validati
                       status={!/^[A-Z][A-Z0-9_]{0,99}$/.test(step.saveResultAs) ? 'error' : undefined}
                       onChange={(event) => updateStep(index, { saveResultAs: event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}
                     />}
-                    {step.saveResultAs && <InputNumber min={0} max={100} aria-label={t('connections.rowIndex')} placeholder={t('connections.rowIndex')} value={step.saveRowIndex ?? 0} disabled={readOnly} onChange={(saveRowIndex) => updateStep(index, { saveRowIndex: saveRowIndex ?? 0 })} />}
+                    {step.saveResultAs && (!step.saveResultType || step.saveResultType === 'column') && <InputNumber min={0} max={100} aria-label={t('connections.rowIndex')} placeholder={t('connections.rowIndex')} value={step.saveRowIndex ?? 0} disabled={readOnly} onChange={(saveRowIndex) => updateStep(index, { saveRowIndex: saveRowIndex ?? 0 })} />}
                     {step.saveResultAs && step.saveColumn !== undefined && <Input aria-label={t('connections.column')} placeholder={t('connections.column')} value={step.saveColumn} disabled={readOnly} onChange={(event) => updateStep(index, { saveColumn: event.target.value })} />}
+                    {step.saveResultAs && <Checkbox checked={Boolean(step.secret) || isSecretVariableName(step.saveResultAs)} disabled={readOnly || isSecretVariableName(step.saveResultAs)} onChange={(event) => updateStep(index, { secret: event.target.checked })}>{t('capture.secret')}</Checkbox>}
                   </Space>
                 </div>
                 {fieldIssue?.message && <Text type="danger">{fieldIssue.message}</Text>}

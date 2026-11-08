@@ -6,6 +6,7 @@ import prisma from '../prisma';
 import { enqueueTestRun } from '../queue/batch-sequencer';
 import { getAccessibleProjectIds, getAuthUser, getProjectAccessStatusCode, requireProjectRole } from '../utils/project-access';
 import { buildDataCaseSnapshot, getTestDataCases } from '../utils/test-data';
+import { isSecretVariableName } from '../utils/variable-context';
 
 const TRACES_DIR = path.resolve(process.env.TRACES_DIR || './traces');
 
@@ -15,6 +16,14 @@ const RunSchema = z.object({
 });
 
 export async function runRoutes(fastify: FastifyInstance) {
+  function maskSecretVariables(value: unknown) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    return Object.fromEntries(Object.entries(value).map(([name, variable]) => [
+      name,
+      isSecretVariableName(name) ? '••••••' : variable
+    ]));
+  }
+
   async function buildTraceMetadata(run: {
     id: string;
     tracePath: string | null;
@@ -231,6 +240,11 @@ export async function runRoutes(fastify: FastifyInstance) {
     }
     return {
       ...run,
+      dataCaseVariables: maskSecretVariables(run.dataCaseVariables),
+      environment: run.environment ? {
+        ...run.environment,
+        variables: maskSecretVariables(run.environment.variables)
+      } : run.environment,
       trace: await buildTraceMetadata(run)
     };
   });

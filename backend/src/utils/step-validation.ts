@@ -81,6 +81,12 @@ export function validateStepRequirements(step: Step): StepRequirementIssue | nul
       if (!step.generator) return { message: required('Generator'), fields: { value: required('Generator') } };
       if (!step.saveAs?.trim()) return { message: required('Runtime variable name'), fields: { value: required('Runtime variable name') } };
       return null;
+    case 'captureValue':
+      if (!step.captureSource?.trim()) return { message: required('Capture source'), fields: { value: required('Capture source') } };
+      if (!step.saveAs?.trim()) return { message: required('Runtime variable name'), fields: { value: required('Runtime variable name') } };
+      if (step.captureSource !== 'url' && !step.selector?.trim()) return { message: required('Target'), fields: { selector: required('Target') } };
+      if (step.captureSource === 'attribute' && !step.attributeName?.trim()) return { message: required('Attribute name'), fields: { value: required('Attribute name') } };
+      return null;
     case 'selectOption':
       return buildIssue({
         ...(step.selector?.trim() ? {} : { selector: required('Target') }),
