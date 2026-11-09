@@ -1,6 +1,6 @@
 # Release Checklist
 
-Current status: **NOT READY**. The final isolated UI E2E smoke passes 19/19 and the confirmed Viewer Check Editor fail-open has been fixed in the working tree. Several release-critical security and end-to-end coverage gates remain incomplete.
+Current status: **NOT READY** (Phase 8.3 audit date 2026-11-09). Current isolated UI smoke passes 19/19; security/integration release gates listed below remain open.
 
 ## Security
 
@@ -10,7 +10,7 @@ Current status: **NOT READY**. The final isolated UI E2E smoke passes 19/19 and 
 - [x] Run PostgreSQL/MySQL provider integration with disposable services, including real read-only enforcement and secret redaction.
 - [ ] Complete endpoint-by-endpoint RBAC/IDOR matrix for every object and operation, including revocation/removal and secret access.
 - [ ] Exercise all 32 MCP tools against Owner, Editor, Viewer, cross-project and unauthenticated contexts.
-- [ ] Complete artifact security matrix for expired tickets, removed members, altered kind/run IDs, path escape, cache/referrer headers, logs and analytics on current source.
+- [ ] Complete artifact security matrix in Docker Compose for expired tickets, removed members, altered kind/run IDs, path escape, cache/referrer headers, logs, range requests and restart persistence.
 - [ ] Resolve or formally accept 3 remaining Moderate production dependency advisories. Current fixed upstream `@fastify/static` requires Node >=22; supported runtime is Node 20.
 
 ## Runtime and Regression
@@ -30,12 +30,15 @@ Current status: **NOT READY**. The final isolated UI E2E smoke passes 19/19 and 
 - [ ] Run full mixed HTTP → SQL → Browser Check and full Sequential/Independent handoff matrix.
 - [ ] Complete broad schedule recurrence, scheduler restart, timezone, cancellation and idempotency scenarios.
 - [x] Confirm full UI E2E after project-list loading synchronization; final run passed 19/19. The same ordered regression run exposed and verified the Viewer fail-closed editor fix.
-- [x] Run the full backend unit suite: 99 passed, 0 failed, 3 provider/mixed-worker tests skipped; provider-backed PostgreSQL/MySQL integration passed separately (2/2).
+- [x] Rerun backend unit suite: 99 passed, 0 failed, 3 opt-in integration cases skipped by default. All three opt-in cases passed separately on disposable services (PostgreSQL/MySQL 2/2; worker 1/1); combined flagged suite is not green due test-mode incompatibility with the loopback policy unit case and earlier queue contention.
+- [x] Rerun isolated UI E2E (2026-11-09): 19/19 passed in 3.7 minutes.
+- [x] Rerun backend/frontend TypeScript, E2E typecheck, MCP build/tests (16/16), frontend build, Prisma validate and `i18n:check` (1,334 messages).
 - [ ] Run complete isolated recovery matrix for every coordinator crash/cancel/retry cut point and Redis reconnect.
 
 ## Release Preparation
 
-- [ ] Review user, installation and security guides against shipped behavior.
-- [x] Update the Phase 8.2 audit, regression matrix, checklist and known limitations with measured results.
-- [ ] Resolve all Critical/High findings; none were confirmed in tested paths, but exhaustive coverage remains open.
+- [ ] Review user, installation and security guides against shipped behavior. Existing untracked user guide files were preserved; `docs/security.md` needs reconciliation because its artifact/advisory statements are stale.
+- [x] Update the Phase 8.3 audit, regression matrix, checklist, changelog draft and known limitations with measured results.
+- [x] Current production dependency audit reports 0 High (3 Moderate); detailed reachability/risk disposition remains required before stable release.
+- [ ] Resolve all Critical/High security findings and complete the missing coverage; no confirmed Critical/High defect arose in executed gates, but exhaustive coverage remains open.
 - [ ] Obtain release approval before tag, registry publication or deployment.

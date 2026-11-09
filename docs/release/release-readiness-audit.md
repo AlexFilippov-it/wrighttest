@@ -1,9 +1,9 @@
 # WrightTest Release Readiness Audit
 
-Audit date: 2026-11-08
+Audit date: 2026-11-09
 
-Checkout: `codex/mcp-browser-exploration` at `e63c434` (working tree includes uncommitted Phase 8.2 changes)
-Scope: Phase 8.2 local regression and disposable-runtime validation. GitHub Actions were not triggered.
+Checkout: `codex/mcp-browser-exploration` at `809fc48` (working tree contains user changes and Phase 8.3 validation)
+Scope: Phase 8.3 local RC preparation. No remote Git synchronization, GitHub Actions, release, or deployment was performed.
 
 ## Findings
 
@@ -34,6 +34,16 @@ Scope: Phase 8.2 local regression and disposable-runtime validation. GitHub Acti
 - Authentication HTTP 429 was not reproduced. The observed full-suite 429 was the general per-process API limit, not the login endpoint. The disposable harness now overrides only that global test-process limit; production and route-specific login limits were not changed.
 - The final isolated UI E2E run passed 19/19. It includes Owner/Editor/Viewer smoke, Check editor, project creation/navigation, localization and route refresh/history. Earlier failures exposed project-list synchronization flakiness and the Viewer fail-open described above; both corresponding smoke/guard changes are included in the working tree.
 
+## Phase 8.3 Evidence (2026-11-09)
+
+- Backend unit suite rerun with `npm run test:unit -w backend`: 99 passed, 0 failed, 3 intentionally skipped integration cases. The skipped tests are the PostgreSQL provider case, MySQL provider case (`database-connections.integration.test.ts`, gated by `WRIGHTTEST_DATABASE_INTEGRATION=1`) and mixed browser/SQL worker case (`database-worker.integration.test.ts`, gated by `WRIGHTTEST_DATABASE_WORKER_INTEGRATION=1`). All three were separately executed against disposable services and passed: provider tests 2/2 and worker integration 1/1. A combined run with the private-address integration opt-in is not a valid full-suite command because the ordinary loopback SSRF unit case correctly expects loopback to remain blocked; an initial concurrent worker attempt also exposed test queue contention. A serial integration rerun passed the worker and failed-run-trace tests. Do not mark the combined flagged suite as PASS.
+- Isolated UI E2E rerun: `npm run test:e2e:isolated`, 19/19 passed in 3.7 minutes on a unique database and backend port.
+- Current-run checks: backend/frontend TypeScript, E2E typecheck, MCP TypeScript build, MCP tests (16/16), frontend production build, Prisma validation and `i18n:check` (1,334 messages) passed. Frontend build retains the known large-chunk warning.
+- Current `npm audit --omit=dev`: 3 Moderate, 0 High, all through `@fastify/static` → `glob`/`minimatch`. The candidate fix is outside the declared dependency range; no forced upgrade was applied. Older changelog text naming Prisma `deepmerge-ts` is stale for this lockfile and must not be used as the current advisory inventory.
+- API route review found consistent OWNER/EDITOR write/run guards and read-only access for project viewers across the inspected route groups. This was source inspection, not the required account-by-account API/MCP IDOR matrix. The 32 MCP tools (23 core and 9 browser) have 16 automated tests, not a per-tool/per-role test matrix. Gate remains open.
+- Current-phase missing release evidence: one full Generate → HTTP → SQL → Browser → HTTP cleanup Check; screenshot/trace delivery and full ticket security matrix in Docker Compose; full schedule/recovery/cancellation matrix; exhaustive RBAC/IDOR tests; and a real GitHub Actions run. Historical Phase 8.2 positive Compose health/login/check/restart evidence does not prove artifact delivery.
+- User-owned guide/screenshot/workflow changes remain unstaged and were not rewritten or included. `docs/security.md` is untracked and contains stale statements about public artifact routes and Prisma advisories; review/update it before release rather than treating it as current security documentation.
+
 ## Verdict
 
-`PARTIAL`: the full isolated UI suite is now clean (19/19), alongside positive type/build, provider, API, Suite, MCP and disposable Compose evidence. Do not sign off release until the remaining exhaustive RBAC/MCP matrix, mixed Check, Compose artifact delivery, full schedule/recovery matrix, and advisory disposition are completed or formally deferred.
+`NOT READY`: local type/build/i18n/MCP/UI checks passed and all three opt-in backend integrations passed separately on disposable infrastructure. Mandatory Phase 8.3 security and delivery gates remain unverified: exhaustive RBAC/IDOR including all 32 MCP tools, mixed Check, Compose screenshot/trace authorization and ticket lifecycle, broad schedules/recovery matrix, and live CI. Three Moderate advisories remain documented, and user-owned security guide text requires reconciliation. No Critical/High advisory was reported by the current npm audit, but this does not substitute for the missing security matrices.

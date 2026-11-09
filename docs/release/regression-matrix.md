@@ -1,6 +1,6 @@
 # Release Regression Matrix
 
-Run date: 2026-11-08. This table reports Phase 8.2 evidence only; historical Phase 8.1 results are not silently counted as current reruns. Test infrastructure was disposable and isolated from the working DB and user-owned containers.
+Run date: 2026-11-09. Phase 8.2 evidence is labeled as historical where applicable. Current Phase 8.3 reruns are identified explicitly. Test infrastructure was disposable and isolated from the working DB and user-owned containers.
 
 | Area | Command / scenario | Result | Evidence / limits |
 |---|---|---|---|
@@ -28,5 +28,27 @@ Run date: 2026-11-08. This table reports Phase 8.2 evidence only; historical Pha
 | Security advisories | `npm audit --omit=dev` | PARTIAL | 3 Moderate, 0 High through `@fastify/static` → `glob` → `minimatch`; see audit/known limitations. |
 | Git hygiene | `git diff --check`; scoped diff and secret review | PASS | Runtime E2E outputs use unique temporary directories. Existing user modifications remain in the worktree and must not be staged with the Phase 8.2 changes. |
 | GitHub Actions | CI / Release Validation | SKIPPED | No remote workflow was triggered. |
+
+## Phase 8.3 Reruns (2026-11-09)
+
+| Area | Command / scenario | Result | Evidence / limits |
+|---|---|---|---|
+| Backend unit | `npm run test:unit -w backend` | PASS with skips | 99 passed, 0 failed, 3 skipped. Isolated DB name was unique to this run and migrations/seed completed. |
+| Opt-in DB integrations | PostgreSQL/MySQL provider integration plus worker integration, using disposable target services and unique queue namespace | PASS, separately | Provider tests 2/2 and worker test 1/1 passed. The combined integration-flag full suite was not green: its private-target opt-in conflicts with the loopback-block unit test, and concurrent worker execution caused queue contention on an initial attempt. Serial rerun passed the worker integration and `failed-run-trace`; do not report the combined run as passing. |
+| UI E2E | `npm run test:e2e:isolated` | PASS | 19/19 passed in 3.7 minutes. Unique database/backend port; includes role UI, localization, project/check navigation, refresh/history and responsive foundation checks. |
+| Backend/frontend TS | `npx tsc --noEmit -p backend/tsconfig.json`; `npx tsc --noEmit -p frontend/tsconfig.json` | PASS | Both exited 0 on current checkout. |
+| E2E typecheck | `npm run test:e2e:typecheck` | PASS | Exit 0. |
+| MCP | `npm run build -w mcp-server`; `npm test -w mcp-server` | PASS | Build succeeded; 16/16 tests passed. Registry contains 32 tools (23 core + 9 browser), but no per-tool × role matrix was run. |
+| Frontend build | `npm run build -w frontend` | PASS with warning | Vite production build succeeded; initial JS chunk remains ~1.62 MB minified. |
+| i18n | `npm run i18n:check` | PASS | 1,334 English/Russian messages. |
+| Prisma | `npx prisma validate --config backend/prisma.config.ts` | PASS | Current schema valid. |
+| npm audit | `npm audit --omit=dev` | PARTIAL | 3 Moderate, 0 High through `@fastify/static` → `glob`/`minimatch`; no forced update. |
+| Docker artifact E2E | Unique Compose screenshot/trace lifecycle, authorization, expiry, range and restart matrix | NOT RUN | Prior Phase 8.2 Compose runtime did not validate screenshot/trace retrieval. Mandatory release gate remains open. |
+| Mixed Check | Generate → HTTP → SQL → Browser → HTTP cleanup in one Check | NOT RUN | Component-level evidence is not equivalent to this end-to-end scenario. |
+| RBAC/MCP matrix | Per-object CRUD/run/read/export/secret checks across Owner, Editor, Viewer, other project, revoked and anonymous contexts | NOT RUN | Route review and selected tests only; no complete IDOR matrix. |
+| Schedules/recovery | Browser/HTTP/SQL schedules, scheduler restart, cancellation race and recovery matrix | PARTIAL | Selected HTTP schedule and worker/Suite reliability evidence is historical; the full requested matrix was not rerun in Phase 8.3. |
+| CI | GitHub Actions CI and Release Validation | NOT RUN | Push/PR not authorized; no workflow was claimed as passed. |
+
+`NOT RUN` is an open gate, not a pass. The combined DB integration command failure is recorded separately from the passing targeted integration tests.
 
 `PASS` applies only to the exact command/scenario listed. `PARTIAL` and `SKIPPED` are not release passes.
