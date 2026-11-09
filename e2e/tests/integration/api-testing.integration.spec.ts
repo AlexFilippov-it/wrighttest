@@ -270,7 +270,10 @@ test('HTTP steps execute in the worker, preserve captured types, and render safe
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: path.join(outputDir, 'api-editor-mobile.png'), fullPage: true });
-    await page.getByLabel('Check name', { exact: true }).fill(`${name} UI Edited`);
+    const checkNameInput = page.getByLabel('Check name', { exact: true });
+    await expect(checkNameInput).toHaveValue(name);
+    await checkNameInput.fill(`${name} UI Edited`);
+    await expect(checkNameInput).toHaveValue(`${name} UI Edited`);
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect.poll(async () => {
       const response = await workspace.adminApi.get(`/tests/${checkId}`);
