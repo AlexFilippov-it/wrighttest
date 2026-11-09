@@ -8,8 +8,8 @@ Current status: **NOT READY** (Phase 8.3 audit date 2026-11-09). Current isolate
 - [x] Keep production authentication rate limit unchanged; isolated UI harness uses a separate higher global API limit only for its disposable backend.
 - [x] Keep HTTP DNS resolution pinned after checking all resolved addresses; regression covers Node single-address and `all:true` lookup callback forms.
 - [x] Run PostgreSQL/MySQL provider integration with disposable services, including real read-only enforcement and secret redaction.
-- [ ] Complete endpoint-by-endpoint RBAC/IDOR matrix for every object and operation, including revocation/removal and secret access.
-- [ ] Exercise all 32 MCP tools against Owner, Editor, Viewer, cross-project and unauthenticated contexts.
+- [ ] Complete endpoint-by-endpoint RBAC/IDOR matrix for every object and operation, including revocation/removal and secret access. Gate 1 found and fixed an unauthorised check-import write; see `docs/release/rbac-idor-matrix.md`. Full actor matrix remains open.
+- [ ] Exercise all 32 MCP tools against Owner, Editor, Viewer, cross-project and unauthenticated contexts. Registry is inventoried in `docs/release/rbac-idor-matrix.md`; per-tool runtime matrix remains open.
 - [ ] Complete artifact security matrix in Docker Compose for expired tickets, removed members, altered kind/run IDs, path escape, cache/referrer headers, logs, range requests and restart persistence.
 - [ ] Resolve or formally accept 3 remaining Moderate production dependency advisories. Current fixed upstream `@fastify/static` requires Node >=22; supported runtime is Node 20.
 
@@ -30,7 +30,7 @@ Current status: **NOT READY** (Phase 8.3 audit date 2026-11-09). Current isolate
 - [ ] Run full mixed HTTP → SQL → Browser Check and full Sequential/Independent handoff matrix.
 - [ ] Complete broad schedule recurrence, scheduler restart, timezone, cancellation and idempotency scenarios.
 - [x] Confirm full UI E2E after project-list loading synchronization; final run passed 19/19. The same ordered regression run exposed and verified the Viewer fail-closed editor fix.
-- [x] Rerun backend unit suite: 99 passed, 0 failed, 3 opt-in integration cases skipped by default. All three opt-in cases passed separately on disposable services (PostgreSQL/MySQL 2/2; worker 1/1); combined flagged suite is not green due test-mode incompatibility with the loopback policy unit case and earlier queue contention.
+- [x] Rerun backend unit suite: 100 passed, 0 failed, 3 opt-in integration cases skipped by default after adding the RBAC import regression. All three opt-in cases passed separately on disposable services (PostgreSQL/MySQL 2/2; worker 1/1); combined flagged suite is not green due test-mode incompatibility with the loopback policy unit case and earlier queue contention.
 - [x] Rerun isolated UI E2E (2026-11-09): 19/19 passed in 3.7 minutes.
 - [x] Rerun backend/frontend TypeScript, E2E typecheck, MCP build/tests (16/16), frontend build, Prisma validate and `i18n:check` (1,334 messages).
 - [ ] Run complete isolated recovery matrix for every coordinator crash/cancel/retry cut point and Redis reconnect.

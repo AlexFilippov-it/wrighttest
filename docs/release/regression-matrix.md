@@ -51,4 +51,14 @@ Run date: 2026-11-09. Phase 8.2 evidence is labeled as historical where applicab
 
 `NOT RUN` is an open gate, not a pass. The combined DB integration command failure is recorded separately from the passing targeted integration tests.
 
+## Security Gate 1 (2026-11-09)
+
+| Area | Scenario | Result | Evidence / limits |
+|---|---|---|---|
+| RBAC / import IDOR | Editor allowed; Viewer denied; other-project Owner denied; removed Editor denied; no denied request created a Check | PASS | New isolated PostgreSQL Fastify integration test. Before the authorization fix, the Viewer case returned success and failed the regression. |
+| Full route and role matrix | 95 backend route registrations inventoried; authorization policy reviewed by route family | PARTIAL | Inventory and the exact missing runtime cases are in `docs/release/rbac-idor-matrix.md`; source review is not runtime proof. |
+| MCP inventory | 32 registered tools enumerated and mapped to backend operations / expected roles | PARTIAL | Existing 16 MCP tests mock backend calls. No full tool-by-role live authorization matrix was run. |
+| Backend unit | `npm run test:unit -w backend` | PASS with skips | 100 passed, 0 failed, 3 opt-in integrations skipped by default. |
+| UI smoke | `npm run test:e2e:isolated` | PASS | 19/19 passed against a separate disposable PostgreSQL/backend. Includes UI role flows; it is not proof of authorization for every API endpoint. |
+
 `PASS` applies only to the exact command/scenario listed. `PARTIAL` and `SKIPPED` are not release passes.

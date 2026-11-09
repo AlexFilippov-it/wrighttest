@@ -157,6 +157,15 @@ export async function exportRoutes(fastify: FastifyInstance) {
 
     if (!project) return reply.status(404).send({ error: 'Project not found' });
 
+    const { userId } = getAuthUser(req);
+    try {
+      await requireProjectRole(project.id, userId, ['OWNER', 'EDITOR']);
+    } catch (error) {
+      return reply.status(getProjectAccessStatusCode(error)).send({
+        error: error instanceof Error ? error.message : 'Forbidden'
+      });
+    }
+
     const { testName, steps, testData } = parsePlaywrightSpec(body.data.code);
     if (steps.length === 0) {
       return reply.status(400).send({ error: 'No steps parsed from the provided code' });
