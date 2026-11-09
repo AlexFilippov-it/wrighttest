@@ -47,7 +47,7 @@ jobs:
       - run: npm exec -w backend prisma generate
       - run: npm exec -w backend prisma validate
       - run: npm exec -w backend prisma migrate deploy
-      - run: npx playwright install --with-deps chromium
+      - run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
       - run: npm exec -w backend tsc -- --noEmit -p tsconfig.json
       - run: npm exec -w frontend tsc -- --noEmit -p tsconfig.json
       - run: npm exec -w mcp-server tsc -- --noEmit -p tsconfig.json
