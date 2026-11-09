@@ -1,6 +1,6 @@
-# WrightTest MCP Server (Stages 1–3)
+# WrightTest MCP Server (Stages 1–4)
 
-The local MCP server exposes WrightTest projects, checks, suites, runs, results, and safe browser exploration to a connected AI client. It uses the existing authenticated HTTP API; it does not connect to PostgreSQL or implement check execution itself. The server supports **stdio only** and does not add a public MCP endpoint. The 24 tools comprise 15 project/check/suite/run tools and nine browser-session tools. Stage 3 adds a bounded AI-client workflow for planning, creating, executing, and carefully repairing Checks; it adds no MCP tools and embeds no LLM in WrightTest.
+The local MCP server exposes WrightTest projects, checks, suites, runs, results, safe browser exploration, and safe database-connection metadata to a connected AI client. It uses the existing authenticated HTTP API; it does not connect directly to WrightTest's PostgreSQL database or implement check execution itself. The server supports **stdio only** and does not add a public MCP endpoint. The 32 tools comprise 23 core project/check/suite/run, project-variable, and database-connection metadata tools, plus nine browser-session tools. Stages 3 and 4 add bounded client workflows without embedding an LLM in WrightTest.
 
 ## Tool and API map
 
@@ -21,6 +21,8 @@ The local MCP server exposes WrightTest projects, checks, suites, runs, results,
 | `run_suite` | `POST /suites/:id/run` | Owner, Editor |
 | `get_run_status` | `GET /runs/:id` | Owner, Editor, Viewer |
 | `get_run_results` | `GET /runs/:id` | Owner, Editor, Viewer |
+| `list_database_connections` | `GET /projects/:projectId/connections` | Owner, Editor, Viewer; safe metadata only |
+| `get_database_connection` | `GET /connections/:id` | Owner, Editor, Viewer; safe metadata only |
 
 No project/check/suite/run API operation was missing. WrightTest did not have personal, revocable API credentials, so this stage adds the minimum token lifecycle endpoints: `GET/POST/DELETE /auth/api-tokens`. Existing routes remain responsible for project membership and role checks. Creating a project is intentionally still restricted to system admins, and project updates are currently Owner-only in the backend.
 
@@ -67,7 +69,7 @@ WRIGHTTEST_URL = "http://localhost:3000"
 WRIGHTTEST_NODE_PATH = "/absolute/path/to/node-20-or-newer/bin/node"
 ```
 
-Store the token once in macOS Keychain with service `wrighttest-mcp` and account equal to the macOS user name. `WRIGHTTEST_NODE_PATH` is needed when Codex is launched from a desktop app that does not inherit the shell's Node.js PATH. Restart/reload Codex or run a new Codex CLI session after changing MCP configuration, then confirm the `wrighttest` server exposes 24 tools.
+Store the token once in macOS Keychain with service `wrighttest-mcp` and account equal to the macOS user name. `WRIGHTTEST_NODE_PATH` is needed when Codex is launched from a desktop app that does not inherit the shell's Node.js PATH. Restart/reload Codex or run a new Codex CLI session after changing MCP configuration, then confirm the `wrighttest` server exposes 32 tools.
 
 ## Connect Claude Desktop
 
@@ -100,7 +102,7 @@ Expected generation flow: `list_projects`/`get_project` → `browser_start`/`bro
 
 ## Tools and execution flow
 
-The server exposes 15 project/check/run tools in the API map and nine browser exploration tools. Tool arguments are validated before API calls. `run_check` and `run_suite` only enqueue work and return run IDs; use `get_run_status` and `get_run_results` in later calls rather than holding a tool request open while Playwright runs.
+The server exposes 23 core project/check/suite/run, project-variable, and database-connection metadata tools, plus nine browser exploration tools. Tool arguments are validated before API calls. `run_check` and `run_suite` only enqueue work and return run IDs; use `get_run_status` and `get_run_results` in later calls rather than holding a tool request open while Playwright runs.
 
 Run results contain status, duration, step outcomes and sanitized error messages, plus available screenshot/trace links. Environment values and authentication state are excluded. The same backend authorization applies to every call; a Viewer can inspect data but cannot change checks/suites or start runs.
 
@@ -131,6 +133,10 @@ Example workflow: call `browser_start` with a project ID and approved public dem
 Stage 3 is an external-client workflow, not a new backend model or additional MCP tool set. Use [the AI Test Generation guide](./ai-test-generation.md) for the planning table, Step mapping, safe example prompt, repair policy, and reporting template. Codex users can use the repository skill at [`.agents/skills/wrighttest-ai-test-generation/SKILL.md`](../.agents/skills/wrighttest-ai-test-generation/SKILL.md).
 
 The workflow caps one request at five Checks and limits each failed Check to two repair attempts. It requires a plan before creating records, assertions grounded in page observations, separate reporting of PASSED/FAILED/NOT TESTED, user approval for actions with possible external effects, and honest reporting when a product defect is not a test defect. It cannot test credential-gated flows through the unauthenticated exploration session.
+
+## Database checks (Stage 4)
+
+The existing `create_check`, `update_check`, `get_check`, `run_check`, and `get_run_results` tools serialize database steps as part of the Check's normal `steps` array. `list_database_connections` and `get_database_connection` expose safe metadata only; neither can retrieve a password. No arbitrary SQL execution tool is provided. Check execution still uses the backend worker, project membership rules, the connection access mode, parameter binding, query limits, and SSRF controls. See [Database Connections and Testing](./database-testing.md) for SQL step fields, assertions, and an end-to-end example.
 
 ## Development and tests
 

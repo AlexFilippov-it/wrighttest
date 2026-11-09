@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "defaultViewport": { "width": 1440, "height": 900 },
+  "screenshots": [
+    { "id": "dashboard", "title": "Dashboard", "file": "dashboard", "usage": ["homepage"] },
+    { "id": "projects", "title": "Projects", "file": "projects", "usage": ["homepage"] },
+    { "id": "overview", "title": "Project Overview", "file": "project-overview", "usage": ["homepage"] },
+    { "id": "checks", "title": "Checks", "file": "checks", "usage": ["mcp"] },
+    { "id": "check-editor", "title": "Check Editor", "file": "check-editor", "usage": ["homepage", "mcp"] },
+    { "id": "visual-recorder", "title": "Visual Recorder", "file": "visual-recorder", "usage": ["homepage"] },
+    { "id": "suites", "title": "Suites", "file": "suites", "usage": ["homepage", "mcp"] },
+    { "id": "run-results", "title": "Run Results", "file": "run-results", "usage": ["homepage", "mcp"] },
+    { "id": "run-failure", "title": "Step Failure", "file": "run-failure", "usage": ["mcp"] },
+    { "id": "run-repaired", "title": "Repaired Check", "file": "run-repaired", "usage": ["mcp"] },
+    { "id": "trace-viewer", "title": "Trace Viewer", "file": "trace-viewer", "usage": ["mcp"] },
+    { "id": "schedules", "title": "Schedules", "file": "schedules", "usage": ["homepage"] },
+    { "id": "environments", "title": "Environments", "file": "environments", "usage": ["homepage"] },
+    { "id": "localization", "title": "Interface Localization", "file": "localization", "usage": ["homepage"] },
+    { "id": "api-tokens", "title": "Personal API Tokens", "file": "api-tokens", "usage": ["mcp"] }
+  ]
+}

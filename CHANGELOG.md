@@ -1,12 +1,12 @@
 # Changelog
 
-## Unreleased (release-candidate draft; public version not selected)
+## 0.4.0 (release candidate; not published)
 
-- Added project-scoped database connections and SQL steps, typed project/runtime variables, data-driven checks, and sequential Suite Runs with explicit variable handoff.
-- Added HTTP Request steps with assertions and capture, plus MCP API-token, project/check/suite/run and browser-exploration tools.
-- Improved responsive application surfaces, Check editing and Run Results, interface localization, and user-facing diagnostics.
-- Hardened artifact access, browser/API egress validation, secret handling, and production runtime configuration.
-- Release gates are not yet closed: see `docs/release/release-readiness-audit.md` and `docs/release/release-checklist.md` before assigning a public release version.
+- Added project database connections and SQL steps, typed runtime/project variables, data-driven Checks, and sequential Suite Runs with explicit variable handoff.
+- Added HTTP Request steps with assertions and capture, plus a local stdio MCP server for project, Check, Suite, run, browser exploration, and safe database-connection metadata workflows.
+- Improved responsive application surfaces, Check editing, Run Results, interface localization, and step-level diagnostics.
+- Hardened artifact delivery, browser/API egress validation, secret handling, and production runtime configuration.
+- Final smoke evidence and accepted limitations are recorded in `docs/release/release-readiness-audit.md`, `docs/release/regression-matrix.md`, and `docs/release/known-limitations.md`. No Git tag or GitHub Release has been created.
 
 ## 0.3.0 - 2026-11-03
 

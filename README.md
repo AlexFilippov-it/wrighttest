@@ -27,7 +27,7 @@
 - **Import and export** - import supported Playwright specs, export a single `.spec.ts`, or download a runnable Playwright project `.zip`
 - **Projects and roles** - organize checks, environments, schedules, alerts, and history; assign Owner, Editor, and read-only Viewer access
 - **Dashboard** - review run health, pass rates, recent failures, and flaky checks
-- **Interface languages** - English and Russian catalogs, instance-wide language selection, and administrator-managed JSON language packs
+- **[Interface languages](#-interface-languages)** - switch the instance-wide interface between English and Russian under **System → Language**, or install administrator-managed JSON language packs
 - **AI-assisted test generation through MCP** - connect Codex, Claude Desktop, or another stdio MCP client to explore public pages, plan evidence-based Checks, group them into Suites, run them, and inspect or carefully repair failures. Uses revocable user API tokens; no LLM is embedded in WrightTest.
 
 ## How WrightTest compares
@@ -198,6 +198,10 @@ This keeps the container image unchanged and moves the deployment-specific part 
 For repository setup, architecture, and contribution workflow, start here:
 
 - [AGENTS.md](./AGENTS.md)
+- [Installation Guide](./docs/installation.md)
+- [User Guide](./docs/user-guide.md)
+- [Security Guide](./docs/security.md)
+- [Release notes draft](./CHANGELOG.md)
 
 It contains the canonical repo workflow, startup order, and environment rules for WrightTest.
 
@@ -275,15 +279,30 @@ docker compose up --build -d
 
 ## 📸 Product Tour
 
-Current screenshots are captured from the running application at a consistent 1920×1080 viewport. The project-tour set is intentionally limited to screens that do not expose local test URLs or inconsistent demo data.
+Current screenshots are captured from the running application at a consistent 1440×900 viewport using an isolated demo database and synthetic data. See [`docs/screenshot-workflow.md`](./docs/screenshot-workflow.md) to reproduce them. The live recorder is excluded because it requires an interactive headed/noVNC session.
 
 <p align="center">
-  <img src="./docs/release/suites.png" alt="Suites page in WrightTest" width="100%" />
+  <img src="./docs/release/screenshots/dashboard.png" alt="WrightTest dashboard with synthetic demo run history" width="100%" />
+</p>
+<p align="center"><em>Monitor check health and recent results across a workspace.</em></p>
+
+<p align="center">
+  <img src="./docs/release/screenshots/check-editor.png" alt="WrightTest check editor with a browser flow and assertion" width="100%" />
+</p>
+<p align="center"><em>Build browser checks from ordered steps and outcome assertions.</em></p>
+
+<p align="center">
+  <img src="./docs/release/screenshots/run-results.png" alt="Passed WrightTest run details and trace availability" width="100%" />
+</p>
+<p align="center"><em>Review step results and open the associated Playwright trace.</em></p>
+
+<p align="center">
+  <img src="./docs/release/screenshots/suites.png" alt="Suites page in WrightTest with synthetic checks" width="100%" />
 </p>
 <p align="center"><em>Organize reusable groups of browser checks.</em></p>
 
 <p align="center">
-  <img src="./docs/release/language-settings.png" alt="English instance language settings in WrightTest" width="100%" />
+  <img src="./docs/release/screenshots/localization.png" alt="English instance language settings in WrightTest" width="100%" />
 </p>
 <p align="center"><em>Manage the instance interface language and language packs.</em></p>
 
@@ -353,7 +372,7 @@ The built-in English and Russian catalogs are checked by `npm run i18n:check`. E
 
 WrightTest includes a local stdio MCP server for compatible AI clients. It delegates project, check, suite, run, and safe browser-exploration operations to the existing backend API, preserves project roles, and uses isolated unauthenticated browser sessions. An external AI client can follow the documented generation workflow to plan evidence-backed Checks, run a Suite, and diagnose or repair confirmed test defects. Remote MCP transport and an embedded LLM are not included.
 
-See [MCP Server setup and tool reference](./docs/mcp-server.md) for API token creation, Codex and Claude Desktop configuration, all 24 tools, permissions, browser safety constraints, and local tests. [AI-Assisted Test Generation](./docs/ai-test-generation.md) documents planning, execution, bounded repair, and honest reporting.
+See the [WrightTest MCP overview](https://wrighttest.com/mcp/), [MCP Server setup and tool reference](./docs/mcp-server.md) for API token creation, Codex and Claude Desktop configuration, all 32 tools, permissions, browser safety constraints, and local tests, and the [AI-Assisted Test Generation guide](./docs/ai-test-generation.md) for planning, execution, bounded repair, and honest reporting.
 
 ## 🖥 Devices
 
