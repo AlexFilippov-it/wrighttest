@@ -71,6 +71,9 @@ jobs:
       - name: Install test dependencies
         run: npm ci
 
+      - name: Generate Prisma Client for host integration tests
+        run: npm exec -w backend prisma generate
+
       - name: Install Chromium for the host E2E runner
         run: npx playwright install --with-deps chromium
 
@@ -78,7 +81,7 @@ jobs:
         run: npm run test:e2e
 
       - name: Run integration scenarios
-        run: E2E_INTEGRATION=1 npx dotenv -e .env -- playwright test --config=e2e/playwright.config.ts --grep-invert='Mixed Check runs Generate, HTTP, SQL, Browser, and cleanup in sequence'
+        run: env REDIS_PORT=56379 E2E_INTEGRATION=1 npx dotenv -e .env -- playwright test --config=e2e/playwright.config.ts --grep-invert='Mixed Check runs Generate, HTTP, SQL, Browser, and cleanup in sequence'
 
       - name: Run isolated mixed-check integration
         run: env REDIS_PORT=56379 npm run test:e2e:isolated:integration -- e2e/tests/integration/mixed-check.integration.spec.ts
