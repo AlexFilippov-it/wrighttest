@@ -72,7 +72,7 @@ jobs:
         run: npm ci
 
       - name: Generate Prisma Client for host integration tests
-        run: npm exec -w backend prisma generate
+        run: npx dotenv -e .env -- npm exec -w backend prisma generate
 
       - name: Install Chromium for the host E2E runner
         run: npx playwright install --with-deps chromium
