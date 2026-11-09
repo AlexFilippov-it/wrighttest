@@ -27,7 +27,7 @@ docker compose -f docker-compose.hub.yml pull
 docker compose -f docker-compose.hub.yml up -d --wait
 ```
 
-Set `WRIGHTTEST_IMAGE_NAMESPACE` and `WRIGHTTEST_IMAGE_TAG` in `.env` to pin the images. As of 2026-11-09, Docker Hub has `0.3.0` and `latest` tags for backend, frontend and noVNC; `0.4.0` has not been published. Do not select the `0.4.0` tag until the images are published.
+Set `WRIGHTTEST_IMAGE_NAMESPACE` and `WRIGHTTEST_IMAGE_TAG` in `.env` to pin the images. The `0.4.0` and `latest` tags are published for backend, frontend and noVNC; the previous `0.3.0` tags remain available. For the current v0.4.0 release, set `WRIGHTTEST_IMAGE_TAG=0.4.0`.
 
 ### Windows checkout and shell scripts
 

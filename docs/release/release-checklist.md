@@ -1,6 +1,6 @@
 # Release Checklist
 
-Current status: **RELEASE CANDIDATE PREPARATION** (2026-11-09). PR #8 is merged; CI and Release Validation passed on the merge commit. Security Gate 1 remains PARTIAL and three Moderate advisories remain. This is not a claim that a GitHub Release or Docker Hub images have been published.
+Current status: **RELEASED: v0.4.0** (2026-11-09). PR #8 and documentation sync are merged; CI, Release Validation, and Docker image publication passed. Security Gate 1 remains PARTIAL and three Moderate advisories remain as documented release limitations.
 
 ## Security
 
@@ -43,5 +43,5 @@ Current status: **RELEASE CANDIDATE PREPARATION** (2026-11-09). PR #8 is merged;
 - [ ] Re-run current dependency audit and required CI workflows before publishing; the previous audit recorded 3 Moderate advisories and 0 High, which may change over time.
 - [x] Merge PR #8 with the contributor's original commit preserved; the current `main` CI passed on merge commit `1a3119b`.
 - [x] Confirm Release Validation run [42592608099](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42592608099) passed on the PR #8 merge commit.
-- [ ] Publish the v0.4.0 GitHub Release and Docker Hub tags only after explicit release approval; the three image repositories currently have no `0.4.0` tag.
+- [x] Publish GitHub Release `v0.4.0` and Docker Hub `0.4.0`/`latest` tags for backend, frontend and noVNC; verify the release and all image tags.
 - [ ] Obtain release approval before tag, registry publication or deployment.
