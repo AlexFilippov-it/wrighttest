@@ -13,7 +13,7 @@ PostgreSQL and Redis are upstream images and are not included in the WrightTest 
 - `postgres:16-alpine`
 - `redis:7-alpine`
 
-All three WrightTest images currently expose `0.3.0` and `latest` tags. The `0.4.0` tag is not available yet; a Git merge alone does not publish images. Set `WRIGHTTEST_IMAGE_TAG` only to a tag present in all three repositories.
+All three WrightTest images expose `0.4.0` and `latest` tags. The previous `0.3.0` tags remain available. The v0.4.0 release publish workflow completed successfully; set `WRIGHTTEST_IMAGE_TAG=0.4.0` to pin the current release.
 
 ## Run
 
@@ -28,4 +28,4 @@ The Compose file reads `WRIGHTTEST_IMAGE_NAMESPACE` and `WRIGHTTEST_IMAGE_TAG` f
 
 ## Version publishing
 
-The `docker-publish.yml` GitHub Actions workflow publishes the three application images when a GitHub Release is published. For a `v0.4.0` GitHub Release, it creates `0.4.0` and `latest` tags. Do not show `0.4.0` as available on Docker Hub until those workflow runs succeed and the tags are visible in all three repositories.
+The `docker-publish.yml` GitHub Actions workflow publishes the three application images when a GitHub Release is published. Publishing `v0.4.0` created `0.4.0` and `latest` tags in all three repositories; the workflow succeeded. Verify the tags in each image repository before future release announcements.

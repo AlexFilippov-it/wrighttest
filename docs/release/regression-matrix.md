@@ -72,7 +72,8 @@ Run date: 2026-11-09. Phase 8.2 evidence is labeled as historical where applicab
 | PR #8 | `.gitattributes` LF rule | MERGED | `hendricktlv`'s original commit is preserved in merge commit `1a3119b814b1ad7203da81399006423f0243492e`. PR CI passed. The PR's Release Validation failed 10 E2E smoke tests on the then-current pre-PR #9 base; that result is not counted as a pass. |
 | Current main after PR #8 | CI | PASS | [CI run 42592608010](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42592608010) passed on `1a3119b814b1ad7203da81399006423f0243492e`. |
 | Current main after PR #8 | Release Validation | PASS | [Run 42592608099](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42592608099) passed on `1a3119b814b1ad7203da81399006423f0243492e`, including E2E smoke, integration scenarios, API testing, worker restart, and Mixed Check. |
-| Docker Hub | v0.4.0 image tags | NOT PUBLISHED | Read-only registry check found `0.3.0` and `latest`; `0.4.0` was absent for backend, frontend, and noVNC. |
+| Docker Hub | v0.4.0 image tags | PASS | Publish workflow [42598125620](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42598125620) passed; Docker Hub returned HTTP 200 for tag `0.4.0` on backend, frontend, and noVNC. `latest` is also published by the workflow. |
+| GitHub Release | `v0.4.0` | PUBLISHED | [WrightTest 0.4.0](https://github.com/AlexFilippov-it/wrighttest/releases/tag/v0.4.0), tagged from `main` commit `e31db84bc60102c06bae1c8163e1fdff0098337e`; it is marked Latest by GitHub. |
 
 ## Security Gate 1 (2026-11-09)
 

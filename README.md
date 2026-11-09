@@ -103,13 +103,13 @@ Use `WRIGHTTEST_IMAGE_NAMESPACE` and `WRIGHTTEST_IMAGE_TAG` to select another Do
 
 ```env
 WRIGHTTEST_IMAGE_NAMESPACE=sacha1bu
-WRIGHTTEST_IMAGE_TAG=0.3.0
+WRIGHTTEST_IMAGE_TAG=0.4.0
 ```
 
-As of 2026-11-09, the published application image tags are `0.3.0` and `latest`; the `0.4.0` Docker Hub tags are **not published yet**. After the v0.4.0 images are published, set `WRIGHTTEST_IMAGE_TAG=0.4.0` to pin all three application images to that version. Do not assume a GitHub merge makes Docker Hub images available.
+As of 2026-11-09, `0.4.0` and `latest` are published for all three application images. The previous `0.3.0` tags remain available. The `0.4.0` release publishes HTTP/API and SQL checks, typed variables, sequential Suites, 32 MCP tools, and the Windows LF checkout fix. Pin `WRIGHTTEST_IMAGE_TAG=0.4.0` to use this release.
 
 ```dotenv
-# Use only after the 0.4.0 tag is visible for backend, frontend, and noVNC.
+# Pin all three application images to the v0.4.0 release.
 WRIGHTTEST_IMAGE_TAG=0.4.0
 ```
 
@@ -117,7 +117,7 @@ The regular `docker-compose.yml` remains the source-of-truth development compose
 
 Publishing is automated by `.github/workflows/docker-publish.yml`:
 
-- publishing a GitHub Release such as `v0.4.0` publishes both `0.4.0` and `latest` for all three images;
+- publishing a GitHub Release such as `v0.4.0` publishes both `0.4.0` and `latest` for all three images; the v0.4.0 publish completed successfully;
 - a manual workflow run publishes the requested tag and can optionally update `latest` to the same image digest;
 - Docker Hub credentials are stored only in the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` GitHub Actions secrets;
 - `DOCKERHUB_NAMESPACE` is configured as a GitHub Actions repository variable.
