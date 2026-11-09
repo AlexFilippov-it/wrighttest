@@ -96,7 +96,7 @@ test('MCP generation workflow plans four observed scenarios, runs a suite, and r
     await client.connect(transport);
 
     const tools = await client.listTools();
-    expect(tools.tools).toHaveLength(24);
+    expect(tools.tools).toHaveLength(32);
     const projects = await callTool<{ id: string }[]>(client, 'list_projects', {});
     expect(projects.some((project) => project.id === workspace.projectId)).toBe(true);
 

@@ -94,8 +94,11 @@ export async function validateSteps(
 
   try {
     console.log(`[Validator] Using ${getBrowserName()}`);
-    await context.tracing.start({ screenshots: true, snapshots: true });
-    tracingStarted = true;
+    // A later capture may prove sensitive; do not create validation artifacts for capture flows.
+    if (!steps.some((step) => step.action === 'captureValue' || step.action === 'httpRequest')) {
+      await context.tracing.start({ screenshots: true, snapshots: true });
+      tracingStarted = true;
+    }
 
     if (canNavigateInitialUrl) {
       await page.goto(resolveBrowserUrl(url), { waitUntil: 'domcontentloaded', timeout: 15000 });
@@ -144,6 +147,11 @@ export async function validateSteps(
 
       if (step.action === 'assertHidden') {
         results.push({ index, status: 'skipped', selector: step.selector });
+        continue;
+      }
+
+      if (step.action === 'httpRequest') {
+        results.push({ index, status: 'skipped', error: 'HTTP requests are validated and executed by the run worker.' });
         continue;
       }
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Checkbox, Input, Layout, Modal, Popconfirm, Radio, Space, Table, Tag, Typography, message } from 'antd';
-import { DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Checkbox, Input, Layout, Modal, Popconfirm, Radio, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { createSuite, deleteSuite, getEnvironments, getSuites, runSuite, updateSuite } from '../api/client';
@@ -35,6 +35,9 @@ export default function SuitesPage() {
   const [editingSuite, setEditingSuite] = useState<Suite | null>(null);
   const [name, setName] = useState('');
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
+  const [executionMode, setExecutionMode] = useState<Suite['executionMode']>('INDEPENDENT');
+  const [mappings, setMappings] = useState<Suite['executionConfig']['mappings']>([]);
+  const [dataCaseIndexes, setDataCaseIndexes] = useState<Record<string, number>>({});
   const [runModalOpen, setRunModalOpen] = useState(false);
   const [runSuiteId, setRunSuiteId] = useState<string | null>(null);
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | undefined>(undefined);
@@ -65,6 +68,9 @@ export default function SuitesPage() {
     setEditingSuite(null);
     setName('');
     setSelectedTestIds([]);
+    setExecutionMode('INDEPENDENT');
+    setMappings([]);
+    setDataCaseIndexes({});
     setModalOpen(true);
   };
 
@@ -72,6 +78,9 @@ export default function SuitesPage() {
     setEditingSuite(suite);
     setName(suite.name);
     setSelectedTestIds(Array.isArray(suite.testIds) ? suite.testIds : []);
+    setExecutionMode(suite.executionMode ?? 'INDEPENDENT');
+    setMappings(suite.executionConfig?.mappings ?? []);
+    setDataCaseIndexes(suite.executionConfig?.dataCaseIndexes ?? {});
     setModalOpen(true);
   };
 
@@ -88,7 +97,15 @@ export default function SuitesPage() {
 
     setSaving(true);
     try {
-      const payload = { name: name.trim(), testIds: selectedTestIds };
+      const payload = {
+        name: name.trim(), testIds: selectedTestIds,
+        executionMode,
+        executionConfig: {
+          orderedTestIds: selectedTestIds,
+          mappings: executionMode === 'SEQUENTIAL' ? mappings : [],
+          dataCaseIndexes
+        }
+      };
       if (editingSuite) {
         await updateSuite(editingSuite.id, payload);
         message.success(t('suites.updatedToast'));
@@ -127,10 +144,10 @@ export default function SuitesPage() {
 
     setRunLoading(true);
     try {
-      await runSuite(runSuiteId, selectedEnvironmentId);
+      const result = await runSuite(runSuiteId, selectedEnvironmentId);
       setRunModalOpen(false);
       message.success(t('suites.queuedToast'));
-      navigate('/dashboard');
+      navigate(`/projects/${projectId}/suite-runs/${result.suiteRunId}`);
     } catch {
       message.error(t('suites.runFailed'));
     } finally {
@@ -176,6 +193,7 @@ export default function SuitesPage() {
                 pagination={false}
                 columns={[
                   { title: t('suites.name'), dataIndex: 'name' },
+                  { title: t('suites.executionMode'), dataIndex: 'executionMode', render: (mode: Suite['executionMode']) => <Tag>{t(mode === 'SEQUENTIAL' ? 'suites.sequential' : 'suites.independent')}</Tag> },
                   {
                     title: t('suites.tests'),
                     render: (_, row) => (
@@ -239,7 +257,16 @@ export default function SuitesPage() {
           <div>
             <Text type="secondary">{t('suites.selectTests')}</Text>
             <div style={{ marginTop: 8 }}>
-              <Checkbox.Group value={selectedTestIds} onChange={(values) => setSelectedTestIds(values as string[])}>
+              <Checkbox.Group value={selectedTestIds} onChange={(values) => {
+                const selected = values as string[];
+                const ordered = [
+                  ...selectedTestIds.filter((id) => selected.includes(id)),
+                  ...selected.filter((id) => !selectedTestIds.includes(id))
+                ];
+                setSelectedTestIds(ordered);
+                setMappings((current) => current.filter((mapping) => ordered.includes(mapping.sourceTestId) && ordered.includes(mapping.targetTestId)));
+                setDataCaseIndexes((current) => Object.fromEntries(Object.entries(current).filter(([id]) => ordered.includes(id))));
+              }}>
                 <Space direction="vertical" style={{ width: '100%' }}>
                   {projectTests.map((test) => (
                     <Checkbox key={test.id} value={test.id}>
@@ -253,6 +280,55 @@ export default function SuitesPage() {
               </Checkbox.Group>
             </div>
           </div>
+
+          <div>
+            <Text type="secondary">{t('suites.executionMode')}</Text>
+            <Radio.Group value={executionMode} onChange={(event) => setExecutionMode(event.target.value)} style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+              <Radio value="INDEPENDENT">{t('suites.independent')}</Radio>
+              <Radio value="SEQUENTIAL">{t('suites.sequential')}</Radio>
+            </Radio.Group>
+          </div>
+
+          {selectedTestIds.filter((id) => (projectTests.find((item) => item.id === id)?.testData.length ?? 0) > 0).length > 0 ? <div>
+            <Text strong>{t('suites.dataCaseSelection')}</Text>
+            {selectedTestIds.filter((id) => (projectTests.find((item) => item.id === id)?.testData.length ?? 0) > 0).map((testId) => {
+              const test = projectTests.find((item) => item.id === testId)!;
+              const enabledCases = test.testData.map((item, originalIndex) => ({ ...item, originalIndex })).filter((item) => item.enabled);
+              return <div key={testId} style={{ marginTop: 8 }}>
+                <Text type="secondary">{test.name}</Text>
+                <Select style={{ width: '100%' }} value={dataCaseIndexes[testId]} placeholder={t('suites.chooseDataCase')} options={enabledCases.map((item) => ({ value: item.originalIndex, label: item.name }))} onChange={(value) => setDataCaseIndexes((current) => ({ ...current, [testId]: value }))} />
+              </div>;
+            })}
+          </div> : null}
+
+          {executionMode === 'SEQUENTIAL' ? <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Alert type="info" showIcon message={t('suites.sequentialHelp')} />
+            <Space direction="vertical" style={{ width: '100%' }}>
+              {selectedTestIds.map((testId, index) => {
+                const test = projectTests.find((item) => item.id === testId);
+                return <Card size="small" key={testId} title={`${index + 1}. ${test?.name ?? testId}`} extra={<Space>
+                  <Button aria-label={t('suites.moveUp')} size="small" disabled={index === 0} icon={<ArrowUpOutlined />} onClick={() => setSelectedTestIds((ids) => { const next = [...ids]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })} />
+                  <Button aria-label={t('suites.moveDown')} size="small" disabled={index === selectedTestIds.length - 1} icon={<ArrowDownOutlined />} onClick={() => setSelectedTestIds((ids) => { const next = [...ids]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; return next; })} />
+                </Space>} />;
+              })}
+            </Space>
+            <div>
+              <Space style={{ justifyContent: 'space-between', width: '100%' }}>
+                <Text strong>{t('suites.outputMappings')}</Text>
+                <Button size="small" onClick={() => setMappings((current) => [...current, { sourceTestId: selectedTestIds[0] ?? '', outputVariable: '', targetTestId: selectedTestIds[1] ?? '', targetVariable: '', required: true }])}>{t('suites.addMapping')}</Button>
+              </Space>
+              {mappings.map((mapping, index) => <Space key={`${mapping.sourceTestId}-${index}`} wrap style={{ width: '100%', marginTop: 8 }}>
+                <Select style={{ minWidth: 145 }} value={mapping.sourceTestId || undefined} placeholder={t('suites.sourceCheck')} options={selectedTestIds.slice(0, -1).map((id) => ({ value: id, label: projectTests.find((test) => test.id === id)?.name ?? id }))} onChange={(sourceTestId) => setMappings((items) => items.map((item, i) => i === index ? { ...item, sourceTestId } : item))} />
+                <Input style={{ width: 125 }} placeholder={t('suites.outputVariable')} value={mapping.outputVariable} onChange={(event) => setMappings((items) => items.map((item, i) => i === index ? { ...item, outputVariable: event.target.value } : item))} />
+                <span>→</span>
+                <Select style={{ minWidth: 145 }} value={mapping.targetTestId || undefined} placeholder={t('suites.targetCheck')} options={selectedTestIds.slice(1).map((id) => ({ value: id, label: projectTests.find((test) => test.id === id)?.name ?? id }))} onChange={(targetTestId) => setMappings((items) => items.map((item, i) => i === index ? { ...item, targetTestId } : item))} />
+                <Input style={{ width: 125 }} placeholder={t('suites.targetVariable')} value={mapping.targetVariable} onChange={(event) => setMappings((items) => items.map((item, i) => i === index ? { ...item, targetVariable: event.target.value } : item))} />
+                <Checkbox checked={mapping.required} onChange={(event) => setMappings((items) => items.map((item, i) => i === index ? { ...item, required: event.target.checked } : item))}>{t('suites.required')}</Checkbox>
+                <Select allowClear style={{ width: 135 }} value={mapping.expectedType} placeholder={t('suites.anyType')} options={['string', 'number', 'boolean', 'json', 'null'].map((value) => ({ value, label: value }))} onChange={(expectedType) => setMappings((items) => items.map((item, i) => i === index ? { ...item, expectedType } : item))} />
+                <Button danger size="small" onClick={() => setMappings((items) => items.filter((_, i) => i !== index))}>{t('suites.removeMapping')}</Button>
+              </Space>)}
+            </div>
+          </Space> : null}
         </Space>
       </Modal>
 

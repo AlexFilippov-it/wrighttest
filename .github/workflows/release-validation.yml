@@ -2,7 +2,7 @@ name: Release Validation
 
 on:
   push:
-    branches: [release/0.3.0]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -29,6 +29,8 @@ jobs:
           cat > .env <<'EOF'
           FRONTEND_PORT=5173
           BACKEND_PORT=3000
+          RATE_LIMIT_MAX=1000
+          E2E_API_REQUEST_LIMIT=1000
           POSTGRES_PORT=5432
           REDIS_PORT=6379
           VNC_PORT=5900
@@ -37,12 +39,13 @@ jobs:
           FRONTEND_HOST_PORT=5180
           BACKEND_HOST_PORT=3000
           POSTGRES_HOST_PORT=55432
+          POSTGRES_PASSWORD=wrighttest-ci-postgres-password
           REDIS_HOST_PORT=56379
           VNC_HOST_PORT=55900
           NOVNC_HOST_PORT=56080
           WRIGHTTEST_IMAGE_NAMESPACE=wrighttest-ci
           WRIGHTTEST_IMAGE_TAG=release-validation
-          DATABASE_URL=postgresql://postgres:postgres@localhost:55432/playwright_testing
+          DATABASE_URL=postgresql://postgres:wrighttest-ci-postgres-password@localhost:55432/playwright_testing
           REDIS_HOST=localhost
           FRONTEND_URL=http://127.0.0.1:5173
           FRONTEND_DEV_URL=http://127.0.0.1:5173
@@ -51,7 +54,7 @@ jobs:
           VITE_ENABLE_NOVNC=false
           NODE_ENV=development
           ADMIN_EMAIL=admin@wrighttest.app
-          ADMIN_PASSWORD=wrighttest-ci-only-password
+          ADMIN_PASSWORD=wrighttest-ci-only-password-8d72
           JWT_SECRET=wrighttest-ci-only-secret-not-for-production-6c93e24b
           JWT_EXPIRES_IN=24h
           WEBHOOK_SECRET=wrighttest-ci-only-webhook-secret
@@ -59,6 +62,7 @@ jobs:
           TRACES_DIR=./traces
           AUTH_STATES_DIR=./auth-states
           AUTH_STATE_ENCRYPTION_KEY=wrighttest-ci-only-auth-state-key
+          DATABASE_CREDENTIALS_ENCRYPTION_KEY=6c93e24b6c93e24b6c93e24b6c93e24b6c93e24b6c93e24b6c93e24b6c93e24b
           EOF
 
       - name: Build images and start isolated Compose stack
@@ -67,14 +71,28 @@ jobs:
       - name: Install test dependencies
         run: npm ci
 
+      - name: Generate Prisma Client for host integration tests
+        run: npx dotenv -e .env -- npm exec -w backend prisma generate
+
       - name: Install Chromium for the host E2E runner
-        run: npx playwright install --with-deps chromium
+        run: |
+          npx playwright install --with-deps chromium
+          PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium
 
       - name: Run E2E smoke
         run: npm run test:e2e
 
       - name: Run integration scenarios
-        run: npm run test:e2e:integration
+        run: env REDIS_PORT=56379 npm run test:e2e:isolated:integration -- --grep-invert='Mixed Check runs Generate, HTTP, SQL, Browser, and cleanup in sequence|HTTP steps execute in the worker, preserve captured types, and render safe run details|Sequential Suite recovers after its worker is killed during the second Check|startup recovery queues a committed next Check and a queued Check waits for worker startup'
+
+      - name: Run API testing integration
+        run: env REDIS_PORT=56379 npm run test:e2e:isolated:integration -- e2e/tests/integration/api-testing.integration.spec.ts
+
+      - name: Run worker restart integration
+        run: env REDIS_PORT=56379 npm run test:e2e:isolated:integration -- e2e/tests/integration/suite-worker-restart.integration.spec.ts
+
+      - name: Run isolated mixed-check integration
+        run: env REDIS_PORT=56379 npm run test:e2e:isolated:integration -- e2e/tests/integration/mixed-check.integration.spec.ts
 
       - name: Stop and remove isolated test stack
         if: always()

@@ -4,10 +4,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: playwright_testing
     ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +20,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "${REDIS_HOST_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -38,8 +38,8 @@ services:
         BUILD_DATE: ${WRIGHTTEST_BUILD_DATE:-local}
     restart: unless-stopped
     ports:
-      - "${VNC_HOST_PORT:-5900}:5900"
-      - "${NOVNC_HOST_PORT:-6080}:6080"
+      - "127.0.0.1:${VNC_HOST_PORT:-5900}:5900"
+      - "127.0.0.1:${NOVNC_HOST_PORT:-6080}:6080"
     environment:
       VNC_PORT: ${VNC_PORT:-5900}
       NOVNC_PORT: ${NOVNC_PORT:-6080}
@@ -66,7 +66,8 @@ services:
       - "${BACKEND_HOST_PORT:-3000}:3000"
     environment:
       BACKEND_PORT: ${BACKEND_PORT:-3000}
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/playwright_testing
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/playwright_testing
       REDIS_HOST: redis
       REDIS_PORT: ${REDIS_PORT:-6379}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:${FRONTEND_HOST_PORT:-5173}}
@@ -75,11 +76,12 @@ services:
       TRACES_DIR: /app/backend/traces
       AUTH_STATES_DIR: /app/backend/auth-states
       AUTH_STATE_ENCRYPTION_KEY: ${AUTH_STATE_ENCRYPTION_KEY:-}
+      DATABASE_CREDENTIALS_ENCRYPTION_KEY: ${DATABASE_CREDENTIALS_ENCRYPTION_KEY:?DATABASE_CREDENTIALS_ENCRYPTION_KEY is required}
       DISPLAY: ":99"
       NOVNC_HOST: novnc
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@wrighttest.app}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
       NODE_ENV: production
     volumes:

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Card, Checkbox, Collapse, Empty, Input, Modal, Popconfirm, Segmented, Space, Switch, Table, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Collapse, Empty, Input, Modal, Popconfirm, Segmented, Select, Space, Switch, Table, Typography } from 'antd';
 import { CopyOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import {
@@ -133,7 +133,7 @@ export default function TestDataEditor({
   const updateVariable = (
     caseId: string,
     variableId: string,
-    patch: Partial<{ key: string; value: string }>
+    patch: Partial<EditableTestDataCase['variables'][number]>
   ) => {
     onCasesChange(cases.map((testCase) => (
       testCase.id === caseId
@@ -154,6 +154,63 @@ export default function TestDataEditor({
         : testCase
     )));
   };
+
+  const renderVariableValueEditor = (caseId: string, variable: EditableTestDataCase['variables'][number], error?: string) => (
+    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+      <Select
+        value={variable.kind}
+        disabled={readOnly}
+        options={[
+          { value: 'literal', label: t('testData.cellMode.literal') },
+          { value: 'reference', label: t('testData.cellMode.reference') },
+          { value: 'generated', label: t('testData.cellMode.generated') }
+        ]}
+        onChange={(kind: EditableTestDataCase['variables'][number]['kind']) => updateVariable(caseId, variable.id, { kind })}
+      />
+      {variable.kind === 'literal' ? <Input.TextArea
+        value={variable.value}
+        aria-label={variable.value === '' ? `${variable.key} ${t('testData.emptyString')}` : variable.key}
+        onChange={(event) => updateVariable(caseId, variable.id, { value: event.target.value })}
+        placeholder={t('common.value')}
+        autoSize={{ minRows: 1, maxRows: 4 }}
+        status={error ? 'error' : undefined}
+        disabled={readOnly}
+      /> : null}
+      {variable.kind === 'reference' ? <>
+        <Input
+          value={variable.referenceName ?? ''}
+          onChange={(event) => updateVariable(caseId, variable.id, { referenceName: event.target.value.toUpperCase() })}
+          placeholder={t('testData.referenceNamePlaceholder')}
+          disabled={readOnly}
+        />
+        <Select
+          allowClear
+          value={variable.referenceSource}
+          placeholder={t('testData.referenceSource')}
+          options={[{ value: 'project', label: t('testData.source.project') }, { value: 'environment', label: t('testData.source.environment') }]}
+          onChange={(referenceSource: 'project' | 'environment' | undefined) => updateVariable(caseId, variable.id, { referenceSource })}
+          disabled={readOnly}
+        />
+      </> : null}
+      {variable.kind === 'generated' ? <>
+        <Select
+          value={variable.generator ?? 'username'}
+          options={['username', 'email', 'password', 'uuid', 'string', 'number', 'boolean', 'date', 'timestamp', 'pattern'].map((generator) => ({ value: generator, label: t(`testData.generator.${generator}`) }))}
+          onChange={(generator: string) => updateVariable(caseId, variable.id, { generator, secret: generator === 'password' ? true : variable.secret })}
+          disabled={readOnly}
+        />
+        <Input.TextArea
+          value={JSON.stringify(variable.options ?? {})}
+          onChange={(event) => { try { const options = JSON.parse(event.target.value) as Record<string, string | number | boolean>; updateVariable(caseId, variable.id, { options }); } catch { /* Keep the last valid generator options while the user edits JSON. */ } }}
+          placeholder={t('testData.generatorOptionsPlaceholder')}
+          autoSize={{ minRows: 1, maxRows: 3 }}
+          disabled={readOnly}
+        />
+        <Checkbox checked={Boolean(variable.secret)} onChange={(event) => updateVariable(caseId, variable.id, { secret: event.target.checked })} disabled={readOnly}>{t('testData.secretOutput')}</Checkbox>
+      </> : null}
+      {error ? <Text type="danger" style={{ fontSize: 12 }}>{error}</Text> : null}
+    </Space>
+  );
 
   const tableColumns = useMemo(() => [
     {
@@ -209,14 +266,10 @@ export default function TestDataEditor({
         const variableErrors = variable ? errors.cases[testCase.id]?.variables?.[variable.id] : undefined;
         return (
           <Space direction="vertical" size={2} style={{ width: '100%' }}>
-            <Input.TextArea
-              value={variable?.value ?? ''}
-              placeholder={variable ? t('testData.emptyString') : t('testData.missing')}
-              autoSize={{ minRows: 1, maxRows: 3 }}
-              status={variableErrors?.value ? 'error' : undefined}
-              disabled={readOnly}
+            {variable ? renderVariableValueEditor(testCase.id, variable, variableErrors?.value) : <Input.TextArea
+              value="" placeholder={t('testData.missing')} autoSize={{ minRows: 1, maxRows: 3 }} disabled={readOnly}
               onChange={(event) => onCasesChange(updateEditableVariableValue(cases, testCase.id, key, event.target.value))}
-            />
+            />}
             {!variable && (
               <Text type="secondary" style={{ fontSize: 11 }}>
                 {t('testData.missingUntilEdited')}
@@ -491,19 +544,7 @@ export default function TestDataEditor({
                                         )}
                                       </td>
                                       <td style={{ verticalAlign: 'top', paddingRight: 8 }}>
-                                        <Input.TextArea
-                                          value={variable.value}
-                                          onChange={(event) => updateVariable(testCase.id, variable.id, { value: event.target.value })}
-                                          placeholder={t('common.value')}
-                                          autoSize={{ minRows: 1, maxRows: 4 }}
-                                          status={variableErrors?.value ? 'error' : undefined}
-                                          disabled={readOnly}
-                                        />
-                                        {variableErrors?.value && (
-                                          <Text type="danger" style={{ fontSize: 12 }}>
-                                            {variableErrors.value}
-                                          </Text>
-                                        )}
+                                        {renderVariableValueEditor(testCase.id, variable, variableErrors?.value)}
                                       </td>
                                       <td style={{ verticalAlign: 'top' }}>
                                         <Button

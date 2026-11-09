@@ -7,8 +7,33 @@ on:
 jobs:
   typecheck:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: playwright_testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d playwright_testing"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/playwright_testing
+      DATABASE_URL: postgresql://postgres:ci-postgres-password@localhost:5432/playwright_testing
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
 
     steps:
       - uses: actions/checkout@v4
@@ -20,5 +45,15 @@ jobs:
 
       - run: npm ci
       - run: npm exec -w backend prisma generate
+      - run: npm exec -w backend prisma validate
+      - run: npm exec -w backend prisma migrate deploy
+      - run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
       - run: npm exec -w backend tsc -- --noEmit -p tsconfig.json
       - run: npm exec -w frontend tsc -- --noEmit -p tsconfig.json
+      - run: npm exec -w mcp-server tsc -- --noEmit -p tsconfig.json
+      - run: npm run i18n:check
+      - run: npm run test:e2e:typecheck
+      - run: npm run build -w frontend
+      - run: npm run build -w mcp-server
+      - run: npm test -w mcp-server
+      - run: npm run test:unit:isolated -w backend

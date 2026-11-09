@@ -57,8 +57,13 @@ test('instance language is system-admin-only and imports merge without data loss
     await languageSelect.click();
     await page.getByText('Русский (ru-RU)', { exact: true }).click();
     await page.keyboard.press('Escape');
+    const russianLocaleLoad = page.waitForResponse((response) => response.url().endsWith('/localization/public') && response.request().method() === 'GET');
     await page.getByRole('button', { name: 'Apply language' }).click();
+    const russianLocale = await russianLocaleLoad;
+    expect((await russianLocale.json()).activeLocale).toBe('ru-RU');
+    await expect.poll(() => page.locator('html').getAttribute('lang')).toBe('ru-RU');
     await expect(page.getByRole('button', { name: 'Применить язык' })).toBeDisabled();
+    await expect(page.getByRole('heading', { name: 'Язык установки' })).toBeVisible();
     await page.getByRole('heading', { name: 'Язык установки' }).click();
     await expect(page.getByRole('button', { name: 'Импортировать язык' }).first()).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath('instance-language-ru.png'), fullPage: true });
@@ -103,10 +108,15 @@ test('instance language is system-admin-only and imports merge without data loss
     await expect(page.getByText('Проверить заголовок страницы', { exact: true }).first()).toBeVisible();
 
     await page.locator('.wt-shell-navigation a[href="/instance/language"]').click();
+    await expect(page.getByRole('heading', { name: 'Язык установки', exact: true })).toBeVisible();
     await page.getByRole('combobox').nth(1).click();
     await page.getByText('English (en)', { exact: true }).click();
     await page.keyboard.press('Escape');
+    const englishLocaleLoad = page.waitForResponse((response) => response.url().endsWith('/localization/public') && response.request().method() === 'GET');
     await page.getByRole('button', { name: 'Применить язык' }).click();
+    const englishLocale = await englishLocaleLoad;
+    expect((await englishLocale.json()).activeLocale).toBe('en');
+    await expect.poll(() => page.locator('html').getAttribute('lang')).toBe('en');
     await expect(page.getByRole('heading', { name: 'Instance language' })).toBeVisible();
 
     const templateResponse = await workspace.adminApi.get('/instance/locales/template/de-DE');
@@ -295,7 +305,8 @@ test('Russian unsaved-changes confirmation protects edits in the check editor', 
     await workspace.adminApi.patch('/instance/settings/language', { data: { locale: 'ru-RU' } });
     await openAuthenticatedPage(page, workspace.owner, `/tests/${workspace.checkId}/edit`);
     await page.getByRole('textbox', { name: 'Название проверки' }).fill(`${workspace.checkName} изменено`);
-    await page.getByRole('button', { name: 'Отмена' }).click();
+    await expect(page.getByRole('button', { name: 'Сохранить изменения' })).toBeEnabled();
+    await page.locator('.ant-breadcrumb').getByRole('link', { name: 'Проекты' }).click();
 
     const discardDialog = page.getByRole('dialog');
     await expect(discardDialog).toContainText('Отменить изменения?');

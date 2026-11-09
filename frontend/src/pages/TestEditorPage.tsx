@@ -2,16 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Breadcrumb, Button, Card, Checkbox, Col, Dropdown, Form, Input, Layout, Modal, Radio, Row, Select, Space, Tag, Typography, message, notification } from 'antd';
 import type { MenuProps } from 'antd';
 import { DownOutlined, DownloadOutlined, PlayCircleOutlined, StopOutlined, VideoCameraOutlined, WarningOutlined } from '@ant-design/icons';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api, createTest, getDevices, getEnvironments, getProject, getTest, startRecording, stopRecording, updateTest, validateTestSteps, runTestWithEnvironment, runAllEnabledTestCases } from '../api/client';
+import { api, createTest, getDatabaseConnections, getDevices, getEnvironments, getProject, getProjectVariables, getTest, startRecording, stopRecording, updateTest, validateTestSteps, runTestWithEnvironment, runAllEnabledTestCases, type ProjectVariable } from '../api/client';
 import AppHeader from '../components/AppHeader';
 import AppFooter from '../components/AppFooter';
 import StepEditor from '../components/StepEditor';
 import TestDataEditor from '../components/test-data/TestDataEditor';
 import VariableAutocompleteInput from '../components/VariableAutocompleteInput';
 import UserMenu from '../components/UserMenu';
-import type { Environment, Step, StepValidationResult, Test } from '../types';
+import { useAuth } from '../context/AuthContext';
+import type { DatabaseConnection, Environment, Step, StepValidationResult, Test } from '../types';
 import {
   hasTestDataValidationErrors,
   getEnabledTestDataCaseOptions,
@@ -113,7 +114,38 @@ function buildStepIssue(fields: Omit<StepIssue, 'message'>): StepIssue | null {
 }
 
 function validateRequiredStepFields(step: Step, t: (key: string) => string): StepIssue | null {
+  if (step.action === 'executeSql' || step.action === 'assertDatabaseResult') {
+    if (!step.databaseConnectionId) return { message: t('connections.validation.connectionRequired') };
+    if (!step.sql?.trim()) return { message: t('connections.validation.queryRequired') };
+    if (step.action === 'assertDatabaseResult' && !step.assertion) return { message: t('connections.validation.assertionRequired') };
+    if (step.assertion) {
+      if (['columnEquals', 'columnContains', 'columnNotNull'].includes(step.assertion.type) && !step.assertion.column?.trim()) {
+        return { message: t('connections.validation.columnRequired') };
+      }
+      if (['rowCountEquals', 'rowCountGreaterThan', 'columnEquals', 'columnContains', 'affectedRowsEquals'].includes(step.assertion.type) && step.assertion.expected === undefined) {
+        return { message: t('connections.validation.expectedRequired') };
+      }
+      if (['rowCountEquals', 'rowCountGreaterThan', 'affectedRowsEquals'].includes(step.assertion.type)) {
+        const expectedCount = Number(step.assertion.expected);
+        if (!/^(0|[1-9]\d*)$/.test(step.assertion.expected ?? '') || !Number.isSafeInteger(expectedCount) || expectedCount < 0) return { message: t('connections.validation.countMustBeNonNegativeInteger') };
+      }
+    }
+    if (step.waitForResult && !step.assertion) return { message: t('connections.validation.waitNeedsAssertion') };
+    if (step.saveResultAs && (!step.saveResultType || step.saveResultType === 'column') && step.saveColumn !== undefined && !step.saveColumn.trim()) return { message: t('connections.validation.saveColumnRequired') };
+    return null;
+  }
+
   switch (step.action) {
+    case 'captureValue':
+      if (!step.captureSource) return { message: t('capture.validation.sourceRequired') };
+      if (!step.saveAs || !/^[A-Z][A-Z0-9_]{0,99}$/.test(step.saveAs)) return { message: t('testData.validation.variableName') };
+      if (step.captureSource !== 'url' && !step.selector?.trim()) return { message: t('step.validation.targetRequired'), selector: t('step.validation.targetRequired') };
+      if (step.captureSource === 'attribute' && !step.attributeName?.trim()) return { message: t('capture.validation.attributeRequired') };
+      return null;
+    case 'generateData':
+      if (!step.generator) return { message: t('testData.validation.generatorRequired') };
+      if (!step.saveAs || !/^[A-Z][A-Z0-9_]{0,99}$/.test(step.saveAs)) return { message: t('testData.validation.variableName') };
+      return null;
     case 'goto':
       if (!step.value?.trim()) {
         return { message: t('step.validation.urlRequired'), value: t('step.validation.urlRequired') };
@@ -197,6 +229,7 @@ function formatStepIssueSummary(step: Step, index: number, issue: StepIssue, t: 
 
 export default function TestEditorPage() {
   const { t } = useTranslation();
+  const { isSystemAdmin } = useAuth();
   const { projectId, testId } = useParams<{ projectId?: string; testId?: string }>();
   const { setProject: setShellProject } = useAppShell();
   const [form] = Form.useForm();
@@ -209,6 +242,8 @@ export default function TestEditorPage() {
   const [recordingProjectId, setRecordingProjectId] = useState<string | undefined>(projectId);
   const [recordEnvironments, setRecordEnvironments] = useState<Environment[]>([]);
   const [environmentVariableNames, setEnvironmentVariableNames] = useState<string[]>([]);
+  const [projectVariables, setProjectVariables] = useState<ProjectVariable[]>([]);
+  const [databaseConnections, setDatabaseConnections] = useState<DatabaseConnection[]>([]);
   const [selectedRecordingEnvironmentId, setSelectedRecordingEnvironmentId] = useState<string | undefined>(undefined);
   const [useProjectAuthentication, setUseProjectAuthentication] = useState(true);
   const [recordingUrlHasTemplate, setRecordingUrlHasTemplate] = useState(false);
@@ -220,7 +255,7 @@ export default function TestEditorPage() {
   const [exportMode, setExportMode] = useState<'inline' | 'envvars' | 'raw'>('inline');
   const [exportEnvId, setExportEnvId] = useState<string | undefined>(undefined);
   const [deviceOptions, setDeviceOptions] = useState<{ label: string; value: string }[]>([]);
-  const [validationTracePath, setValidationTracePath] = useState<string | undefined>(undefined);
+  const [validationTraceViewerUrl, setValidationTraceViewerUrl] = useState<string | undefined>(undefined);
   const [novncAvailable, setNovncAvailable] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [currentProjectId, setCurrentProjectId] = useState<string | undefined>(projectId);
@@ -234,9 +269,10 @@ export default function TestEditorPage() {
   const stepsRef = useRef<Step[]>([]);
   const initialSnapshotRef = useRef<string>('');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [confirmModal, confirmModalContextHolder] = Modal.useModal();
   const isEdit = Boolean(testId);
-  const isReadOnly = currentProjectRole === 'VIEWER';
+  const isReadOnly = !isSystemAdmin && currentProjectRole !== 'OWNER' && currentProjectRole !== 'EDITOR';
   const checkName = Form.useWatch('name', form);
   const selectedUrl = Form.useWatch('url', form);
   const selectedDevice = Form.useWatch('device', form);
@@ -254,7 +290,10 @@ export default function TestEditorPage() {
           setProjectName(project.name);
           setCurrentProjectRole(project.currentUserRole ?? null);
         })
-        .catch(() => setProjectName(''));
+        .catch(() => {
+          setProjectName('');
+          setCurrentProjectRole(null);
+        });
     }
 
     if (!testId) {
@@ -268,7 +307,7 @@ export default function TestEditorPage() {
       setCurrentProjectId(projectId);
       setSelectedRecordingEnvironmentId(undefined);
       setUseProjectAuthentication(true);
-      setValidationTracePath(undefined);
+      setValidationTraceViewerUrl(undefined);
       setValidationFeedback(null);
       setStepIssues([]);
       setFirstInvalidStepIndex(null);
@@ -293,8 +332,10 @@ export default function TestEditorPage() {
           setProjectName(project.name);
           setCurrentProjectRole(project.currentUserRole ?? null);
         })
-        .catch(() => setCurrentProjectRole(null));
-      setValidationTracePath(undefined);
+        .catch(() => {
+          setCurrentProjectRole(null);
+        });
+      setValidationTraceViewerUrl(undefined);
       setValidationFeedback(null);
       setStepIssues([]);
       setFirstInvalidStepIndex(null);
@@ -314,6 +355,8 @@ export default function TestEditorPage() {
     if (!recordingProjectId) {
       setRecordEnvironments([]);
       setEnvironmentVariableNames([]);
+      setProjectVariables([]);
+      setDatabaseConnections([]);
       return;
     }
 
@@ -330,6 +373,14 @@ export default function TestEditorPage() {
         setRecordEnvironments([]);
         setEnvironmentVariableNames([]);
       });
+
+    void getProjectVariables(recordingProjectId)
+      .then((variables) => { if (!cancelled) setProjectVariables(variables); })
+      .catch(() => { if (!cancelled) setProjectVariables([]); });
+
+    void getDatabaseConnections(recordingProjectId)
+      .then((connections) => { if (!cancelled) setDatabaseConnections(connections); })
+      .catch(() => { if (!cancelled) setDatabaseConnections([]); });
 
     return () => {
       cancelled = true;
@@ -391,7 +442,7 @@ export default function TestEditorPage() {
     stepsRef.current = nextSteps;
     setSteps(nextSteps);
     setValidationResults(undefined);
-    setValidationTracePath(undefined);
+    setValidationTraceViewerUrl(undefined);
     setValidationFeedback(null);
     setStepIssues([]);
     setFirstInvalidStepIndex(null);
@@ -447,7 +498,7 @@ export default function TestEditorPage() {
     const currentSteps = stepsRef.current;
     const localIssues = validateCurrentSteps(currentSteps, t);
     setValidationResults(undefined);
-    setValidationTracePath(undefined);
+    setValidationTraceViewerUrl(undefined);
     setStepIssues(localIssues.issues);
     setFirstInvalidStepIndex(localIssues.firstInvalidIndex);
     if (localIssues.firstInvalidIndex !== null) {
@@ -475,9 +526,9 @@ export default function TestEditorPage() {
         useProjectAuthentication
       );
       setValidationResults(report.results);
-      setValidationTracePath(report.tracePath);
-      if (report.tracePath) {
-        const traceUrl = `${BACKEND_URL}/trace-viewer/?trace=${encodeURIComponent(`${BACKEND_URL}/api/traces/${report.tracePath}`)}`;
+      setValidationTraceViewerUrl(report.traceViewerUrl ? `${BACKEND_URL}${report.traceViewerUrl}` : undefined);
+      if (report.traceViewerUrl) {
+        const traceUrl = `${BACKEND_URL}${report.traceViewerUrl}`;
         notification.info({
           message: t('editor.validationTraceReady'),
           description: (
@@ -934,7 +985,7 @@ export default function TestEditorPage() {
     return recordEnvironments.find((environment) => environment.id === selectedRecordingEnvironmentId)?.name ?? t('editor.noEnvironment');
   };
 
-  const stepAssertionsCount = steps.filter((step) => step.action.startsWith('assert')).length;
+  const stepAssertionsCount = steps.filter((step) => step.action.startsWith('assert') || (step.action === 'executeSql' && Boolean(step.assertion)) || (step.action === 'httpRequest' && Boolean(step.http?.assertions?.length))).length;
   const stepSummaryBadges = [
     <Tag key="steps" color="blue">
       {t('editor.stepsCount', { count: steps.length })}
@@ -1002,6 +1053,12 @@ export default function TestEditorPage() {
     () => getEnabledTestDataCaseOptions(currentApiTestData),
     [currentApiTestData]
   );
+  const testDataVariableNames = useMemo(() => {
+    if (!useTestData || dataCaseOptions.length === 0) return [];
+    const enabledCases = editableTestData.filter((testCase) => testCase.enabled);
+    const firstCaseNames = new Set(enabledCases[0]?.variables.map((variable) => variable.key).filter(Boolean) ?? []);
+    return [...firstCaseNames].filter((name) => enabledCases.every((testCase) => testCase.variables.some((variable) => variable.key === name)));
+  }, [dataCaseOptions.length, editableTestData, useTestData]);
   const effectiveSelectedDataCaseIndex = dataCaseOptions.length === 1
     ? dataCaseOptions[0].value
     : selectedDataCaseIndex;
@@ -1061,9 +1118,7 @@ export default function TestEditorPage() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [isDirty]);
 
-  const validationTraceUrl = validationTracePath
-    ? `${BACKEND_URL}/trace-viewer/?trace=${encodeURIComponent(`${BACKEND_URL}/api/traces/${validationTracePath}`)}`
-    : undefined;
+  const validationTraceUrl = validationTraceViewerUrl;
   const projectRouteId = currentProjectId ?? projectId;
   const projectLink = projectRouteId ? `/projects/${projectRouteId}/checks` : '/projects';
   const exportMenu: MenuProps = {
@@ -1082,10 +1137,10 @@ export default function TestEditorPage() {
     </Dropdown>
   );
   return (
-    <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #ffffff 100%)' }}>
+    <Layout className="wt-test-editor-page" style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #ffffff 100%)' }}>
       {confirmModalContextHolder}
       <AppHeader actions={[<UserMenu key="menu" />]} />
-      <Content style={{ padding: 32, paddingBottom: 260, maxWidth: 1180, width: '100%', margin: '0 auto' }}>
+      <Content className="wt-test-editor-page__content">
         <Row gutter={[24, 24]}>
           <Col span={24}>
             <Card style={{ borderRadius: 20, boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)' }}>
@@ -1127,9 +1182,15 @@ export default function TestEditorPage() {
                       {t('editor.runAllCases')}
                     </Button>
                   )}
-                  <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
-                    {t('editor.startRecording')}
-                  </Button>
+                  {recording ? (
+                    <Button icon={<StopOutlined />} onClick={handleStopRecording} danger disabled={isReadOnly}>
+                      {t('editor.stopRecording')}
+                    </Button>
+                  ) : (
+                    <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
+                      {t('editor.startRecording')}
+                    </Button>
+                  )}
                   {exportTrigger}
                   <Button type="primary" loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors || shouldBlockRunAllCases} onClick={handleValidateAndSave}>
                     {isEdit ? t('common.saveChanges') : t('editor.createCheck')}
@@ -1204,7 +1265,7 @@ export default function TestEditorPage() {
                       <VariableAutocompleteInput
                         placeholder="{{BASE_URL}}/projects or https://example.com"
                         size="large"
-                        variableNames={environmentVariableNames}
+                        variableNames={[...new Set([...projectVariables.map(({ name }) => name), ...environmentVariableNames])]}
                         disabled={isReadOnly}
                       />
                     </Form.Item>
@@ -1301,21 +1362,9 @@ export default function TestEditorPage() {
                   <Space wrap size={[8, 8]}>
                     {stepSummaryBadges}
                   </Space>
-                      {!recording ? (
-                        <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
-                          {t('editor.startRecording')}
-                        </Button>
-                      ) : (
-                        <Button icon={<StopOutlined />} onClick={handleStopRecording} danger disabled={isReadOnly}>
-                          {t('editor.stopRecording')}
-                        </Button>
-                      )}
-                      <Button onClick={() => setSteps((current) => [...current, { action: 'goto', value: '' }])} disabled={isReadOnly}>
-                        {t('editor.addStep')}
-                      </Button>
-                      <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly || saving || validating || hasTestDataErrors || shouldBlockSelectedCaseRun}>
-                        {t('editor.runCheck')}
-                      </Button>
+                  <Button onClick={() => setSteps((current) => [...current, { action: 'goto', value: '' }])} disabled={isReadOnly}>
+                    {t('editor.addStep')}
+                  </Button>
                 </Space>
               }
               style={{
@@ -1369,6 +1418,11 @@ export default function TestEditorPage() {
                     stepIssues={stepIssues}
                     validationResults={validationResults}
                     variableNames={environmentVariableNames}
+                    projectVariables={projectVariables}
+                    testDataVariableNames={testDataVariableNames}
+                    databaseConnections={databaseConnections}
+                    projectId={currentProjectId}
+                    defaultDatabaseConnectionId={!isEdit ? searchParams.get('databaseConnectionId') ?? undefined : undefined}
                   />
                 ) : (
                   <Card style={{ borderRadius: 16, background: '#fafafa' }}>
@@ -1378,15 +1432,6 @@ export default function TestEditorPage() {
                         {t('editor.noStepsDescription')}
                       </Text>
                       <Space wrap>
-                        {!recording ? (
-                          <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
-                            {t('editor.startRecording')}
-                          </Button>
-                        ) : (
-                          <Button icon={<StopOutlined />} onClick={handleStopRecording} danger disabled={isReadOnly}>
-                            {t('editor.stopRecording')}
-                          </Button>
-                        )}
                         <Button type="dashed" onClick={() => setSteps([{ action: 'goto', value: '' }])} disabled={isReadOnly}>
                           {t('editor.addStep')}
                         </Button>
@@ -1400,33 +1445,6 @@ export default function TestEditorPage() {
         </Row>
       </Content>
 
-      <div
-        style={{
-          position: 'sticky',
-          bottom: 0,
-          zIndex: 8,
-          marginTop: 12,
-          borderTop: '1px solid #e5e7eb',
-          background: 'rgba(255, 255, 255, 0.96)',
-          backdropFilter: 'blur(14px)',
-          boxShadow: '0 -10px 30px rgba(15, 23, 42, 0.08)'
-        }}
-      >
-        <div style={{ maxWidth: 1180, margin: '0 auto', padding: '14px 32px' }}>
-          <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
-            <Space wrap>
-              <Button onClick={() => confirmLeave(() => navigate(-1))}>{t('common.cancel')}</Button>
-              {exportTrigger}
-            </Space>
-            <Space wrap>
-              <Button onClick={handleValidateAndSave} loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors || shouldBlockRunAllCases}>
-                {isEdit ? t('common.saveChanges') : t('editor.createCheck')}
-              </Button>
-            </Space>
-          </Space>
-        </div>
-      </div>
-      <div style={{ height: 96 }} />
       <AppFooter bottomPadding={24} />
       <Modal
         title={t('editor.selectEnvironmentForRecording')}

@@ -17,16 +17,55 @@ export type StepAction =
   | 'assertTitle'
   | 'assertChecked'
   | 'assertCount'
-  | 'waitForSelector';
+  | 'waitForSelector'
+  | 'executeSql'
+  | 'assertDatabaseResult'
+  | 'generateData'
+  | 'captureValue'
+  | 'httpRequest';
 
 export interface Step {
   action: StepAction;
+  generator?: 'username' | 'email' | 'password' | 'uuid' | 'string' | 'number' | 'boolean' | 'date' | 'timestamp' | 'pattern';
+  generatorOptions?: Record<string, string | number | boolean>;
+  saveAs?: string;
+  captureSource?: 'text' | 'input' | 'attribute' | 'url' | 'count';
+  attributeName?: string;
+  secret?: boolean;
+  replace?: boolean;
   selector?: string;
   selectorCandidates?: string[];
   elementText?: string;
   elementTag?: string;
   value?: string;
   expected?: string;
+  databaseConnectionId?: string;
+  sql?: string;
+  parameters?: Record<string, string | number | boolean | null>;
+  assertion?: {
+    type: 'rowCountEquals' | 'rowCountGreaterThan' | 'empty' | 'notEmpty' | 'columnEquals' | 'columnContains' | 'columnNotNull' | 'affectedRowsEquals';
+    expected?: string;
+    column?: string;
+    rowIndex?: number;
+  };
+  waitForResult?: { timeoutMs: number; pollIntervalMs: number };
+  saveResultAs?: string;
+  saveResultType?: 'column' | 'rowCount' | 'affectedRows';
+  saveRowIndex?: number;
+  saveColumn?: string;
+  captureRows?: boolean;
+  http?: {
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
+    url: string;
+    headers?: Array<{ key: string; value: string; enabled: boolean; secret?: boolean }>;
+    queryParams?: Array<{ key: string; value: string; enabled: boolean }>;
+    body?: { type: 'none' | 'json' | 'text' | 'form-urlencoded'; value?: string; fields?: Array<{ key: string; value: string; enabled: boolean }> };
+    timeoutMs?: number;
+    followRedirects?: boolean;
+    auth?: { type: 'none' | 'bearer' | 'basic' | 'apiKey'; token?: string; username?: string; password?: string; apiKeyName?: string; apiKeyValue?: string; apiKeyLocation?: 'header' };
+    assertions?: Array<Record<string, unknown>>;
+    capture?: Array<{ source: 'jsonPath' | 'responseHeader' | 'status' | 'responseTime' | 'textBody'; path?: string; headerName?: string; saveAs: string; secret?: boolean; replace?: boolean }>;
+  };
   options?: {
     exact?: boolean;
     timeout?: number;
@@ -46,13 +85,14 @@ export interface StepValidationResult {
 export interface TestDataCase {
   name: string;
   enabled: boolean;
-  variables: Record<string, string>;
+  variables: Record<string, string | { kind: 'literal'; value: unknown } | { kind: 'reference'; name: string; source?: 'project' | 'environment' } | { kind: 'generated'; generator: string; options?: Record<string, string | number | boolean>; secret?: boolean }>;
 }
 
 export interface ValidationReport {
   valid: boolean;
   results: StepValidationResult[];
-  tracePath?: string;
+  traceUrl?: string;
+  traceViewerUrl?: string;
 }
 
 export interface Project {
@@ -255,9 +295,35 @@ export interface Suite {
   name: string;
   projectId: string;
   testIds: string[];
+  executionMode: 'INDEPENDENT' | 'SEQUENTIAL';
+  executionConfig: {
+    orderedTestIds: string[];
+    mappings: Array<{
+      sourceTestId: string; outputVariable: string; targetTestId: string;
+      targetVariable: string; required: boolean; expectedType?: 'string' | 'number' | 'boolean' | 'json' | 'null';
+    }>;
+    dataCaseIndexes: Record<string, number>;
+  };
   createdAt: string;
   updatedAt: string;
   _count?: { schedules: number };
+}
+
+export interface SuiteRun {
+  id: string;
+  suiteId: string;
+  projectId: string;
+  suiteName: string;
+  executionMode: 'INDEPENDENT' | 'SEQUENTIAL';
+  status: 'PENDING' | 'RUNNING' | 'PASSED' | 'FAILED' | 'CANCELLED';
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  currentOrder: number;
+  outputMetadata: Array<{ sourceTestId: string; outputVariable: string; targetTestId: string; targetVariable: string; type: string; secret: boolean }>;
+  orderedChecks: Array<{ testId: string; name: string; order: number }>;
+  testRuns: Array<{ id: string; testId: string; suiteOrder: number; status: string; startedAt: string; finishedAt: string | null; durationMs: number | null; error: string | null; dataCaseName: string | null; dataCaseIndex: number | null; test: { name: string } }>;
 }
 
 export interface Environment {
@@ -265,6 +331,26 @@ export interface Environment {
   name: string;
   projectId: string;
   variables: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DatabaseProvider = 'POSTGRESQL' | 'MYSQL' | 'SUPABASE';
+export type DatabaseAccessMode = 'READ_ONLY' | 'READ_WRITE';
+export interface DatabaseConnection {
+  id: string;
+  projectId: string;
+  name: string;
+  provider: DatabaseProvider;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  ssl: boolean;
+  accessMode: DatabaseAccessMode;
+  lastCheckedAt: string | null;
+  lastSuccessfulCheckAt: string | null;
+  lastCheckStatus: 'CONNECTED' | 'FAILED' | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -382,7 +468,8 @@ export interface TestRun {
   traceUnavailableReason?: string | null;
   dataCaseName?: string | null;
   dataCaseIndex?: number | null;
-  dataCaseVariables?: Record<string, string> | null;
+  dataCaseVariables?: Record<string, unknown> | null;
+  variableSnapshot?: Array<{ name: string; source: string; type: string; secret: boolean; value?: unknown }>;
   trace?: {
     available: boolean;
     downloadUrl?: string;
@@ -402,6 +489,28 @@ export interface TestRun {
     durationMs: number;
     screenshot?: string | null;
     error?: string | null;
+    generated?: { variableName: string; generator: string; secret: boolean; value?: string | number | boolean };
+    captured?: { variableName: string; source: string; type: string; secret: boolean; createdByStep: number; value?: string | number | boolean | null | Record<string, unknown> | unknown[] };
+    database?: {
+      connectionName: string;
+      rowCount: number;
+      affectedRows?: number;
+      rowLimitReached: boolean;
+      columns: string[];
+      rows?: Record<string, string | number | boolean | null>[];
+      assertion?: { type: NonNullable<Step['assertion']>['type']; passed: boolean };
+    };
+    http?: {
+      method: string;
+      url: string;
+      status: number;
+      durationMs: number;
+      responseBytes: number;
+      requestHeaderNames: string[];
+      responseHeaderNames: string[];
+      assertions: Array<{ type: string; passed: boolean; message: string }>;
+      captures: Array<{ variableName: string; type: string; secret: boolean }>;
+    };
   }>;
   test?: (Test & {
     project?: Project | null;

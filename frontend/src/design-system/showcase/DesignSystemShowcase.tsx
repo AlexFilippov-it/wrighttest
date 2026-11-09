@@ -49,12 +49,6 @@ const rows: CheckRow[] = [
   { key: '3', name: 'Search results', status: 'Failed', duration: '4.7s', updated: '18 min ago' }
 ];
 
-function statusTone(status: CheckRow['status']) {
-  if (status === 'Passed') return 'success' as const;
-  if (status === 'Running') return 'info' as const;
-  return 'danger' as const;
-}
-
 export default function DesignSystemShowcase() {
   const [modalOpen, setModalOpen] = useState(false);
   const columns: ColumnsType<CheckRow> = [
@@ -68,7 +62,7 @@ export default function DesignSystemShowcase() {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (value: CheckRow['status']) => <StatusBadge tone={statusTone(value)} label={value} />
+      render: (value: CheckRow['status']) => <StatusBadge status={value} label={value} />
     },
     { title: 'Duration', dataIndex: 'duration', key: 'duration', width: 110 },
     { title: 'Updated', dataIndex: 'updated', key: 'updated', width: 120 },
@@ -170,11 +164,11 @@ export default function DesignSystemShowcase() {
 
         <SectionCard title="Status language" description="One visual grammar for checks, runs, authentication, schedules, and members.">
           <Space wrap size={[8, 8]}>
-            <StatusBadge tone="neutral" label="Pending" icon={<ClockCircleOutlined />} />
-            <StatusBadge tone="info" label="Running" icon={<ClockCircleOutlined />} />
-            <StatusBadge tone="success" label="Passed" icon={<CheckCircleOutlined />} />
+            <StatusBadge status="PENDING" label="Pending" icon={<ClockCircleOutlined />} />
+            <StatusBadge status="RUNNING" label="Running" icon={<ClockCircleOutlined />} />
+            <StatusBadge status="PASSED" label="Passed" icon={<CheckCircleOutlined />} />
             <StatusBadge tone="warning" label="Needs attention" icon={<WarningOutlined />} />
-            <StatusBadge tone="danger" label="Failed" icon={<WarningOutlined />} />
+            <StatusBadge status="FAILED" label="Failed" icon={<WarningOutlined />} />
           </Space>
         </SectionCard>
 

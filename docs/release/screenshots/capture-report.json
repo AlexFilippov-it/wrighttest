@@ -1,0 +1,129 @@
+{
+  "createdAt": "2026-11-04T13:31:26.156Z",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "outputDirectory": "screenshots",
+  "screenshots": [
+    {
+      "id": "dashboard",
+      "title": "Dashboard",
+      "source": "dashboard.png",
+      "webp": "dashboard.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "projects",
+      "title": "Projects",
+      "source": "projects.png",
+      "webp": "projects.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "overview",
+      "title": "Project Overview",
+      "source": "overview.png",
+      "webp": "project-overview.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "checks",
+      "title": "Checks",
+      "source": "checks.png",
+      "webp": "checks.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "check-editor",
+      "title": "Check Editor",
+      "source": "check-editor.png",
+      "webp": "check-editor.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "suites",
+      "title": "Suites",
+      "source": "suites.png",
+      "webp": "suites.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "run-results",
+      "title": "Run Results",
+      "source": "run-results.png",
+      "webp": "run-results.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "run-failure",
+      "title": "Step Failure",
+      "source": "run-failure.png",
+      "webp": "run-failure.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "run-repaired",
+      "title": "Repaired Check",
+      "source": "run-repaired.png",
+      "webp": "run-repaired.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "trace-viewer",
+      "title": "Trace Viewer",
+      "source": "trace-viewer.png",
+      "webp": "trace-viewer.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "schedules",
+      "title": "Schedules",
+      "source": "schedules.png",
+      "webp": "schedules.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "environments",
+      "title": "Environments",
+      "source": "environments.png",
+      "webp": "environments.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "localization",
+      "title": "Interface Localization",
+      "source": "localization.png",
+      "webp": "localization.webp",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "api-tokens",
+      "title": "Personal API Tokens",
+      "source": "api-tokens.png",
+      "webp": "api-tokens.webp",
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "skipped": [
+    {
+      "id": "visual-recorder",
+      "reason": "Live recorder requires an interactive headed session/noVNC service; it was not started by the safe screenshot runner."
+    }
+  ],
+  "failed": []
+}

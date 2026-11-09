@@ -2,6 +2,9 @@ import axios from 'axios';
 import type {
   DashboardResponse,
   Environment,
+  DatabaseConnection,
+  DatabaseProvider,
+  DatabaseAccessMode,
   NotificationChannel,
   NotificationChannelType,
   Project,
@@ -12,6 +15,7 @@ import type {
   Schedule,
   ScheduleHistoryResponse,
   Suite,
+  SuiteRun,
   Step,
   Test,
   TestRun,
@@ -189,22 +193,25 @@ export const getSuites = (projectId: string) =>
 
 export const createSuite = (
   projectId: string,
-  data: { name: string; testIds: string[] }
+  data: { name: string; testIds: string[]; executionMode?: Suite['executionMode']; executionConfig?: Suite['executionConfig'] }
 ) => api.post<Suite>(`/projects/${projectId}/suites`, data).then((r) => r.data);
 
 export const updateSuite = (
   id: string,
-  data: Partial<{ name: string; testIds: string[] }>
+  data: Partial<{ name: string; testIds: string[]; executionMode: Suite['executionMode']; executionConfig: Suite['executionConfig'] }>
 ) => api.patch<Suite>(`/suites/${id}`, data).then((r) => r.data);
 
 export const deleteSuite = (id: string) =>
   api.delete(`/suites/${id}`);
 
 export const runSuite = (id: string, environmentId?: string) =>
-  api.post<{ suiteId: string; queued: number; jobs: { testRunId: string; testId: string }[] }>(
+  api.post<{ suiteId: string; suiteRunId: string; queued: number; jobs: { testRunId: string; testId: string }[] }>(
     `/suites/${id}/run`,
     environmentId ? { environmentId } : {}
   ).then((r) => r.data);
+
+export const getSuiteRun = (id: string) => api.get<SuiteRun>(`/suite-runs/${encodeURIComponent(id)}`).then((r) => r.data);
+export const cancelSuiteRun = (id: string) => api.post<{ id: string; status: SuiteRun['status'] }>(`/suite-runs/${encodeURIComponent(id)}/cancel`).then((r) => r.data);
 
 export const getSchedules = (projectId: string) =>
   api.get<Schedule[]>(`/projects/${projectId}/schedules`).then((r) => r.data);
@@ -254,6 +261,44 @@ export const updateEnvironment = (
 
 export const deleteEnvironment = (id: string) =>
   api.delete(`/environments/${id}`);
+
+export const getDatabaseConnections = (projectId: string) =>
+  api.get<DatabaseConnection[]>(`/projects/${projectId}/connections`).then((r) => r.data);
+
+export type DatabaseConnectionInput = {
+  name: string;
+  provider: DatabaseProvider;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password: string;
+  ssl: boolean;
+  accessMode: DatabaseAccessMode;
+};
+
+export const createDatabaseConnection = (projectId: string, data: DatabaseConnectionInput) =>
+  api.post<DatabaseConnection>(`/projects/${projectId}/connections`, data).then((r) => r.data);
+
+export const updateDatabaseConnection = (id: string, data: Partial<DatabaseConnectionInput>) =>
+  api.patch<DatabaseConnection>(`/connections/${id}`, data).then((r) => r.data);
+
+export const deleteDatabaseConnection = (id: string) => api.delete(`/connections/${id}`);
+
+export const testDatabaseConnection = (id: string) =>
+  api.post<{ status: 'CONNECTED' | 'FAILED'; checkedAt: string; error?: string }>(`/connections/${id}/test`).then((r) => r.data);
+
+export type ProjectVariable = {
+  id: string; projectId: string; name: string;
+  type: 'string' | 'number' | 'boolean' | 'json' | 'null';
+  value?: unknown; secret: boolean; configured: boolean; description: string;
+  createdAt: string; updatedAt: string;
+};
+export type ProjectVariableInput = Pick<ProjectVariable, 'name' | 'type' | 'secret' | 'description'> & { value?: unknown };
+export const getProjectVariables = (projectId: string) => api.get<ProjectVariable[]>(`/projects/${projectId}/variables`).then((r) => r.data);
+export const createProjectVariable = (projectId: string, data: ProjectVariableInput) => api.post<ProjectVariable>(`/projects/${projectId}/variables`, data).then((r) => r.data);
+export const updateProjectVariable = (id: string, data: Partial<ProjectVariableInput>) => api.patch<ProjectVariable>(`/variables/${id}`, data).then((r) => r.data);
+export const deleteProjectVariable = (id: string) => api.delete(`/variables/${id}`);
 
 export const getProjectAuthProfiles = (projectId: string) =>
   api.get<ProjectAuthProfile[]>(`/projects/${projectId}/authentication`).then((r) => r.data);

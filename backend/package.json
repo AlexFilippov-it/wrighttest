@@ -8,7 +8,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "dotenv -e ../.env -- prisma studio",
     "test:trace": "dotenv -e ../.env -- tsx --test tests/failed-run-trace.test.ts",
-    "test:unit": "dotenv -e ../.env -- tsx --test tests/*.test.ts",
+    "test:unit": "node scripts/test-with-isolated-db.mjs",
+    "test:unit:isolated": "tsx --test tests/*.test.ts",
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "prisma": {
@@ -30,7 +31,10 @@
     "fastify": "^5.12.8",
     "ioredis": "^5.10.1",
     "ipaddr.js": "^2.5.0",
+    "mysql2": "^3.24.6",
     "node-cron": "^4.2.1",
+    "node-sql-parser": "^5.4.0",
+    "pg": "^8.23.1",
     "playwright": "1.61.0",
     "prisma": "^6.19.3",
     "uuid": "^11.1.1",
@@ -41,6 +45,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^22.13.10",
     "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.23.1",
     "@types/uuid": "^10.0.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",

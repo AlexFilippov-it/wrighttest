@@ -25,6 +25,7 @@ if (!['localhost', '127.0.0.1', '::1'].includes(adminUrl.hostname)) {
 }
 
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
+const workerRestartScenario = process.argv.some((argument) => argument.endsWith('suite-worker-restart.integration.spec.ts'));
 const databaseName = `wrighttest_e2e_${suffix}`;
 const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'wrighttest-e2e-'));
 const databaseUrl = new URL(sourceDatabaseUrl);
@@ -33,15 +34,24 @@ const dbAdminUrl = new URL(sourceDatabaseUrl);
 dbAdminUrl.pathname = '/postgres';
 const backendPort = await findFreePort();
 const frontendPort = await findFreePort();
+const redisPort = workerRestartScenario ? await findFreePort() : undefined;
+const redisContainerName = workerRestartScenario ? `wrighttest-e2e-redis-${suffix}` : undefined;
 const adminEmail = `e2e-admin-${suffix}@example.test`;
 const adminPassword = randomBytes(24).toString('base64url');
 const jwtSecret = randomBytes(48).toString('base64url');
 const environment = {
   ...process.env,
+  NODE_ENV: 'test',
+  // The full browser suite can exceed the app-wide limit even with one worker. Keep this
+  // exception scoped to the disposable backend; route-specific authentication limits stay intact.
+  RATE_LIMIT_MAX: '1000',
+  WRIGHTTEST_HTTP_TEST_ALLOW_LOOPBACK: '1',
+  WRIGHTTEST_DATABASE_TEST_MODE: '1',
   DATABASE_URL: databaseUrl.toString(),
   ADMIN_EMAIL: adminEmail,
   ADMIN_PASSWORD: adminPassword,
   JWT_SECRET: jwtSecret,
+  DATABASE_CREDENTIALS_ENCRYPTION_KEY: randomBytes(32).toString('hex'),
   BACKEND_PORT: String(backendPort),
   FRONTEND_PORT: String(frontendPort),
   FRONTEND_URL: `http://127.0.0.1:${frontendPort}`,
@@ -53,18 +63,32 @@ const environment = {
   E2E_STATE_DIR: path.join(tempRoot, 'state'),
   E2E_OUTPUT_DIR: path.join(tempRoot, 'results'),
   E2E_REPORT_DIR: path.join(tempRoot, 'report'),
+  PHASE5_SCREENSHOT_DIR: path.join(tempRoot, 'phase5-screenshots'),
+  PHASE6_SCREENSHOT_DIR: path.join(tempRoot, 'phase6-screenshots'),
   SCREENSHOTS_DIR: path.join(tempRoot, 'screenshots'),
   TRACES_DIR: path.join(tempRoot, 'traces'),
   AUTH_STATES_DIR: path.join(tempRoot, 'auth-states'),
   BULLMQ_PREFIX: `wrighttest-e2e-${suffix}`
 };
+if (workerRestartScenario) {
+  environment.DISABLE_TEST_WORKER = '1';
+  environment.REDIS_HOST = '127.0.0.1';
+  environment.REDIS_PORT = String(redisPort);
+}
 
 let backend;
 let databaseCreated = false;
+let redisContainerStarted = false;
 let exitCode = 1;
 const adminPrisma = new PrismaClient({ datasources: { db: { url: dbAdminUrl.toString() } } });
 
 try {
+  if (workerRestartScenario) {
+    run('docker', ['run', '--detach', '--rm', '--name', redisContainerName, '--label', 'wrighttest.test=isolated-worker-restart', '--publish', `127.0.0.1:${redisPort}:6379`, 'redis:7-alpine'], { cwd: root, env: process.env });
+    redisContainerStarted = true;
+    await waitForRedis(redisPort);
+  }
+
   await adminPrisma.$connect();
   await adminPrisma.$executeRawUnsafe(`CREATE DATABASE "${databaseName}"`);
   databaseCreated = true;
@@ -98,6 +122,11 @@ try {
     if (backend.exitCode === null) backend.kill('SIGKILL');
   }
 
+  if (redisContainerStarted && redisContainerName) {
+    const cleanup = spawnSync('docker', ['rm', '--force', redisContainerName], { cwd: root, stdio: 'inherit' });
+    if (cleanup.status !== 0) exitCode = 1;
+  }
+
   if (databaseCreated) {
     const cleanupPrisma = new PrismaClient({ datasources: { db: { url: dbAdminUrl.toString() } } });
     try {
@@ -110,7 +139,11 @@ try {
       await cleanupPrisma.$disconnect().catch(() => undefined);
     }
   }
-  await fs.rm(tempRoot, { recursive: true, force: true });
+  if (process.env.WRIGHTTEST_E2E_KEEP_ARTIFACTS === '1' && exitCode !== 0) {
+    console.error(`Preserving failed isolated E2E artifacts at ${tempRoot}`);
+  } else {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
 }
 
 process.exitCode = exitCode;
@@ -146,4 +179,14 @@ async function waitForHealth(url, child) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error('Isolated backend did not become healthy within 60 seconds.');
+}
+
+async function waitForRedis(port) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const ping = spawnSync('docker', ['exec', redisContainerName, 'redis-cli', 'ping'], { encoding: 'utf8' });
+    if (ping.status === 0 && ping.stdout.trim() === 'PONG') return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`Disposable Redis did not become healthy on 127.0.0.1:${port}.`);
 }

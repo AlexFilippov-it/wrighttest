@@ -1,9 +1,9 @@
-import crypto from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import prisma from '../prisma';
-import { testQueue } from '../queue/queue';
+import { enqueueTestRun } from '../queue/batch-sequencer';
 import { DATA_DRIVEN_CASE_REQUIRED_ERROR, hasTestDataCases } from '../utils/test-data';
+import { isWebhookSecretConfigured, verifyWebhookSignature } from '../services/webhook-security';
 
 const WebhookPayloadSchema = z.object({
   testId: z.string().optional(),
@@ -11,25 +11,19 @@ const WebhookPayloadSchema = z.object({
   environmentId: z.string().optional()
 });
 
-function verifySignature(secret: string, body: string, signature: string) {
-  if (!signature) return false;
-  if (signature === secret) return true;
-
-  const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
-  return signature === `sha256=${expected}`;
-}
-
 export async function webhookRoutes(fastify: FastifyInstance) {
   fastify.post('/webhooks/trigger', async (req, reply) => {
     const secret = process.env.WEBHOOK_SECRET;
-    if (secret) {
-      const signatureHeader = req.headers['x-wrighttest-secret'];
-      const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
-      const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
+    if (!isWebhookSecretConfigured(secret)) {
+      return reply.status(503).send({ error: 'Webhook trigger is not configured' });
+    }
 
-      if (!signature || !verifySignature(secret, rawBody, signature)) {
-        return reply.status(401).send({ error: 'Invalid signature' });
-      }
+    const signatureHeader = req.headers['x-wrighttest-secret'];
+    const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
+    const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
+
+    if (!signature || !verifyWebhookSignature(secret!, rawBody, signature)) {
+      return reply.status(401).send({ error: 'Invalid signature' });
     }
 
     const result = WebhookPayloadSchema.safeParse(req.body);
@@ -62,7 +56,7 @@ export async function webhookRoutes(fastify: FastifyInstance) {
       const run = await prisma.testRun.create({
         data: { testId, status: 'PENDING', environmentId }
       });
-      await testQueue.add('run', { testRunId: run.id, testId, environmentId });
+      await enqueueTestRun({ id: run.id, testId, environmentId });
       jobs.push({ testRunId: run.id, testId });
     } else if (projectId) {
       const tests = await prisma.test.findMany({ where: { projectId } });
@@ -89,11 +83,7 @@ export async function webhookRoutes(fastify: FastifyInstance) {
         const run = await prisma.testRun.create({
           data: { testId: test.id, status: 'PENDING', environmentId }
         });
-        await testQueue.add('run', {
-          testRunId: run.id,
-          testId: test.id,
-          environmentId
-        });
+        await enqueueTestRun({ id: run.id, testId: test.id, environmentId });
         jobs.push({ testRunId: run.id, testId: test.id });
       }
     } else {

@@ -1,5 +1,6 @@
 import '../setup-playwright-env';
 import { Worker, Job } from 'bullmq';
+import type { Prisma } from '@prisma/client';
 import { devices, type Page } from 'playwright';
 import { expect } from '@playwright/test';
 import path from 'node:path';
@@ -11,8 +12,8 @@ import { getTestWorkerConcurrency, markBatchRunning, updateBatchAfterRun } from 
 import type { Step } from '../types/step';
 import { resolveBrowserUrl } from '../utils/runtime-url';
 import { resolveLocator } from '../utils/locator';
-import { hasUnresolvedVariables, interpolateStep } from '../utils/interpolate';
-import { mergeRuntimeVariables } from '../utils/runtime-variables';
+import { isSecretVariableName, VariableContext, VariableEngineError } from '../utils/variable-context';
+import { completeSuiteChild, expireSuiteHandoffs, recoverSuiteRuns } from '../services/suite-runner';
 import { notifyRunResult } from '../services/notifier';
 import { getBrowserName, launchChromium } from '../utils/browser';
 import { hasAssertionSteps, validateStepRequirements } from '../utils/step-validation';
@@ -21,6 +22,11 @@ import {
   failAuthRefresh,
   resolveAuthStateForExecution
 } from '../services/auth-state';
+import { executeDatabaseStep, openDatabaseConnection, type SqlExecutionSummary, type SqlSession } from '../services/database-connections';
+import { executeHttpRequest, type HttpExecutionSummary } from '../services/http-request';
+import { captureBrowserValue } from '../services/value-capture';
+import { generateTestDataValue, isSecretGeneratorStep } from '../services/test-data-generators';
+import { decryptRunVariablesSnapshot } from '../services/project-variable-crypto';
 import {
   buildActionCandidates,
   dedupe,
@@ -40,6 +46,7 @@ function escapeRegExp(value: string) {
 }
 
 function getStepTarget(step: Step) {
+  if (step.action === 'generateData') return step.saveAs ? `{{${step.saveAs}}}` : '';
   if (step.action === 'goto') return step.value ?? '';
   if (step.action === 'press' || step.action === 'keyboardPress' || step.action === 'selectOption') return step.value ?? '';
   if ('selector' in step && step.selector) return step.selector;
@@ -179,10 +186,21 @@ type RunStepResult = {
   durationMs: number;
   screenshot?: string | null;
   error?: string | null;
+  database?: SqlExecutionSummary;
+  http?: HttpExecutionSummary;
+  generated?: { variableName: string; generator: string; secret: boolean; value?: string | number | boolean };
+  captured?: { variableName: string; source: NonNullable<Step['captureSource']> | 'sql'; type: string; secret: boolean; createdByStep: number; value?: string | number | boolean | null | Record<string, unknown> | unknown[] };
+  variableError?: {
+    code: string;
+    variableName?: string;
+    stepIndex?: number;
+    expectedType?: string;
+  };
 };
 
 let started = false;
 let testWorker: Worker<TestJobData> | null = null;
+let suiteRunCleanupTimer: NodeJS.Timeout | null = null;
 
 async function ensureDirectories() {
   await fs.mkdir(SCREENSHOTS_DIR, { recursive: true });
@@ -191,11 +209,22 @@ async function ensureDirectories() {
 
 async function runTest(job: Job<TestJobData>) {
   const { testRunId, testId } = job.data;
+  const runSnapshot = await prisma.testRun.findUnique({ where: { id: testRunId }, include: { suiteRun: { select: { status: true } } } });
+  if (!runSnapshot) throw new Error(`TestRun ${testRunId} not found`);
+  if (runSnapshot.status === 'PASSED' || runSnapshot.status === 'FAILED') return;
+  if (runSnapshot.suiteRun?.status === 'CANCELLED') {
+    await prisma.testRun.updateMany({
+      where: { id: testRunId, status: 'PENDING' },
+      data: { status: 'FAILED', error: 'Not started because the Suite Run was cancelled.', finishedAt: new Date(), durationMs: 0 }
+    });
+    return;
+  }
 
-  await prisma.testRun.update({
-    where: { id: testRunId },
-    data: { status: 'RUNNING' }
-  });
+  const claimed = await prisma.testRun.updateMany({ where: { id: testRunId, status: 'PENDING' }, data: { status: 'RUNNING' } });
+  if (claimed.count === 0) {
+    const latest = await prisma.testRun.findUnique({ where: { id: testRunId }, select: { status: true } });
+    if (latest?.status !== 'RUNNING') return;
+  }
   await markBatchRunning(testRunId);
 
   const test = await prisma.test.findUnique({ where: { id: testId } });
@@ -203,30 +232,22 @@ async function runTest(job: Job<TestJobData>) {
     throw new Error(`Test ${testId} not found`);
   }
 
-  const runSnapshot = await prisma.testRun.findUnique({ where: { id: testRunId } });
-  if (!runSnapshot) {
-    throw new Error(`TestRun ${testRunId} not found`);
+  let variableSnapshot: { projectVariables?: Record<string, unknown>; environmentVariables?: Record<string, unknown>; testDataVariables?: Record<string, unknown>; runInputs?: Record<string, unknown>; secretNames?: string[] } = {};
+  variableSnapshot.testDataVariables = (runSnapshot.dataCaseVariables ?? {}) as Record<string, unknown>;
+  if (runSnapshot.variablesSnapshot) {
+    variableSnapshot = decryptRunVariablesSnapshot(runSnapshot.variablesSnapshot) as typeof variableSnapshot;
+  } else if (runSnapshot.environmentId) {
+    const environment = await prisma.environment.findUnique({ where: { id: runSnapshot.environmentId } });
+    variableSnapshot.environmentVariables = (environment?.variables ?? {}) as Record<string, unknown>;
   }
-
-  let environmentVariables: Record<string, string> = {};
-  if (runSnapshot.environmentId) {
-    const environment = await prisma.environment.findUnique({
-      where: { id: runSnapshot.environmentId }
-    });
-    if (environment) {
-      environmentVariables = (environment.variables ?? {}) as Record<string, string>;
-    }
-  }
-
-  const dataCaseVariables = (runSnapshot.dataCaseVariables ?? {}) as Record<string, string>;
-  const runtimeVariables = mergeRuntimeVariables(environmentVariables, dataCaseVariables);
+  let variableContext = new VariableContext();
   const isAuthRefresh = runSnapshot.runMode === 'AUTH_REFRESH';
 
   if (isAuthRefresh && !runSnapshot.authStateId) {
     throw new Error(`Authentication refresh run ${testRunId} is missing its authentication profile.`);
   }
 
-  const steps = (test.steps as unknown as Step[]).map((step) => interpolateStep(step, runtimeVariables));
+  const steps = test.steps as unknown as Step[];
   const deviceConfig = test.device && test.device in devices ? devices[test.device as keyof typeof devices] : {};
 
   if (test.device && !(test.device in devices)) {
@@ -243,6 +264,16 @@ async function runTest(job: Job<TestJobData>) {
   let tracePath: string | null = null;
   let traceUnavailableReason: string | null = null;
   let runError: Error | null = null;
+  let omitArtifactsForSecrets = steps.some((step) =>
+    (step.action === 'generateData' && (isSecretGeneratorStep(step) || isSecretVariableName(step.saveAs ?? ''))) ||
+    step.action === 'captureValue' ||
+    step.action === 'httpRequest' ||
+    (step.action === 'executeSql' && Boolean(step.saveResultAs)) ||
+    step.secret === true ||
+    (Boolean(step.saveResultAs) && isSecretVariableName(step.saveResultAs ?? ''))
+  );
+  if (omitArtifactsForSecrets) traceUnavailableReason = 'Trace and screenshots are omitted for runs that may capture secret values.';
+  const databaseSessions = new Map<string, { session: SqlSession; name: string; accessMode: 'READ_ONLY' | 'READ_WRITE' }>();
 
   console.log(`[Worker] Using ${getBrowserName()} for test run ${testRunId}`);
 
@@ -256,6 +287,17 @@ async function runTest(job: Job<TestJobData>) {
   });
 
   try {
+    variableContext = new VariableContext({
+      projectVariables: variableSnapshot.projectVariables,
+      environmentVariables: variableSnapshot.environmentVariables,
+      testDataVariables: variableSnapshot.testDataVariables,
+      runInputs: variableSnapshot.runInputs,
+      secretNames: variableSnapshot.secretNames
+    });
+    if (variableContext.getMetadata().some((entry) => entry.secret)) {
+      omitArtifactsForSecrets = true;
+      traceUnavailableReason = 'Trace and screenshots are omitted for runs containing secret variables.';
+    }
     if (isAuthRefresh && !hasAssertionSteps(steps)) {
       throw new Error(
         'Authentication check must contain at least one assertion that confirms login succeeded, such as Assert URL or Assert visible.'
@@ -273,15 +315,22 @@ async function runTest(job: Job<TestJobData>) {
       ...deviceConfig,
       ...(storageState ? { storageState } : {})
     });
-    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
-    traceStarted = true;
+    if (!omitArtifactsForSecrets) {
+      await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+      traceStarted = true;
+    }
 
     const page = await context.newPage();
 
-    for (const [index, step] of steps.entries()) {
+    for (const [index, rawStep] of steps.entries()) {
+      let step = rawStep;
       currentStep = index + 1;
       const stepStartedAt = Date.now();
       let stepError: Error | null = null;
+      let databaseSummary: SqlExecutionSummary | undefined;
+      let httpSummary: HttpExecutionSummary | undefined;
+      let generatedSummary: RunStepResult['generated'];
+      let capturedSummary: RunStepResult['captured'];
 
       await prisma.testRun.update({
         where: { id: testRunId },
@@ -291,22 +340,98 @@ async function runTest(job: Job<TestJobData>) {
       });
 
       try {
+        step = variableContext.resolveStep(rawStep, index);
         const requirementIssue = validateStepRequirements(step);
         if (requirementIssue) {
           throw new Error(requirementIssue.message);
         }
 
-        if (
-          (step.value && hasUnresolvedVariables(step.value)) ||
-          (step.expected && hasUnresolvedVariables(step.expected)) ||
-          (step.selector && hasUnresolvedVariables(step.selector))
-        ) {
-          throw new Error(
-            `Unresolved template variable in step ${index + 1}: ${JSON.stringify(step)}`
-          );
-        }
-
         switch (step.action) {
+          case 'generateData': {
+            const variableName = step.saveAs!;
+            const secret = isSecretGeneratorStep(step);
+            variableContext.assertRuntimeWritable(variableName, step.replace, index);
+            const generatedValue = generateTestDataValue(step.generator, step.generatorOptions);
+            variableContext.setRuntime(variableName, generatedValue, {
+              source: 'generated',
+              secret,
+              createdByStep: index + 1,
+              replace: step.replace
+            });
+            generatedSummary = {
+              variableName,
+              generator: step.generator!,
+              secret,
+              ...(!secret ? { value: generatedValue } : {})
+            };
+            break;
+          }
+          case 'captureValue': {
+            const variableName = step.saveAs!;
+            variableContext.assertRuntimeWritable(variableName, step.replace, index);
+            const { value: capturedValue, secret: sourceSecret } = await captureBrowserValue(page, step);
+            variableContext.setRuntime(variableName, capturedValue, {
+              source: 'captured',
+              secret: Boolean(step.secret || sourceSecret || isSecretVariableName(variableName)),
+              createdByStep: index + 1, replace: step.replace
+            });
+            const entry = variableContext.resolve(variableName)!;
+            capturedSummary = {
+              variableName,
+              source: step.captureSource!,
+              type: entry.type,
+              secret: entry.secret,
+              createdByStep: index + 1,
+              ...(!entry.secret ? { value: capturedValue } : {})
+            };
+            break;
+          }
+          case 'executeSql':
+          case 'assertDatabaseResult': {
+            if (step.saveResultAs) variableContext.assertRuntimeWritable(step.saveResultAs, step.replace, index);
+            const connectionId = step.databaseConnectionId!;
+            let databaseSession = databaseSessions.get(connectionId);
+            if (!databaseSession) {
+              const connection = await prisma.databaseConnection.findFirst({ where: { id: connectionId, projectId: test.projectId } });
+              if (!connection) throw new Error('The database connection was not found in this project.');
+              databaseSession = {
+                session: await openDatabaseConnection(connection),
+                name: connection.name,
+                accessMode: connection.accessMode
+              };
+              databaseSessions.set(connectionId, databaseSession);
+            }
+            const execution = await executeDatabaseStep(
+              databaseSession.session,
+              databaseSession.name,
+              databaseSession.accessMode,
+              step,
+              variableContext
+            );
+            databaseSummary = execution.summary;
+            if (step.saveResultAs && Object.prototype.hasOwnProperty.call(execution, 'savedValue')) {
+              variableContext.setRuntime(step.saveResultAs, execution.savedValue, {
+                source: 'captured', secret: Boolean(step.secret || execution.savedValueSecret || isSecretVariableName(step.saveResultAs)),
+                createdByStep: index + 1, replace: step.replace
+              });
+              const entry = variableContext.resolve(step.saveResultAs)!;
+              capturedSummary = {
+                variableName: step.saveResultAs,
+                source: 'sql',
+                type: entry.type,
+                secret: entry.secret,
+                createdByStep: index + 1,
+                ...(!entry.secret ? { value: execution.savedValue } : {})
+              };
+            }
+            break;
+          }
+          case 'httpRequest': {
+            const execution = await executeHttpRequest(rawStep, variableContext, index);
+            httpSummary = execution.summary;
+            if (execution.failed) throw new Error(execution.error ?? 'HTTP assertion failed.');
+            break;
+          }
           case 'goto':
             await page.goto(resolveBrowserUrl(step.value!), { waitUntil: 'domcontentloaded' });
             break;
@@ -409,25 +534,47 @@ async function runTest(job: Job<TestJobData>) {
             throw new Error(`Unsupported action: ${step.action}`);
         }
       } catch (error) {
-        stepError = error instanceof Error ? error : new Error(String(error));
+        const message = error instanceof Error ? error.message : String(error);
+        stepError = error instanceof VariableEngineError
+          ? error
+          : new Error(variableContext.redact(message));
       } finally {
-        const screenshotName = `${testRunId}_step${index + 1}${stepError ? '_failed' : ''}.png`;
-        const screenshotPath = path.join(SCREENSHOTS_DIR, screenshotName);
-        try {
-          await page.screenshot({ path: screenshotPath });
-          screenshots.push(screenshotName);
-        } catch (screenshotError) {
-          console.error(`[Worker] Failed to capture screenshot for ${testRunId} step ${index + 1}:`, screenshotError);
+        let screenshot: string | null = null;
+        if (!omitArtifactsForSecrets && !['executeSql', 'assertDatabaseResult', 'httpRequest'].includes(step.action)) {
+          const screenshotName = `${testRunId}_step${index + 1}${stepError ? '_failed' : ''}.png`;
+          const screenshotPath = path.join(SCREENSHOTS_DIR, screenshotName);
+          try {
+            await page.screenshot({ path: screenshotPath });
+            screenshots.push(screenshotName);
+            screenshot = screenshotName;
+          } catch (screenshotError) {
+            console.error(`[Worker] Failed to capture screenshot for ${testRunId} step ${index + 1}:`, screenshotError);
+          }
         }
 
         stepResults.push({
           index,
           action: step.action,
-          target: getStepTarget(step),
+          target: getStepTarget(rawStep),
           status: stepError ? 'failed' : 'passed',
           durationMs: Date.now() - stepStartedAt,
-          screenshot: screenshots[screenshots.length - 1] ?? null,
-          error: stepError?.message ?? null
+          screenshot,
+          error: stepError?.message ?? null,
+          ...(stepError instanceof VariableEngineError ? {
+            variableError: {
+              code: stepError.code,
+              ...(stepError.variableName ? { variableName: stepError.variableName } : {}),
+              ...(stepError.stepIndex === undefined ? {} : { stepIndex: stepError.stepIndex }),
+              ...(stepError.expectedType ? { expectedType: stepError.expectedType } : {})
+            }
+          } : {}),
+          ...(databaseSummary ? { database: databaseSummary } : {}),
+          ...(httpSummary ? { http: httpSummary } : {}),
+          ...(generatedSummary ? { generated: generatedSummary } : {}),
+          ...(capturedSummary ? { captured: capturedSummary } : {}),
+          ...(stepError && 'databaseSummary' in stepError && typeof stepError.databaseSummary === 'object'
+            ? { database: stepError.databaseSummary as SqlExecutionSummary }
+            : {})
         });
       }
 
@@ -451,6 +598,9 @@ async function runTest(job: Job<TestJobData>) {
   } catch (error) {
     runError = error instanceof Error ? error : new Error(String(error));
   } finally {
+    await Promise.all([...databaseSessions.values()].map(({ session }) => session.close().catch(() => {
+      console.warn('[Worker] Failed to close a database session after the run.');
+    })));
     if (context && traceStarted) {
       const traceName = `${testRunId}.zip`;
       tracePath = path.join(TRACES_DIR, traceName);
@@ -465,7 +615,7 @@ async function runTest(job: Job<TestJobData>) {
         console.error(`[Worker] Failed to save trace for ${testRunId}:`, traceError);
       }
     } else if (context && !traceStarted) {
-      traceUnavailableReason = 'Trace was not created because browser context failed before tracing started.';
+      traceUnavailableReason ??= 'Trace was not created because browser context failed before tracing started.';
     } else if (!context) {
       traceUnavailableReason = 'Trace was not created because browser context could not be initialized.';
     }
@@ -489,21 +639,19 @@ async function runTest(job: Job<TestJobData>) {
     });
   }
 
-  await prisma.testRun.update({
-    where: { id: testRunId },
-    data: {
+  const completionData = {
       status: runError ? 'FAILED' : 'PASSED',
       finishedAt: new Date(),
       durationMs: Date.now() - startedAt,
       currentStep: runError ? currentStep : steps.length,
       totalSteps: steps.length,
       screenshots,
-      stepResults,
+      stepResults: JSON.parse(JSON.stringify(stepResults)) as Prisma.InputJsonValue,
       error: runError ? runError.message : null,
       tracePath: tracePath ? `${testRunId}.zip` : null,
       traceUnavailableReason
-    }
-  });
+    } as const;
+  await completeSuiteChild(testRunId, completionData.status, variableContext.getRuntimeEntries(), completionData);
 
   const finalRun = await prisma.testRun.findUnique({ where: { id: testRunId } });
   if (finalRun && !isAuthRefresh) {
@@ -526,6 +674,11 @@ export async function startTestWorker() {
   started = true;
 
   await ensureDirectories();
+  await recoverSuiteRuns();
+  suiteRunCleanupTimer = setInterval(() => {
+    void expireSuiteHandoffs().catch((error) => console.error('[Worker] Could not expire suite handoff values:', error));
+  }, 10 * 60 * 1000);
+  suiteRunCleanupTimer.unref();
 
   testWorker = new Worker<TestJobData>('test-runs', runTest, {
     connection: redis,
@@ -544,6 +697,8 @@ export async function startTestWorker() {
 
 export async function stopTestWorker() {
   if (!testWorker) return;
+  if (suiteRunCleanupTimer) clearInterval(suiteRunCleanupTimer);
+  suiteRunCleanupTimer = null;
   await testWorker.close();
   testWorker = null;
   started = false;

@@ -4,6 +4,12 @@ export type EditableVariableRow = {
   id: string;
   key: string;
   value: string;
+  kind: 'literal' | 'reference' | 'generated';
+  referenceName?: string;
+  referenceSource?: 'project' | 'environment';
+  generator?: string;
+  options?: Record<string, string | number | boolean>;
+  secret?: boolean;
 };
 
 export type EditableTestDataCase = {
@@ -68,7 +74,7 @@ export function createEmptyCase(existingCases: EditableTestDataCase[] = [], make
 }
 
 export function createVariableRow(makeId = createId): EditableVariableRow {
-  return { id: makeId(), key: '', value: '' };
+  return { id: makeId(), key: '', value: '', kind: 'literal' };
 }
 
 export function toEditableTestData(testData: TestDataCase[] | undefined | null, makeId = createId): EditableTestDataCase[] {
@@ -78,11 +84,14 @@ export function toEditableTestData(testData: TestDataCase[] | undefined | null, 
     id: makeId(),
     name: testCase.name,
     enabled: testCase.enabled,
-    variables: Object.entries(testCase.variables ?? {}).map(([key, value]) => ({
-      id: makeId(),
-      key,
-      value
-    }))
+    variables: Object.entries(testCase.variables ?? {}).map(([key, value]) => {
+      if (typeof value === 'object' && value !== null && 'kind' in value) {
+        if (value.kind === 'literal') return { id: makeId(), key, kind: 'literal' as const, value: typeof value.value === 'string' ? value.value : JSON.stringify(value.value) };
+        if (value.kind === 'reference') return { id: makeId(), key, kind: 'reference' as const, value: '', referenceName: value.name, referenceSource: value.source };
+        return { id: makeId(), key, kind: 'generated' as const, value: '', generator: value.generator, options: value.options, secret: value.secret };
+      }
+      return { id: makeId(), key, kind: 'literal' as const, value };
+    })
   }));
 }
 
@@ -93,7 +102,11 @@ export function toApiTestData(cases: EditableTestDataCase[], useTestData: boolea
     name: testCase.name.trim(),
     enabled: testCase.enabled,
     variables: Object.fromEntries(
-      testCase.variables.map((variable) => [variable.key, variable.value])
+      testCase.variables.map((variable) => [variable.key, variable.kind === 'literal'
+        ? variable.value
+        : variable.kind === 'reference'
+          ? { kind: 'reference', name: variable.referenceName ?? '', ...(variable.referenceSource ? { source: variable.referenceSource } : {}) }
+          : { kind: 'generated', generator: variable.generator ?? '', options: variable.options ?? {}, ...(variable.secret ? { secret: true } : {}) }])
     )
   }));
 }
@@ -112,11 +125,7 @@ export function duplicateCase(
     id: makeId(),
     name,
     enabled: source.enabled,
-    variables: source.variables.map((variable) => ({
-      id: makeId(),
-      key: variable.key,
-      value: variable.value
-    }))
+    variables: source.variables.map(({ id: _id, ...variable }) => ({ ...variable, id: makeId() }))
   };
 
   const sourceIndex = cases.findIndex((testCase) => testCase.id === caseId);
@@ -166,7 +175,7 @@ export function updateEditableVariableValue(
 
     return {
       ...testCase,
-      variables: [...testCase.variables, { id: makeId(), key, value }]
+      variables: [...testCase.variables, { id: makeId(), key, value, kind: 'literal' as const }]
     };
   });
 }
@@ -181,7 +190,7 @@ export function addEditableVariableToAllCases(
       ? testCase
       : {
           ...testCase,
-          variables: [...testCase.variables, { id: makeId(), key, value: '' }]
+          variables: [...testCase.variables, { id: makeId(), key, value: '', kind: 'literal' as const }]
         }
   ));
 }
@@ -245,7 +254,7 @@ export function validateEditableTestData(cases: EditableTestDataCase[], useTestD
         variableErrors.key = 'Variable keys must be unique within a case.';
       }
 
-      if (variable.value.length > VARIABLE_VALUE_LIMIT) {
+      if (variable.kind === 'literal' && variable.value.length > VARIABLE_VALUE_LIMIT) {
         variableErrors.value = `Value must be ${VARIABLE_VALUE_LIMIT} characters or fewer.`;
       }
 

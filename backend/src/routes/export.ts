@@ -32,6 +32,13 @@ function sanitizeFilename(name: string) {
     .replace(/(^-|-$)/g, '');
 }
 
+function hasDatabaseSteps(steps: unknown): boolean {
+  return Array.isArray(steps) && steps.some((step) =>
+    typeof step === 'object' && step !== null && 'action' in step &&
+    ['executeSql', 'assertDatabaseResult'].includes(String(step.action))
+  );
+}
+
 export async function exportRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string }; Querystring: { envId?: string; useEnvVars?: string } }>(
     '/tests/:id/export',
@@ -49,6 +56,10 @@ export async function exportRoutes(fastify: FastifyInstance) {
         return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
       }
 
+      if (hasDatabaseSteps(test.steps)) {
+        return reply.status(409).send({ error: 'Standalone Playwright exports do not support WrightTest database connections yet.' });
+      }
+
       let variables: Record<string, string> = {};
       if (req.query.envId) {
         const environment = await prisma.environment.findUnique({
@@ -62,6 +73,7 @@ export async function exportRoutes(fastify: FastifyInstance) {
 
       const code = exportToSpec(test.steps as never[], {
         testName: test.name,
+        testData: test.testData as Array<{ name: string; enabled: boolean; variables: Record<string, unknown> }> | undefined,
         variables,
         useEnvVars: req.query.useEnvVars === 'true'
       });
@@ -101,6 +113,10 @@ export async function exportRoutes(fastify: FastifyInstance) {
       return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
     }
 
+    if (hasDatabaseSteps(test.steps)) {
+      return reply.status(409).send({ error: 'Standalone Playwright exports do not support WrightTest database connections yet.' });
+    }
+
     let variables: Record<string, string> = {};
     if (body.data.envId) {
       const environment = await prisma.environment.findUnique({
@@ -116,6 +132,7 @@ export async function exportRoutes(fastify: FastifyInstance) {
       testName: test.name,
       testUrl: test.url,
       steps: test.steps as unknown as Step[],
+      testData: test.testData as Array<{ name: string; enabled: boolean; variables: Record<string, unknown> }> | undefined,
       variables,
       useEnvVars: body.data.useEnvVars ?? false
     });
@@ -140,9 +157,35 @@ export async function exportRoutes(fastify: FastifyInstance) {
 
     if (!project) return reply.status(404).send({ error: 'Project not found' });
 
-    const { testName, steps } = parsePlaywrightSpec(body.data.code);
+    const { userId } = getAuthUser(req);
+    try {
+      await requireProjectRole(project.id, userId, ['OWNER', 'EDITOR']);
+    } catch (error) {
+      return reply.status(getProjectAccessStatusCode(error)).send({
+        error: error instanceof Error ? error.message : 'Forbidden'
+      });
+    }
+
+    const { testName, steps, testData } = parsePlaywrightSpec(body.data.code);
     if (steps.length === 0) {
       return reply.status(400).send({ error: 'No steps parsed from the provided code' });
+    }
+
+    const references = testData.flatMap((testCase) => Object.values(testCase.variables).flatMap((cell) => {
+      if (!cell || typeof cell !== 'object' || !('kind' in cell) || cell.kind !== 'reference') return [];
+      const reference = cell as { name?: unknown; source?: unknown };
+      return [{ name: String(reference.name ?? ''), source: reference.source === 'environment' ? 'environment' as const : 'project' as const }];
+    }));
+    const projectVariableNames = new Set((await prisma.projectVariable.findMany({ where: { projectId: req.params.projectId }, select: { name: true } })).map(({ name }) => name));
+    const environmentRows = references.some(({ source }) => source === 'environment')
+      ? await prisma.environment.findMany({ where: { projectId: req.params.projectId }, select: { variables: true } })
+      : [];
+    const environmentVariableNames = new Set(environmentRows.flatMap(({ variables }) => Object.keys((variables ?? {}) as Record<string, unknown>)));
+    const missingReferences = [...new Set(references.filter(({ name, source }) =>
+      !name || !(source === 'project' ? projectVariableNames : environmentVariableNames).has(name)
+    ).map(({ name, source }) => `${source}:${name || '(empty)'}`))];
+    if (missingReferences.length > 0) {
+      return reply.status(400).send({ error: `Referenced variables are not configured in this project: ${missingReferences.join(', ')}` });
     }
 
     const firstGoto = steps.find((step) => step.action === 'goto');
@@ -151,13 +194,15 @@ export async function exportRoutes(fastify: FastifyInstance) {
         name: body.data.name ?? testName,
         url: firstGoto?.value ?? 'https://example.com',
         steps: steps as never[],
+        testData: testData as never[],
         projectId: req.params.projectId
       }
     });
 
     return reply.status(201).send({
       test,
-      parsedSteps: steps.length
+      parsedSteps: steps.length,
+      parsedTestDataCases: testData.length
     });
   });
 }

@@ -1,13 +1,15 @@
+export type TestDataCell = string | { kind: 'literal'; value: unknown } | { kind: 'reference'; name: string; source?: 'project' | 'environment' } | { kind: 'generated'; generator: string; options?: Record<string, string | number | boolean>; secret?: boolean };
+
 export type TestDataCase = {
   name: string;
   enabled: boolean;
-  variables: Record<string, string>;
+  variables: Record<string, TestDataCell>;
 };
 
 export type DataCaseSnapshot = {
   dataCaseName: string;
   dataCaseIndex: number;
-  dataCaseVariables: Record<string, string>;
+  dataCaseVariables: Record<string, TestDataCell>;
 };
 
 export const DATA_DRIVEN_CASE_REQUIRED_ERROR = 'Data-driven test requires an explicitly selected test case.';

@@ -1,6 +1,6 @@
 {
   "name": "wrighttest",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Low-code UI test automation platform powered by Playwright",
   "private": true,
   "homepage": "https://wrighttest.com",
@@ -13,6 +13,11 @@
     "backend",
     "mcp-server"
   ],
+  "overrides": {
+    "@prisma/config": {
+      "deepmerge-ts": "^8.0.2"
+    }
+  },
   "scripts": {
     "setup": "node scripts/setup-playwright.mjs",
     "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
@@ -21,9 +26,10 @@
     "i18n:check": "node scripts/check-locales.mjs",
     "test:e2e:typecheck": "tsc --noEmit -p e2e/tsconfig.json",
     "test:e2e": "dotenv -e .env -- playwright test --config=e2e/playwright.config.ts",
-    "test:e2e:integration": "E2E_INTEGRATION=1 npm run test:e2e",
+    "test:e2e:integration": "E2E_INTEGRATION=1 npm run test:e2e --",
     "test:e2e:isolated": "node scripts/run-isolated-e2e.mjs",
-    "test:e2e:isolated:integration": "E2E_INTEGRATION=1 node scripts/run-isolated-e2e.mjs"
+    "test:e2e:isolated:integration": "E2E_INTEGRATION=1 node scripts/run-isolated-e2e.mjs",
+    "screenshots:capture": "node scripts/capture-product-screenshots.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

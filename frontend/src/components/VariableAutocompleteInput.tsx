@@ -1,7 +1,8 @@
-import { Input } from 'antd';
+import { Button, Input, Space, Typography } from 'antd';
 import type { InputProps } from 'antd';
-import { useId, useMemo } from 'react';
-import type { FormEvent } from 'react';
+import type { InputRef } from 'antd';
+import { useMemo, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
 
 type VariableAutocompleteInputProps = Omit<InputProps, 'value' | 'onChange'> & {
   value?: string;
@@ -27,7 +28,8 @@ export default function VariableAutocompleteInput({
   disabled,
   ...inputProps
 }: VariableAutocompleteInputProps) {
-  const listId = useId();
+  const inputRef = useRef<InputRef>(null);
+  const [cursor, setCursor] = useState<number | null>(null);
 
   const options = useMemo(() => {
     const query = getActiveVariableQuery(value);
@@ -46,30 +48,53 @@ export default function VariableAutocompleteInput({
     onValueChange?.(nextValue);
   };
 
-  const handleInputChange = (event: FormEvent<HTMLInputElement>) => {
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     emitChange(event.currentTarget.value);
+    setCursor(event.currentTarget.selectionStart);
+  };
+
+  const insertVariable = (name: string) => {
+    const input = inputRef.current?.input;
+    const caret = cursor ?? input?.selectionStart ?? value.length;
+    const before = value.slice(0, caret);
+    const match = before.match(/\{\{([A-Za-z0-9_]*)$/);
+    if (!match) return;
+    const start = caret - match[0].length;
+    const next = `${value.slice(0, start)}{{${name}}}${value.slice(caret)}`;
+    emitChange(next);
+    setCursor(start + name.length + 4);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(start + name.length + 4, start + name.length + 4);
+    });
   };
 
   return (
-    <>
+    <div style={{ position: 'relative', width: style?.width ?? '100%' }}>
       <Input
+        ref={inputRef}
         value={value}
         onChange={handleInputChange}
-        onInput={handleInputChange}
+        onSelect={(event) => setCursor(event.currentTarget.selectionStart)}
+        onKeyDown={(event) => { if (event.key === 'Escape') setCursor(null); }}
         placeholder={placeholder}
         suffix={suffix}
         size={size}
         disabled={disabled}
         autoComplete="off"
-        list={options.length > 0 ? listId : undefined}
         style={style}
         {...inputProps}
       />
-      <datalist id={listId}>
-        {options.map((option) => (
-          <option key={option.value} value={`{{${option.value}}}`} />
-        ))}
-      </datalist>
-    </>
+      {options.length > 0 && !disabled && getActiveVariableQuery(value) !== null ? <div
+        role="listbox"
+        style={{ position: 'absolute', zIndex: 20, top: '100%', left: 0, right: 0, maxHeight: 220, overflowY: 'auto', padding: 6, background: '#fff', border: '1px solid #d9dfe8', borderRadius: 8, boxShadow: '0 6px 18px rgba(15, 23, 42, .12)' }}
+      >
+        <Space direction="vertical" size={2} style={{ width: '100%' }}>
+          {options.map((option) => <Button key={option.value} role="option" aria-selected="false" type="text" size="small" block style={{ textAlign: 'left' }} onMouseDown={(event) => event.preventDefault()} onClick={() => insertVariable(option.value)}>
+            <Typography.Text code>{'{{' + option.value + '}}'}</Typography.Text>
+          </Button>)}
+        </Space>
+      </div> : null}
+    </div>
   );
 }

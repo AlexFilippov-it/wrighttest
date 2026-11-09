@@ -19,6 +19,7 @@
 - **Assertions Builder** - configure visibility, text, value, URL, title, checked state, and element-count assertions
 - **Device Presets** - run desktop 1280px by default or emulate iPhone 15, Pixel 7, iPad and other devices
 - **Environments and authentication** - use project-scoped variables and optionally reuse encrypted Playwright storage state per environment
+- **Database checks** - connect PostgreSQL, MySQL, or Supabase PostgreSQL databases; run bounded, parameterized SQL steps and verify results inside existing Checks and Suites ([setup and limits](./docs/database-testing.md))
 - **Data-driven checks** - define named scenario cases, run one selected case, or queue all enabled cases as a batch
 - **Suites and schedules** - group checks and run checks or suites manually or on a cron schedule
 - **Run results** - inspect step-level outcomes, screenshots, and Playwright traces in the built-in trace viewer
@@ -52,6 +53,7 @@ cd wrighttest
 
 cp .env.example .env
 # Edit .env: set JWT_SECRET to a long random value and change the initial admin password.
+# Set DATABASE_CREDENTIALS_ENCRYPTION_KEY to the output of: openssl rand -hex 32
 
 docker compose up --build
 ```
@@ -90,7 +92,7 @@ git clone https://github.com/AlexFilippov-it/wrighttest.git
 cd wrighttest
 
 cp .env.example .env
-# Set JWT_SECRET to a long random value and change the initial admin password.
+# Set JWT_SECRET and DATABASE_CREDENTIALS_ENCRYPTION_KEY, and change the initial admin password.
 
 docker compose -f docker-compose.hub.yml pull
 docker compose -f docker-compose.hub.yml up -d
@@ -151,12 +153,13 @@ For a server deployment:
 
 1. Copy `.env.example` to `.env`
 2. Set `JWT_SECRET` to a long random value
-3. Set `FRONTEND_URL` to your public domain or reverse-proxy URL
-4. Set `VITE_BACKEND_URL` and `VITE_NOVNC_URL` to the URLs users should reach from the browser
+3. Set `DATABASE_CREDENTIALS_ENCRYPTION_KEY` to a generated 32-byte hex key (`openssl rand -hex 32`)
+4. Set `FRONTEND_URL` to your public domain or reverse-proxy URL
+5. Set `VITE_BACKEND_URL` and `VITE_NOVNC_URL` to the URLs users should reach from the browser
    - local example: `http://localhost:6080`
    - reverse-proxy example: `/vnc`
-5. Adjust `*_HOST_PORT` values if your VPS already uses ports like `3000`, `5432`, or `6379`
-6. Run `docker compose up --build -d`
+6. Adjust `*_HOST_PORT` values if your VPS already uses ports like `3000`, `5432`, or `6379`
+7. Run `docker compose up --build -d`
 
 If you place nginx in front of the app, proxy the public frontend domain to the frontend container and route backend/API traffic to the backend container. The backend already exposes `/health` and `/health/db` for readiness checks.
 
@@ -195,6 +198,10 @@ This keeps the container image unchanged and moves the deployment-specific part 
 For repository setup, architecture, and contribution workflow, start here:
 
 - [AGENTS.md](./AGENTS.md)
+- [Installation Guide](./docs/installation.md)
+- [User Guide](./docs/user-guide.md)
+- [Security Guide](./docs/security.md)
+- [Release notes draft](./CHANGELOG.md)
 
 It contains the canonical repo workflow, startup order, and environment rules for WrightTest.
 
@@ -250,6 +257,10 @@ docker compose up --build -d
 
 Migrations apply automatically on startup. Existing projects, tests and run history are preserved in the Postgres volume.
 
+## Database Testing
+
+Database connections and SQL steps extend the existing Checks, Suites, Runs, and worker. Credentials are encrypted by the backend and are never returned by the API. Configure `DATABASE_CREDENTIALS_ENCRYPTION_KEY` before using database connections. Start with **Read Only**, use bound query parameters, and use disposable/staging data for any **Read & Write** checks. Private/VPC targets are blocked by default. See [Database Connections and Testing](./docs/database-testing.md) for setup, permissions, SQL limits, assertions, run results, and current limitations.
+
 ## 🔧 Changing Ports
 
 All ports are in `.env` - no hardcoded values in code:
@@ -268,15 +279,30 @@ docker compose up --build -d
 
 ## 📸 Product Tour
 
-Current screenshots are captured from the running application at a consistent 1920×1080 viewport. The project-tour set is intentionally limited to screens that do not expose local test URLs or inconsistent demo data.
+Current screenshots are captured from the running application at a consistent 1440×900 viewport using an isolated demo database and synthetic data. See [`docs/screenshot-workflow.md`](./docs/screenshot-workflow.md) to reproduce them. The live recorder is excluded because it requires an interactive headed/noVNC session.
 
 <p align="center">
-  <img src="./docs/release/suites.png" alt="Suites page in WrightTest" width="100%" />
+  <img src="./docs/release/screenshots/dashboard.png" alt="WrightTest dashboard with synthetic demo run history" width="100%" />
+</p>
+<p align="center"><em>Monitor check health and recent results across a workspace.</em></p>
+
+<p align="center">
+  <img src="./docs/release/screenshots/check-editor.png" alt="WrightTest check editor with a browser flow and assertion" width="100%" />
+</p>
+<p align="center"><em>Build browser checks from ordered steps and outcome assertions.</em></p>
+
+<p align="center">
+  <img src="./docs/release/screenshots/run-results.png" alt="Passed WrightTest run details and trace availability" width="100%" />
+</p>
+<p align="center"><em>Review step results and open the associated Playwright trace.</em></p>
+
+<p align="center">
+  <img src="./docs/release/screenshots/suites.png" alt="Suites page in WrightTest with synthetic checks" width="100%" />
 </p>
 <p align="center"><em>Organize reusable groups of browser checks.</em></p>
 
 <p align="center">
-  <img src="./docs/release/language-settings.png" alt="English instance language settings in WrightTest" width="100%" />
+  <img src="./docs/release/screenshots/localization.png" alt="English instance language settings in WrightTest" width="100%" />
 </p>
 <p align="center"><em>Manage the instance interface language and language packs.</em></p>
 
@@ -346,7 +372,7 @@ The built-in English and Russian catalogs are checked by `npm run i18n:check`. E
 
 WrightTest includes a local stdio MCP server for compatible AI clients. It delegates project, check, suite, run, and safe browser-exploration operations to the existing backend API, preserves project roles, and uses isolated unauthenticated browser sessions. An external AI client can follow the documented generation workflow to plan evidence-backed Checks, run a Suite, and diagnose or repair confirmed test defects. Remote MCP transport and an embedded LLM are not included.
 
-See [MCP Server setup and tool reference](./docs/mcp-server.md) for API token creation, Codex and Claude Desktop configuration, all 24 tools, permissions, browser safety constraints, and local tests. [AI-Assisted Test Generation](./docs/ai-test-generation.md) documents planning, execution, bounded repair, and honest reporting.
+See the [WrightTest MCP overview](https://wrighttest.com/mcp/), [MCP Server setup and tool reference](./docs/mcp-server.md) for API token creation, Codex and Claude Desktop configuration, all 32 tools, permissions, browser safety constraints, and local tests, and the [AI-Assisted Test Generation guide](./docs/ai-test-generation.md) for planning, execution, bounded repair, and honest reporting.
 
 ## 🖥 Devices
 

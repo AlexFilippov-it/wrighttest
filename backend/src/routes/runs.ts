@@ -1,13 +1,17 @@
 import { FastifyInstance } from 'fastify';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import prisma from '../prisma';
-import { enqueueTestRun } from '../queue/batch-sequencer';
+import { enqueueTestRun, prepareRunVariableSnapshot } from '../queue/batch-sequencer';
 import { getAccessibleProjectIds, getAuthUser, getProjectAccessStatusCode, requireProjectRole } from '../utils/project-access';
 import { buildDataCaseSnapshot, getTestDataCases } from '../utils/test-data';
+import { isSecretVariableName } from '../utils/variable-context';
+import { decryptRunVariablesSnapshot } from '../services/project-variable-crypto';
+import { openArtifact, parseByteRange, resolveArtifactPath } from '../services/artifact-path';
 
 const TRACES_DIR = path.resolve(process.env.TRACES_DIR || './traces');
+const SCREENSHOTS_DIR = path.resolve(process.env.SCREENSHOTS_DIR || './screenshots');
 
 const RunSchema = z.object({
   environmentId: z.string().optional(),
@@ -15,8 +19,140 @@ const RunSchema = z.object({
 });
 
 export async function runRoutes(fastify: FastifyInstance) {
+  type ArtifactKind = 'screenshot' | 'trace' | 'validationTrace';
+  type ArtifactTicket = {
+    typ: 'wrighttest-artifact';
+    userId: string;
+    projectId: string;
+    kind: ArtifactKind;
+    runId?: string;
+    testId?: string;
+    index?: number;
+    filename?: string;
+  };
+
+  function issueArtifactUrl(ticket: Omit<ArtifactTicket, 'typ'>) {
+    const token = fastify.jwt.sign({ ...ticket, typ: 'wrighttest-artifact' }, { expiresIn: '5m' });
+    return `/api/artifacts?ticket=${encodeURIComponent(token)}`;
+  }
+
+  fastify.get<{ Querystring: { ticket?: string } }>('/api/artifacts', async (req, reply) => {
+    let ticket: ArtifactTicket;
+    try {
+      if (!req.query.ticket) throw new Error('Missing artifact ticket');
+      ticket = fastify.jwt.verify<ArtifactTicket>(req.query.ticket);
+    } catch {
+      return reply.status(401).send({ error: 'Artifact link is invalid or expired.' });
+    }
+    if (ticket.typ !== 'wrighttest-artifact' || !ticket.userId || !ticket.projectId ||
+      !['screenshot', 'trace', 'validationTrace'].includes(ticket.kind)) {
+      return reply.status(401).send({ error: 'Artifact link is invalid or expired.' });
+    }
+
+    const requestUser = (req.user as { userId?: string } | undefined)?.userId;
+    if (requestUser && requestUser !== ticket.userId) {
+      return reply.status(403).send({ error: 'Artifact link belongs to another user.' });
+    }
+
+    let filename: string | undefined;
+    if (ticket.kind === 'validationTrace') {
+      if (!ticket.filename) return reply.status(401).send({ error: 'Artifact link is invalid or expired.' });
+      filename = ticket.filename;
+    } else {
+      if (!ticket.runId) return reply.status(401).send({ error: 'Artifact link is invalid or expired.' });
+      const run = await prisma.testRun.findUnique({
+        where: { id: ticket.runId },
+        select: { tracePath: true, screenshots: true, test: { select: { projectId: true } } }
+      });
+      if (!run || run.test.projectId !== ticket.projectId) return reply.status(404).send({ error: 'Artifact not found.' });
+      if (ticket.kind === 'trace') filename = run.tracePath ?? undefined;
+      else if (Number.isInteger(ticket.index) && ticket.index! >= 0 && Array.isArray(run.screenshots)) {
+        const value = run.screenshots[ticket.index!];
+        filename = typeof value === 'string' ? value : undefined;
+      }
+    }
+
+    if (!filename) return reply.status(404).send({ error: 'Artifact not found.' });
+    try {
+      await requireProjectRole(ticket.projectId, ticket.userId, ['OWNER', 'EDITOR', 'VIEWER']);
+    } catch {
+      return reply.status(403).send({ error: 'Project access is no longer available.' });
+    }
+
+    const root = ticket.kind === 'screenshot' ? SCREENSHOTS_DIR : TRACES_DIR;
+    let artifact: Awaited<ReturnType<typeof openArtifact>>;
+    try {
+      artifact = await openArtifact(root, filename);
+    } catch {
+      return reply.status(404).send({ error: 'Artifact not found.' });
+    }
+    if (artifact.size <= 0) {
+      await artifact.handle.close();
+      return reply.status(404).send({ error: 'Artifact not found.' });
+    }
+
+    const range = parseByteRange(req.headers.range, artifact.size);
+    reply.header('Cache-Control', 'private, no-store')
+      .header('Accept-Ranges', 'bytes')
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Cross-Origin-Resource-Policy', 'cross-origin');
+
+    if (range === false) {
+      await artifact.handle.close();
+      return reply.status(416).header('Content-Range', `bytes */${artifact.size}`).send();
+    }
+    const start = range?.start ?? 0;
+    const end = range?.end ?? artifact.size - 1;
+    reply.type(ticket.kind === 'screenshot' ? 'image/png' : 'application/zip')
+      .header('Content-Length', String(Math.max(0, end - start + 1)));
+    if (range) reply.status(206).header('Content-Range', `bytes ${start}-${end}/${artifact.size}`);
+    if (req.method === 'HEAD') {
+      await artifact.handle.close();
+      return reply.send();
+    }
+    return reply.send(artifact.handle.createReadStream({ start, end, autoClose: true }));
+  });
+
+  function maskSecretVariables(value: unknown) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    return Object.fromEntries(Object.entries(value).map(([name, variable]) => [
+      name,
+      isSecretVariableName(name) ? '••••••' : variable
+    ]));
+  }
+
+  function safeVariableSnapshot(value: string | null) {
+    if (!value) return undefined;
+    const snapshot = decryptRunVariablesSnapshot(value) as {
+      projectVariables?: Record<string, unknown>; environmentVariables?: Record<string, unknown>;
+      testDataVariables?: Record<string, unknown>; runInputs?: Record<string, unknown>; secretNames?: string[]; sources?: Record<string, string>;
+    };
+    const secretNames = new Set(snapshot.secretNames ?? []);
+    const items = [
+      ...Object.entries(snapshot.projectVariables ?? {}).map(([name, item]) => ({ name, value: item, source: 'project' })),
+      ...Object.entries(snapshot.environmentVariables ?? {}).map(([name, item]) => ({ name, value: item, source: 'environment' })),
+      ...Object.entries(snapshot.testDataVariables ?? {}).map(([name, item]) => ({ name, value: item, source: snapshot.sources?.[name] ?? 'testData' })),
+      ...Object.entries(snapshot.runInputs ?? {}).map(([name, item]) => ({ name, value: item, source: 'runInput' }))
+    ];
+    const deduped = new Map<string, typeof items[number]>();
+    for (const item of items) deduped.set(item.name, item);
+    return [...deduped.values()].map(({ name, value: itemValue, source }) => {
+      const secret = secretNames.has(name) || isSecretVariableName(name);
+      return {
+        name,
+        source,
+        type: itemValue === null ? 'null' : Array.isArray(itemValue) || typeof itemValue === 'object' ? 'json' : typeof itemValue,
+        secret,
+        ...(!secret ? { value: itemValue } : {})
+      };
+    });
+  }
+
   async function buildTraceMetadata(run: {
     id: string;
+    testId: string;
+    projectId: string;
+    userId: string;
     tracePath: string | null;
     traceUnavailableReason: string | null;
   }) {
@@ -30,11 +166,12 @@ export async function runRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      await fs.access(path.join(TRACES_DIR, run.tracePath));
+      await resolveArtifactPath(TRACES_DIR, run.tracePath);
+      const downloadUrl = issueArtifactUrl({ userId: run.userId, projectId: run.projectId, kind: 'trace', runId: run.id });
       return {
         available: true,
-        downloadUrl: `/api/traces/${run.tracePath}`,
-        viewerUrl: `/trace-viewer/?trace=${encodeURIComponent(`/api/traces/${run.tracePath}`)}`
+        downloadUrl,
+        viewerUrl: `/trace-viewer/?trace=${encodeURIComponent(downloadUrl)}`
       };
     } catch {
       return {
@@ -97,7 +234,7 @@ export async function runRoutes(fastify: FastifyInstance) {
         testId: test.id,
         status: 'PENDING',
         environmentId: body.data.environmentId,
-        ...(dataCaseSnapshot ?? {})
+        ...(dataCaseSnapshot ? { ...dataCaseSnapshot, dataCaseVariables: dataCaseSnapshot.dataCaseVariables as Prisma.InputJsonValue } : {})
       }
     });
 
@@ -171,7 +308,8 @@ export async function runRoutes(fastify: FastifyInstance) {
             environmentId: body.data.environmentId,
             batchId: batch.id,
             batchOrder,
-            ...dataCaseSnapshot
+            ...dataCaseSnapshot,
+            dataCaseVariables: dataCaseSnapshot.dataCaseVariables as Prisma.InputJsonValue
           }
         });
 
@@ -187,6 +325,21 @@ export async function runRoutes(fastify: FastifyInstance) {
 
       return { batch, runs };
     });
+
+    try {
+      await Promise.all(runs.map((run) => prepareRunVariableSnapshot(run.id)));
+    } catch (error) {
+      const safeMessage = error instanceof Error ? error.message : 'Could not prepare run variables.';
+      await prisma.testRun.updateMany({
+        where: { batchId: batch.id, status: 'PENDING' },
+        data: { status: 'FAILED', error: `Variable snapshot preparation failed: ${safeMessage}`.slice(0, 4000), durationMs: 0, finishedAt: new Date() }
+      });
+      await prisma.testRunBatch.update({
+        where: { id: batch.id },
+        data: { status: 'FAILED', completedCases: runs.length, failedCases: runs.length, finishedAt: new Date() }
+      });
+      return reply.status(503).send({ error: safeMessage });
+    }
 
     const firstRun = runs[0];
     const firstJob = firstRun ? await enqueueTestRun(firstRun) : null;
@@ -229,9 +382,37 @@ export async function runRoutes(fastify: FastifyInstance) {
     } catch (error) {
       return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
     }
+    const { variablesSnapshot: _variablesSnapshot, tracePath: _tracePath, ...publicRun } = run;
+    const screenshotNames = Array.isArray(run.screenshots) ? run.screenshots : [];
+    const screenshotUrls = await Promise.all(screenshotNames.map(async (filename, index) => {
+      if (typeof filename !== 'string') return '';
+      try {
+        await resolveArtifactPath(SCREENSHOTS_DIR, filename);
+        return issueArtifactUrl({ userId, projectId: run.test.project.id, kind: 'screenshot', runId: run.id, index });
+      } catch {
+        return '';
+      }
+    }));
+    const stepResults = Array.isArray(run.stepResults) ? run.stepResults.map((stepResult) => {
+      if (!stepResult || typeof stepResult !== 'object' || Array.isArray(stepResult)) return stepResult;
+      const result = stepResult as Record<string, unknown>;
+      const screenshotIndex = screenshotNames.findIndex((name) => name === result.screenshot);
+      return {
+        ...result,
+        ...(screenshotIndex >= 0 && screenshotUrls[screenshotIndex] ? { screenshot: screenshotUrls[screenshotIndex] } : { screenshot: null })
+      };
+    }) : run.stepResults;
     return {
-      ...run,
-      trace: await buildTraceMetadata(run)
+      ...publicRun,
+      screenshots: screenshotUrls.filter(Boolean),
+      stepResults,
+      dataCaseVariables: maskSecretVariables(run.dataCaseVariables),
+      variableSnapshot: safeVariableSnapshot(run.variablesSnapshot),
+      environment: run.environment ? {
+        ...run.environment,
+        variables: maskSecretVariables(run.environment.variables)
+      } : run.environment,
+      trace: await buildTraceMetadata({ ...run, testId: run.testId, projectId: run.test.project.id, userId })
     };
   });
 
@@ -323,6 +504,11 @@ export async function runRoutes(fastify: FastifyInstance) {
 
     return prisma.testRun.findMany({
       where: { testId: req.params.id },
+      select: {
+        id: true, testId: true, status: true, startedAt: true, finishedAt: true,
+        durationMs: true, error: true, currentStep: true, totalSteps: true,
+        environmentId: true, dataCaseName: true, dataCaseIndex: true
+      },
       orderBy: { startedAt: 'desc' },
       take: 20
     });

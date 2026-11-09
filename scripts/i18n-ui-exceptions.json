@@ -20,6 +20,8 @@
     "BASE_URL": "Environment variable identifier example.",
     "USERNAME": "Environment variable identifier example.",
     "PASSWORD": "Environment variable identifier example.",
-    "{{BASE_URL}}/projects or https://example.com": "Start URL syntax example."
+    "{{BASE_URL}}/projects or https://example.com": "Start URL syntax example.",
+    "SELECT id, status FROM orders WHERE id = :orderId": "SQL syntax example in the database query editor placeholder.",
+    "{\n  \"orderId\": \"{{ORDER_ID}}\"\n}": "JSON parameter-value example in the database query editor placeholder."
   }
 }

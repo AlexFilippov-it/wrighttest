@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 (release candidate; not published)
+
+- Added project database connections and SQL steps, typed runtime/project variables, data-driven Checks, and sequential Suite Runs with explicit variable handoff.
+- Added HTTP Request steps with assertions and capture, plus a local stdio MCP server for project, Check, Suite, run, browser exploration, and safe database-connection metadata workflows.
+- Improved responsive application surfaces, Check editing, Run Results, interface localization, and step-level diagnostics.
+- Hardened artifact delivery, browser/API egress validation, secret handling, and production runtime configuration.
+- Final smoke evidence and accepted limitations are recorded in `docs/release/release-readiness-audit.md`, `docs/release/regression-matrix.md`, and `docs/release/known-limitations.md`. No Git tag or GitHub Release has been created.
+
 ## 0.3.0 - 2026-11-03
 
 - Unified the application shell, content surfaces, status treatments, and responsive layouts.
@@ -8,6 +16,6 @@
 - Stabilized E2E authentication setup and added isolated release validation for Docker Compose and existing E2E/integration scenarios.
 - Updated vulnerable runtime dependencies within the supported major versions where possible.
 
-### Remaining dependency advisories
+### Historical advisory note for 0.3.0
 
-`npm audit --omit=dev` still reports advisories in the Prisma 6 `deepmerge-ts` chain and the `glob`/`minimatch` chain under `@fastify/static`. Prisma loads `deepmerge-ts` while reading the repository-owned `backend/prisma.config.ts` during migration/seed startup; the vulnerable recursive-object case is not constructed from HTTP/API input. `@fastify/static` calls `glob` only when configured with `wildcard: false`; WrightTest uses the default wildcard route and does not expose static plugin options or glob patterns to users. These findings remain in the dependency audit and should be reevaluated when upgrading Prisma/static dependencies, but no externally reachable path to the vulnerable input conditions was found for this release.
+This section described the 0.3.0 audit snapshot and is not the current advisory inventory. As of 2026-11-09, `npm audit --omit=dev` reports 3 Moderate and 0 High through `@fastify/static` → `glob`/`minimatch`; see the current release audit for the scoped disposition. No forced upgrade was applied.

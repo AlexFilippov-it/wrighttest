@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '../prisma';
 import { CreateTestSchema, StepSchema, UpdateTestSchema } from '../schemas/test.schema';
@@ -6,6 +7,8 @@ import { runValidationInSubprocess } from '../services/validation-runner';
 import { getAvailableDevices } from '../utils/devices';
 import { getAuthUser, getProjectAccessStatusCode, requireProjectRole } from '../utils/project-access';
 import { deleteAuthStateArtifact, resolveAuthStateForExecution } from '../services/auth-state';
+import path from 'node:path';
+import { resolveArtifactPath } from '../services/artifact-path';
 
 const urlOrTemplate = z.string().refine((value) => {
   if (value.includes('{{')) return true;
@@ -42,6 +45,13 @@ function normalizeEnvironmentId(environmentId?: string | null) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+async function validateConnectionReferences(projectId: string, steps: Array<{ databaseConnectionId?: string }>) {
+  const ids = [...new Set(steps.map((step) => step.databaseConnectionId).filter((id): id is string => Boolean(id)))];
+  if (!ids.length) return true;
+  const count = await prisma.databaseConnection.count({ where: { projectId, id: { in: ids } } });
+  return count === ids.length;
+}
+
 export async function testRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { projectId: string } }>('/projects/:projectId/tests', async (req, reply) => {
     const { userId } = getAuthUser(req);
@@ -61,7 +71,16 @@ export async function testRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>('/tests/:id', async (req, reply) => {
     const test = await prisma.test.findUnique({
       where: { id: req.params.id },
-      include: { runs: { orderBy: { startedAt: 'desc' }, take: 10 } }
+      include: {
+        runs: {
+          select: {
+            id: true, status: true, startedAt: true, finishedAt: true, durationMs: true,
+            error: true, currentStep: true, totalSteps: true
+          },
+          orderBy: { startedAt: 'desc' },
+          take: 10
+        }
+      }
     });
 
     if (!test) return reply.status(404).send({ error: 'Test not found' });
@@ -93,9 +112,14 @@ export async function testRoutes(fastify: FastifyInstance) {
       return reply.status(getProjectAccessStatusCode(error)).send({ error: error instanceof Error ? error.message : 'Forbidden' });
     }
 
+    if (!(await validateConnectionReferences(req.params.projectId, result.data.steps))) {
+      return reply.status(400).send({ error: 'A database connection referenced by this Check does not belong to this project.' });
+    }
+
     const test = await prisma.test.create({
       data: {
         ...result.data,
+        testData: result.data.testData as Prisma.InputJsonValue,
         device: normalizeDevice(result.data.device),
         environmentId: normalizeEnvironmentId(result.data.environmentId),
         projectId: req.params.projectId
@@ -120,13 +144,17 @@ export async function testRoutes(fastify: FastifyInstance) {
     const { userId } = getAuthUser(req);
     try {
       await requireProjectRole(existingTest.projectId, userId, ['OWNER', 'EDITOR']);
+      if (result.data.steps && !(await validateConnectionReferences(existingTest.projectId, result.data.steps))) {
+        return reply.status(400).send({ error: 'A database connection referenced by this Check does not belong to this project.' });
+      }
       const test = await prisma.test.update({
         where: { id: req.params.id },
         data: {
           ...result.data,
+          ...(result.data.testData ? { testData: result.data.testData as Prisma.InputJsonValue } : {}),
           device: normalizeDevice(result.data.device),
           environmentId: normalizeEnvironmentId(result.data.environmentId)
-        }
+        } as Prisma.TestUncheckedUpdateInput
       });
       return test;
     } catch (error) {
@@ -196,7 +224,28 @@ export async function testRoutes(fastify: FastifyInstance) {
         result.data.device,
         storageState
       );
-      return report;
+      const { tracePath, ...safeReport } = report;
+      let traceUrl: string | undefined;
+      let traceViewerUrl: string | undefined;
+      if (tracePath) {
+        const filename = path.basename(tracePath);
+        const tracesDir = path.resolve(process.env.TRACES_DIR || './traces');
+        try {
+          await resolveArtifactPath(tracesDir, filename);
+          const ticket = fastify.jwt.sign({
+            typ: 'wrighttest-artifact',
+            userId,
+            projectId: result.data.projectId,
+            kind: 'validationTrace',
+            filename
+          }, { expiresIn: '5m' });
+          traceUrl = `/api/artifacts?ticket=${encodeURIComponent(ticket)}`;
+          traceViewerUrl = `/trace-viewer/?trace=${encodeURIComponent(traceUrl)}`;
+        } catch {
+          // Do not expose an unverified filesystem path when the artifact is unavailable.
+        }
+      }
+      return { ...safeReport, traceUrl, traceViewerUrl };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Validation failed';
       return reply.status(500).send({ error: message });

@@ -4,6 +4,7 @@ export interface ExportOptions {
   testName: string;
   variables?: Record<string, string>;
   useEnvVars?: boolean;
+  testData?: Array<{ name: string; enabled: boolean; variables: Record<string, unknown> }>;
 }
 
 function escapeRegExp(value: string) {
@@ -13,7 +14,8 @@ function escapeRegExp(value: string) {
 function templateToExpression(
   value: string,
   variables: Record<string, string>,
-  useEnvVars: boolean
+  useEnvVars: boolean,
+  generatedNames: Set<string>
 ) {
   const parts: string[] = [];
   const pattern = /\{\{(\w+)\}\}/g;
@@ -25,7 +27,9 @@ function templateToExpression(
     const literal = value.slice(lastIndex, match.index);
     if (literal) parts.push(JSON.stringify(literal));
 
-    if (useEnvVars) {
+    if (generatedNames.has(name)) {
+      parts.push(`String(__wtRuntime[${JSON.stringify(name)}])`);
+    } else if (useEnvVars) {
       parts.push(`env(${JSON.stringify(name)})`);
     } else {
       const resolved = variables[name];
@@ -48,7 +52,8 @@ function templateToExpression(
 function templateToRegexExpression(
   value: string,
   variables: Record<string, string>,
-  useEnvVars: boolean
+  useEnvVars: boolean,
+  generatedNames: Set<string>
 ) {
   const parts: string[] = [];
   const pattern = /\{\{(\w+)\}\}/g;
@@ -60,7 +65,9 @@ function templateToRegexExpression(
     const literal = value.slice(lastIndex, match.index);
     if (literal) parts.push(`escapeRegExp(${JSON.stringify(literal)})`);
 
-    if (useEnvVars) {
+    if (generatedNames.has(name)) {
+      parts.push(`escapeRegExp(String(__wtRuntime[${JSON.stringify(name)}]))`);
+    } else if (useEnvVars) {
       parts.push(`escapeRegExp(env(${JSON.stringify(name)}))`);
     } else {
       const resolved = variables[name];
@@ -83,21 +90,179 @@ function templateToRegexExpression(
 function selectorToExpression(
   selector: string,
   variables: Record<string, string>,
-  useEnvVars: boolean
+  useEnvVars: boolean,
+  generatedNames: Set<string>
 ) {
   if (selector.startsWith('page.')) {
-    return selector;
+    let expression = '';
+    for (let index = 0; index < selector.length;) {
+      const quote = selector[index];
+      if (quote !== "'" && quote !== '"') {
+        expression += quote;
+        index += 1;
+        continue;
+      }
+
+      const start = index;
+      index += 1;
+      let literal = '';
+      while (index < selector.length && selector[index] !== quote) {
+        if (selector[index] === '\\' && index + 1 < selector.length) {
+          literal += selector[index + 1];
+          index += 2;
+        } else {
+          literal += selector[index];
+          index += 1;
+        }
+      }
+      if (index < selector.length) index += 1;
+
+      const variableNames = [...literal.matchAll(/\{\{(\w+)\}\}/g)].map((match) => match[1]);
+      if (variableNames.length > 0 && variableNames.every((name) => generatedNames.has(name))) {
+        expression += `__wtTemplate(${JSON.stringify(literal)})`;
+      } else {
+        expression += selector.slice(start, index);
+      }
+    }
+    return expression;
   }
 
-  return `page.locator(${templateToExpression(selector, variables, useEnvVars)})`;
+  return `page.locator(${templateToExpression(selector, variables, useEnvVars, generatedNames)})`;
 }
 
-function stepToCode(step: Step, variables: Record<string, string>, useEnvVars: boolean, indent = '  '): string {
-  const selectorExpr = step.selector ? selectorToExpression(step.selector, variables, useEnvVars) : '';
-  const valueExpr = step.value ? templateToExpression(step.value, variables, useEnvVars) : '""';
-  const expectedExpr = step.expected ? templateToExpression(step.expected, variables, useEnvVars) : '""';
+function isVariableReference(value: unknown): value is string {
+  return typeof value === 'string' && /^\{\{[A-Z][A-Z0-9_]{0,99}\}\}$/.test(value);
+}
+
+function assertHttpExportHasNoLiteralCredentials(step: Step) {
+  const config = step.http;
+  if (!config) return;
+  if (config.auth?.type === 'bearer' && !isVariableReference(config.auth.token)) throw new Error('HTTP credentials must use variable references before exporting a Playwright spec.');
+  if (config.auth?.type === 'basic' && (!isVariableReference(config.auth.username) || !isVariableReference(config.auth.password))) throw new Error('HTTP credentials must use variable references before exporting a Playwright spec.');
+  if (config.auth?.type === 'apiKey' && !isVariableReference(config.auth.apiKeyValue)) throw new Error('HTTP credentials must use variable references before exporting a Playwright spec.');
+  const sensitiveName = /authorization|cookie|token|secret|api[-_]?key|credential|password/i;
+  for (const header of config.headers ?? []) if ((header.secret || sensitiveName.test(header.key)) && !isVariableReference(header.value)) throw new Error('Sensitive HTTP headers must use variable references before exporting a Playwright spec.');
+  for (const param of config.queryParams ?? []) if (sensitiveName.test(param.key) && !isVariableReference(param.value)) throw new Error('Sensitive HTTP query parameters must use variable references before exporting a Playwright spec.');
+  try {
+    const url = new URL(config.url.replace(/\{\{[A-Z][A-Z0-9_]{0,99}\}\}/g, 'wt-variable'));
+    for (const [key, value] of url.searchParams.entries()) if (sensitiveName.test(key) && !isVariableReference(value)) throw new Error('Sensitive HTTP URL parameters must use variable references before exporting a Playwright spec.');
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Sensitive HTTP')) throw error;
+  }
+  if (config.body?.type === 'json') {
+    let parsed: unknown;
+    try { parsed = JSON.parse(config.body.value ?? '{}'); } catch { throw new Error('HTTP JSON body must be valid before exporting a Playwright spec.'); }
+    const safe = (value: unknown, key = ''): boolean => {
+      if (sensitiveName.test(key)) return isVariableReference(value);
+      if (Array.isArray(value)) return value.every((item) => safe(item));
+      return !value || typeof value !== 'object' || Object.entries(value).every(([childKey, child]) => safe(child, childKey));
+    };
+    if (!safe(parsed)) throw new Error('Sensitive JSON body fields must use variable references before exporting a Playwright spec.');
+  }
+}
+
+function httpRequestHelper() {
+  return `async function __wtRunHttp(request: import('@playwright/test').APIRequestContext, config: any) {
+  const resolve = (value: any): any => {
+    if (typeof value === 'string') {
+      const exact = value.match(/^\\{\\{([A-Z][A-Z0-9_]*)\\}\\}$/);
+      if (exact) {
+        if (Object.prototype.hasOwnProperty.call(__wtRuntime, exact[1])) return __wtRuntime[exact[1]];
+        const envValue = process.env[exact[1]];
+        if (envValue === undefined) throw new Error('Missing environment variable: ' + exact[1]);
+        return envValue;
+      }
+      return value.replace(/\\{\\{([A-Z][A-Z0-9_]*)\\}\\}/g, (_match: string, name: string) => {
+        if (Object.prototype.hasOwnProperty.call(__wtRuntime, name)) return String(__wtRuntime[name]);
+        const envValue = process.env[name];
+        if (envValue === undefined) throw new Error('Missing environment variable: ' + name);
+        return envValue;
+      });
+    }
+    if (Array.isArray(value)) return value.map(resolve);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolve(item)]));
+    return value;
+  };
+  const jsonPath = (root: any, path: string): any => {
+    if (!/^\\$(?:\\.[A-Za-z_][A-Za-z\\d_]*|\\[(?:\\d+|\"[A-Za-z_][A-Za-z\\d_]*\"|'[A-Za-z_][A-Za-z\\d_]*')\\])*$/.test(path)) throw new Error('Unsupported JSON path: ' + path);
+    const tokens = path.slice(1).match(/\\.[A-Za-z_][A-Za-z\\d_]*|\\[(?:\\d+|\"[A-Za-z_][A-Za-z\\d_]*\"|'[A-Za-z_][A-Za-z\\d_]*')\\]/g) ?? [];
+    let value = root;
+    for (const token of tokens) { const key = token[0] === '.' ? token.slice(1) : token.slice(1, -1).replace(/^['\"]|['\"]$/g, ''); if (!value || typeof value !== 'object' || !Object.prototype.hasOwnProperty.call(value, key)) return undefined; value = value[key]; }
+    return value;
+  };
+  const url = new URL(String(resolve(config.url)));
+  for (const item of config.queryParams ?? []) if (item.enabled) url.searchParams.append(String(resolve(item.key)), String(resolve(item.value)));
+  const headers: Record<string, string> = {};
+  for (const item of config.headers ?? []) if (item.enabled) headers[item.key] = String(resolve(item.value));
+  if (config.auth?.type === 'bearer') headers.Authorization = 'Bearer ' + String(resolve(config.auth.token));
+  if (config.auth?.type === 'basic') headers.Authorization = 'Basic ' + Buffer.from(String(resolve(config.auth.username)) + ':' + String(resolve(config.auth.password))).toString('base64');
+  if (config.auth?.type === 'apiKey') headers[config.auth.apiKeyName] = String(resolve(config.auth.apiKeyValue));
+  let data: any;
+  if (config.body?.type === 'json') { data = resolve(JSON.parse(config.body.value || '{}')); headers['Content-Type'] ??= 'application/json'; }
+  else if (config.body?.type === 'text') { data = String(resolve(config.body.value || '')); headers['Content-Type'] ??= 'text/plain; charset=utf-8'; }
+  else if (config.body?.type === 'form-urlencoded') { const form = new URLSearchParams(); for (const field of config.body.fields ?? []) if (field.enabled) form.append(String(resolve(field.key)), String(resolve(field.value))); data = form.toString(); headers['Content-Type'] ??= 'application/x-www-form-urlencoded'; }
+  const startedAt = Date.now();
+  const response = await request.fetch(url.toString(), { method: config.method, headers, ...(data === undefined ? {} : { data }), timeout: config.timeoutMs ?? 15000, maxRedirects: config.followRedirects === false ? 0 : 5 });
+  const durationMs = Date.now() - startedAt;
+  const responseBody = await response.body();
+  if (responseBody.byteLength > 1024 * 1024) throw new Error('Response exceeded the 1 MB limit.');
+  const text = responseBody.toString('utf8');
+  const responseHeaders = response.headers();
+  let json: any;
+  if (/json/i.test(responseHeaders['content-type'] ?? '') && text) json = JSON.parse(text);
+  for (const assertion of config.assertions ?? []) {
+    const expected = resolve(assertion.expected);
+    let actual: any;
+    let passed = false;
+    switch (assertion.type) {
+      case 'statusEquals': actual = response.status(); passed = actual === expected; break;
+      case 'statusIn': actual = response.status(); passed = (expected as number[]).includes(actual); break;
+      case 'responseTimeLessThan': actual = durationMs; passed = actual < expected; break;
+      case 'headerExists': actual = responseHeaders[String(assertion.name).toLowerCase()]; passed = actual !== undefined; break;
+      case 'headerEquals': actual = responseHeaders[String(assertion.name).toLowerCase()]; passed = actual === expected; break;
+      case 'headerContains': actual = responseHeaders[String(assertion.name).toLowerCase()]; passed = String(actual ?? '').includes(String(expected)); break;
+      case 'jsonPathExists': actual = jsonPath(json, assertion.path); passed = actual !== undefined; break;
+      case 'jsonPathEquals': actual = jsonPath(json, assertion.path); passed = JSON.stringify(actual) === JSON.stringify(expected); break;
+      case 'jsonPathContains': actual = jsonPath(json, assertion.path); passed = typeof actual === 'string' ? actual.includes(String(expected)) : Array.isArray(actual) && actual.some((item) => JSON.stringify(item) === JSON.stringify(expected)); break;
+      case 'jsonPathType': { actual = jsonPath(json, assertion.path); const type = actual === null ? 'null' : Array.isArray(actual) ? 'array' : typeof actual; passed = type === assertion.expectedType; break; }
+      case 'jsonArrayLength': actual = jsonPath(json, assertion.path); passed = Array.isArray(actual) && actual.length === expected; break;
+      case 'textContains': passed = text.includes(String(expected)); break;
+      case 'textEquals': passed = text === String(expected); break;
+      default: throw new Error('Unsupported HTTP assertion.');
+    }
+    if (!passed) throw new Error('HTTP assertion failed: ' + assertion.type + '.');
+  }
+  for (const capture of config.capture ?? []) {
+    let value: any;
+    switch (capture.source) {
+      case 'status': value = response.status(); break;
+      case 'responseTime': value = durationMs; break;
+      case 'textBody': value = text; break;
+      case 'responseHeader': value = responseHeaders[String(capture.headerName).toLowerCase()]; if (value === undefined) throw new Error('Captured response header was not present.'); break;
+      case 'jsonPath': value = jsonPath(json, capture.path); if (value === undefined) throw new Error('Captured JSON path was not present.'); break;
+    }
+    if (typeof value === 'string' && value.length > 10000) throw new Error('Captured value exceeds the 10 KB limit.');
+    __wtRuntime[capture.saveAs] = value;
+  }
+  return response;
+}`;
+}
+
+function stepToCode(step: Step, variables: Record<string, string>, useEnvVars: boolean, generatedNames: Set<string>, indent = '  '): string {
+  const selectorExpr = step.selector ? selectorToExpression(step.selector, variables, useEnvVars, generatedNames) : '';
+  const valueExpr = step.value ? templateToExpression(step.value, variables, useEnvVars, generatedNames) : '""';
+  const expectedExpr = step.expected ? templateToExpression(step.expected, variables, useEnvVars, generatedNames) : '""';
 
   switch (step.action) {
+    case 'generateData':
+      return `${indent}__wtRuntime[${JSON.stringify(step.saveAs ?? 'GENERATED_VALUE')}] = __wtGenerate(${JSON.stringify(step.generator ?? 'string')}, ${JSON.stringify({ ...(step.generatorOptions ?? {}), __wtSecret: step.generator === 'password' || Boolean(step.secret) || /(pass(word)?|secret|token|api[_-]?key|authorization|auth[_-]?code|verification[_-]?code|otp|cookie|credential|private[_-]?key)/i.test(step.saveAs ?? ''), __wtReplace: Boolean(step.replace) })});`;
+    case 'captureValue':
+      return `${indent}// WRIGHTTEST_STEP ${JSON.stringify(step)}\n${indent}__wtRuntime[${JSON.stringify(step.saveAs ?? 'CAPTURED_VALUE')}] = await __wtCapture(page, ${JSON.stringify(step.captureSource ?? 'text')}, ${selectorExpr || 'undefined'}, ${JSON.stringify(step.attributeName ?? '')});`;
+    case 'executeSql':
+    case 'assertDatabaseResult':
+      return `${indent}// WRIGHTTEST_STEP ${JSON.stringify(step)}`;
+    case 'httpRequest':
+      return `${indent}// WRIGHTTEST_STEP ${JSON.stringify(step)}\n${indent}await __wtRunHttp(request, ${JSON.stringify(step.http ?? {})});`;
     case 'goto':
       return `${indent}await page.goto(${valueExpr});`;
     case 'click':
@@ -123,11 +288,11 @@ function stepToCode(step: Step, variables: Record<string, string>, useEnvVars: b
     case 'assertURL':
       return step.options?.exact
         ? `${indent}await expect(page).toHaveURL(${expectedExpr});`
-        : `${indent}await expect(page).toHaveURL(new RegExp(${templateToRegexExpression(step.expected ?? '', variables, useEnvVars)}));`;
+        : `${indent}await expect(page).toHaveURL(new RegExp(${templateToRegexExpression(step.expected ?? '', variables, useEnvVars, generatedNames)}));`;
     case 'assertTitle':
       return step.options?.exact
         ? `${indent}await expect(page).toHaveTitle(${expectedExpr});`
-        : `${indent}await expect(page).toHaveTitle(new RegExp(${templateToRegexExpression(step.expected ?? '', variables, useEnvVars)}));`;
+        : `${indent}await expect(page).toHaveTitle(new RegExp(${templateToRegexExpression(step.expected ?? '', variables, useEnvVars, generatedNames)}));`;
     case 'assertChecked':
       return `${indent}await expect(${selectorExpr}).toBeChecked();`;
     case 'assertCount':
@@ -139,17 +304,70 @@ function stepToCode(step: Step, variables: Record<string, string>, useEnvVars: b
   }
 }
 
+function captureHelper() {
+  return `async function __wtCapture(page: import('@playwright/test').Page, source: string, locator: import('@playwright/test').Locator | undefined, attribute: string): Promise<string | number> {
+  if (source === 'url') return page.url();
+  if (!locator) throw new Error('Capture target is required.');
+  if (source === 'count') return locator.count();
+  if (await locator.count() !== 1) throw new Error('Capture target must match exactly one element.');
+  await locator.waitFor({ state: 'attached', timeout: 10000 });
+  if (source === 'text') { const value = await locator.textContent(); if (value === null) throw new Error('Element text is unavailable.'); return value; }
+  if (source === 'input') return locator.inputValue();
+  if (source === 'attribute') { const value = await locator.getAttribute(attribute); if (value === null) throw new Error('Captured attribute is unavailable.'); return value; }
+  throw new Error('Unsupported capture source: ' + source);
+}`;
+}
+
+function generateDataHelper() {
+  return `import { randomInt, randomUUID } from 'node:crypto';
+const __wtRuntime: Record<string, unknown> = {};
+const __wtGeneratedNames = new Set<string>(__WT_GENERATED_NAMES__);
+const __wtTemplate = (value: string) => value.replace(/\\{\\{(\\w+)\\}\\}/g, (_match, name: string) => __wtGeneratedNames.has(name) ? String(__wtRuntime[name] ?? '') : (typeof process !== 'undefined' ? process.env[name] ?? '' : ''));
+const __wtSets: Record<string, string> = { alphanumeric: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', lowercase: 'abcdefghijklmnopqrstuvwxyz', uppercase: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', digits: '0123456789', hex: '0123456789abcdef', 'lowercase-digits': 'abcdefghijklmnopqrstuvwxyz0123456789' };
+const __wtCharset = (name: string, options: Record<string, string | number | boolean>) => name === 'custom' ? String(options.characters ?? '') : __wtSets[name];
+const __wtRandom = (length: number, chars: string) => Array.from({ length }, () => chars[randomInt(chars.length)]).join('');
+function __wtGenerate(generator: string, options: Record<string, string | number | boolean>): string | number | boolean {
+  const length = Number(options.length ?? 16);
+  switch (generator) {
+    case 'username': { const prefix = String(options.prefix ?? 'user_'), suffix = String(options.suffix ?? ''); return prefix + __wtRandom(length - prefix.length - suffix.length, __wtCharset(String(options.charset ?? 'lowercase-digits'), options)) + suffix; }
+    case 'email': return String(options.prefix ?? 'user_') + __wtRandom(Number(options.length ?? 12), __wtSets['lowercase-digits']) + '@' + String(options.domain ?? 'example.test');
+    case 'password': { const groups = [options.uppercase !== false ? __wtSets.uppercase : '', options.lowercase !== false ? __wtSets.lowercase : '', options.digits !== false ? __wtSets.digits : '', options.symbols === true ? '!@#$%^&*_-+=' : ''].filter(Boolean); const chars = groups.map((group) => group[randomInt(group.length)]), all = groups.join(''); while (chars.length < length) chars.push(all[randomInt(all.length)]); for (let i = chars.length - 1; i > 0; i--) { const j = randomInt(i + 1); [chars[i], chars[j]] = [chars[j], chars[i]]; } return chars.join(''); }
+    case 'uuid': return randomUUID();
+    case 'string': return __wtRandom(length, __wtCharset(String(options.charset ?? 'alphanumeric'), options));
+    case 'number': { const integer = options.integer !== false, scale = integer ? 1 : 10 ** Number(options.precision ?? 2), value = randomInt(Math.ceil(Number(options.min ?? 0) * scale), Math.floor(Number(options.max ?? 1000000) * scale) + 1) / scale; return integer ? value : Number(value.toFixed(Number(options.precision ?? 2))); }
+    case 'boolean': return randomInt(2) === 1;
+    case 'date': { const start = Date.parse(String(options.start ?? '2020-01-01T00:00:00.000Z')), end = Date.parse(String(options.end ?? '2030-12-31T23:59:59.999Z')), date = new Date(randomInt(start, end + 1)); if (options.format === 'iso') return date.toISOString(); if (options.format === 'us') return String(date.getUTCMonth() + 1).padStart(2, '0') + '/' + String(date.getUTCDate()).padStart(2, '0') + '/' + date.getUTCFullYear(); return date.toISOString().slice(0, 10); }
+    case 'timestamp': return options.format === 'iso' ? new Date().toISOString() : Date.now();
+    case 'pattern': { const pattern = String(options.pattern ?? ''); let result = ''; for (let i = 0; i < pattern.length;) { if (pattern[i] === '\\\\') { result += pattern[i + 1] ?? ''; i += 2; } else if (pattern.startsWith('{{TIMESTAMP}}', i)) { result += Date.now(); i += 13; } else if (pattern[i] === 'X') { result += __wtRandom(1, __wtSets.alphanumeric).toLowerCase(); i++; } else if (pattern[i] === '#') { result += __wtRandom(1, __wtSets.digits); i++; } else { result += pattern[i]; i++; } } return result; }
+    default: throw new Error('Unsupported test data generator: ' + generator);
+  }
+}`;
+}
+
 export function exportToSpec(steps: Step[], opts: ExportOptions): string {
-  const { testName, variables = {}, useEnvVars = false } = opts;
-  const hasAssertions = steps.some((step) => step.action.startsWith('assert'));
+  const { testName, variables = {}, useEnvVars = false, testData = [] } = opts;
+  const hasHttpSteps = steps.some((step) => step.action === 'httpRequest');
+  const hasAssertions = steps.some((step) => step.action.startsWith('assert') || (step.action === 'httpRequest' && Boolean(step.http?.assertions?.length)));
+  for (const step of steps) if (step.action === 'httpRequest') assertHttpExportHasNoLiteralCredentials(step);
+  const generatedNames = new Set([
+    ...steps.filter((step) => step.action === 'generateData' && step.saveAs).map((step) => step.saveAs!),
+    ...steps.flatMap((step) => step.action === 'httpRequest' ? (step.http?.capture ?? []).map((capture) => capture.saveAs) : [])
+  ]);
+  const hasGenerators = steps.some((step) => step.action === 'generateData');
+  const hasCaptureSteps = steps.some((step) => step.action === 'captureValue' || (step.action === 'httpRequest' && Boolean(step.http?.capture?.length)));
+  const hasSqlSteps = steps.some((step) => step.action === 'executeSql' || step.action === 'assertDatabaseResult');
   const usesTemplates = useEnvVars && steps.some((step) => JSON.stringify(step).includes('{{'));
-  const needsEscapeRegExpHelper = useEnvVars && steps.some((step) => step.action === 'assertURL' || step.action === 'assertTitle');
+  const needsEscapeRegExpHelper = (useEnvVars || hasGenerators) && steps.some((step) => step.action === 'assertURL' || step.action === 'assertTitle');
 
-  const lines = steps.map((step) => stepToCode(step, variables, useEnvVars)).join('\n');
+  const lines = steps.map((step) => stepToCode(step, variables, useEnvVars, generatedNames)).join('\n');
 
-  const helper = usesTemplates
+  const helper = usesTemplates || hasGenerators || hasCaptureSteps || hasHttpSteps
     ? [
-        'const env = (name: string) => process.env[name] ?? \'\';',
+        usesTemplates ? 'const env = (name: string) => process.env[name] ?? \'\';' : '',
+        !hasGenerators && (hasCaptureSteps || hasHttpSteps) ? 'const __wtRuntime: Record<string, unknown> = {};' : '',
+        hasGenerators ? generateDataHelper().replace('__WT_GENERATED_NAMES__', JSON.stringify([...generatedNames])) : '',
+        hasHttpSteps ? httpRequestHelper() : '',
+        hasCaptureSteps ? captureHelper() : '',
         needsEscapeRegExpHelper
           ? [
               '',
@@ -167,7 +385,9 @@ export function exportToSpec(steps: Step[], opts: ExportOptions): string {
       ? "import { test, expect } from '@playwright/test';"
       : "import { test } from '@playwright/test';",
     helper,
-    `test(${JSON.stringify(testName)}, async ({ page }) => {`,
+    ...(testData.length > 0 ? [`// WRIGHTTEST_TEST_DATA ${JSON.stringify(testData)}`] : []),
+    `test(${JSON.stringify(testName)}, async ({ page${hasHttpSteps ? ', request' : ''} }) => {`,
+    hasSqlSteps ? '  // SQL steps are preserved for WrightTest import but require a configured database connection to execute.' : '',
     lines,
     '});',
     ''

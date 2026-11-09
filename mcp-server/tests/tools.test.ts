@@ -27,16 +27,18 @@ async function connectedClient(fetchImpl: typeof fetch) {
   return { client, server };
 }
 
-test('MCP initializes and lists project and browser exploration tools', async () => {
+test('MCP initializes and lists project, browser, and safe database metadata tools', async () => {
   const { client, server } = await connectedClient(async () => new Response('[]', { status: 200 }));
   const listed = await client.listTools();
-  assert.equal(listed.tools.length, 24);
+  assert.equal(listed.tools.length, 32);
   assert.deepEqual(new Set(listed.tools.map((tool) => tool.name)), new Set([
     'list_projects', 'get_project', 'create_project', 'update_project',
     'list_checks', 'get_check', 'create_check', 'update_check',
     'list_suites', 'create_suite', 'add_check_to_suite',
-    'run_check', 'run_suite', 'get_run_status', 'get_run_results',
-    'browser_start', 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_select', 'browser_screenshot', 'browser_wait', 'browser_close'
+    'run_check', 'run_suite', 'get_suite_run', 'cancel_suite_run', 'get_run_status', 'get_run_results',
+    'browser_start', 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_select', 'browser_screenshot', 'browser_wait', 'browser_close',
+    'list_database_connections', 'get_database_connection',
+    'list_project_variables', 'create_project_variable', 'update_project_variable', 'delete_project_variable'
   ]));
   await client.close();
   await server.close();
@@ -79,16 +81,72 @@ test('list_projects forwards the user API token and returns a safe project summa
 
 test('create_check delegates to the API and returns its sanitized check payload', async () => {
   let received: unknown;
+  const databaseStep = {
+    action: 'executeSql', databaseConnectionId: 'db-1',
+    sql: 'SELECT status FROM orders WHERE id = :id', parameters: { id: '{{ORDER_ID}}' },
+    assertion: { type: 'columnEquals', column: 'status', expected: 'pending' }
+  };
   const { client, server } = await connectedClient(async (_input, init) => {
     received = JSON.parse(String(init?.body));
-    return Response.json({ id: 'check-1', projectId: 'project-1', name: 'Landing', url: 'https://example.test', steps: [] }, { status: 201 });
+    return Response.json({ id: 'check-1', projectId: 'project-1', name: 'Landing', url: 'https://example.test', steps: [databaseStep] }, { status: 201 });
   });
   const response = await client.callTool({
     name: 'create_check',
-    arguments: { projectId: 'project-1', name: 'Landing', url: 'https://example.test', steps: [] }
+    arguments: { projectId: 'project-1', name: 'Landing', url: 'https://example.test', steps: [databaseStep] }
   });
-  assert.deepEqual(received, { name: 'Landing', url: 'https://example.test', steps: [] });
+  assert.deepEqual(received, { name: 'Landing', url: 'https://example.test', steps: [databaseStep] });
   assert.equal(response.isError, undefined);
+  await client.close();
+  await server.close();
+});
+
+test('create_check accepts Generate Test Data steps without a dedicated MCP generator tool', async () => {
+  const generatedStep = { action: 'generateData', generator: 'username', saveAs: 'USERNAME', generatorOptions: { prefix: 'qa_', length: 16 } };
+  let received: unknown;
+  const { client, server } = await connectedClient(async (_input, init) => {
+    received = JSON.parse(String(init?.body));
+    return Response.json({ id: 'check-1', projectId: 'project-1', name: 'Generated user', url: 'https://example.test', steps: [generatedStep] }, { status: 201 });
+  });
+  const response = await client.callTool({ name: 'create_check', arguments: { projectId: 'project-1', name: 'Generated user', url: 'https://example.test', steps: [generatedStep] } });
+  assert.equal(response.isError, undefined);
+  assert.deepEqual((received as Record<string, unknown>).steps, [generatedStep]);
+  await client.close();
+  await server.close();
+});
+
+test('create_check accepts browser Capture Value steps through the existing tool', async () => {
+  const captureStep = { action: 'captureValue', captureSource: 'text', selector: "page.getByTestId('account-id')", saveAs: 'ACCOUNT_ID' };
+  let received: unknown;
+  const { client, server } = await connectedClient(async (_input, init) => {
+    received = JSON.parse(String(init?.body));
+    return Response.json({ id: 'check-capture', projectId: 'project-1', name: 'Capture account ID', url: 'https://example.test', steps: [captureStep] }, { status: 201 });
+  });
+  const response = await client.callTool({ name: 'create_check', arguments: { projectId: 'project-1', name: 'Capture account ID', url: 'https://example.test', steps: [captureStep] } });
+  assert.equal(response.isError, undefined);
+  assert.deepEqual((received as Record<string, unknown>).steps, [captureStep]);
+  await client.close();
+  await server.close();
+});
+
+test('create_check forwards HTTP requests, assertions, and captures through the existing tool', async () => {
+  const httpStep = {
+    action: 'httpRequest',
+    http: {
+      method: 'POST', url: 'https://api.example.test/users',
+      auth: { type: 'bearer', token: '{{API_TOKEN}}' },
+      body: { type: 'json', value: '{"name":"{{USERNAME}}"}' },
+      assertions: [{ type: 'statusEquals', expected: 201 }, { type: 'jsonPathType', path: '$.id', expectedType: 'number' }],
+      capture: [{ source: 'jsonPath', path: '$.id', saveAs: 'USER_ID' }]
+    }
+  };
+  let received: unknown;
+  const { client, server } = await connectedClient(async (_input, init) => {
+    received = JSON.parse(String(init?.body));
+    return Response.json({ id: 'check-http', projectId: 'project-1', name: 'Create user via API', url: 'https://api.example.test/', steps: [httpStep] }, { status: 201 });
+  });
+  const response = await client.callTool({ name: 'create_check', arguments: { projectId: 'project-1', name: 'Create user via API', url: 'https://api.example.test/', steps: [httpStep] } });
+  assert.equal(response.isError, undefined);
+  assert.deepEqual((received as Record<string, unknown>).steps, [httpStep]);
   await client.close();
   await server.close();
 });
@@ -137,7 +195,7 @@ test('invalid tool arguments are rejected before reaching the backend', async ()
   await server.close();
 });
 
-test('run results omit environment data and redact known environment and test-data secrets', async () => {
+test('run results mask environment and test-data secrets while preserving safe variable metadata', async () => {
   const { client, server } = await connectedClient(async () => Response.json({
     id: 'run-1', status: 'FAILED', durationMs: 400, error: 'Login rejected for secret-value',
     environment: { variables: { PASSWORD: 'secret-value' } },
@@ -147,8 +205,66 @@ test('run results omit environment data and redact known environment and test-da
   }));
   const response = await client.callTool({ name: 'get_run_results', arguments: { runId: 'run-1' } });
   const text = firstText(response);
-  assert.doesNotMatch(text, /secret-value|code-12345|PASSWORD|AUTH_CODE|environment|dataCaseVariables/);
+  assert.doesNotMatch(text, /secret-value|code-12345/);
+  assert.match(text, /"AUTH_CODE":"••••••"/);
+  assert.match(text, /dataCaseVariables/);
   assert.match(text, /\[REDACTED\]/);
+  await client.close();
+  await server.close();
+});
+
+test('run results mask explicitly secret captured values and preserve non-secret captures', async () => {
+  const { client, server } = await connectedClient(async () => Response.json({
+    id: 'run-capture', status: 'PASSED',
+    stepResults: [
+      { index: 0, action: 'captureValue', status: 'passed', captured: { variableName: 'ACCOUNT_ID', source: 'text', type: 'string', secret: false, createdByStep: 1, value: 'account-42' } },
+      { index: 1, action: 'captureValue', status: 'passed', captured: { variableName: 'SESSION_VALUE', source: 'input', type: 'string', secret: true, createdByStep: 2, value: 'private-session-value' } }
+    ],
+    screenshots: ['run-capture_step1.png'], trace: { available: true, downloadUrl: '/api/traces/run-capture.zip' }
+  }));
+  const response = await client.callTool({ name: 'get_run_results', arguments: { runId: 'run-capture' } });
+  const text = firstText(response);
+  assert.match(text, /account-42/);
+  assert.doesNotMatch(text, /private-session-value/);
+  assert.match(text, /"SESSION_VALUE"/);
+  assert.match(text, /"secret":true/);
+  assert.match(text, /"artifactsOmittedForSafety":true/);
+  assert.doesNotMatch(text, /run-capture_step1\.png/);
+  assert.match(text, /"available":false/);
+  await client.close();
+  await server.close();
+});
+
+test('run results expose only scoped artifact links and never filesystem artifact names', async () => {
+  const { client, server } = await connectedClient(async () => Response.json({
+    id: 'run-artifact', status: 'PASSED', screenshots: ['/api/artifacts?ticket=scoped-short-ticket'],
+    trace: {
+      available: true,
+      downloadUrl: '/api/artifacts?ticket=scoped-trace-ticket',
+      viewerUrl: '/trace-viewer/?trace=%2Fapi%2Fartifacts%3Fticket%3Dscoped-trace-ticket'
+    },
+    tracePath: '/srv/wrighttest/traces/private-run.zip'
+  }));
+  const response = await client.callTool({ name: 'get_run_results', arguments: { runId: 'run-artifact' } });
+  const text = firstText(response);
+  assert.match(text, /scoped-short-ticket/);
+  assert.match(text, /scoped-trace-ticket/);
+  assert.doesNotMatch(text, /private-run\.zip|\/srv\/wrighttest/);
+  await client.close();
+  await server.close();
+});
+
+test('run results never expose generated secret values even if a backend payload contains one', async () => {
+  const { client, server } = await connectedClient(async () => Response.json({
+    id: 'run-2', status: 'PASSED',
+    stepResults: [{ index: 0, action: 'generateData', status: 'passed', durationMs: 1, error: null, generated: { variableName: 'PASSWORD', generator: 'password', secret: false, value: 'synthetic-secret-value' } }]
+  }));
+  const response = await client.callTool({ name: 'get_run_results', arguments: { runId: 'run-2' } });
+  const text = firstText(response);
+  assert.doesNotMatch(text, /synthetic-secret-value/);
+  assert.match(text, /"secret":true/);
+  assert.match(text, /"artifactsOmittedForSafety":true/);
+  assert.match(text, /"available":false/);
   await client.close();
   await server.close();
 });

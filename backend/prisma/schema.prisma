@@ -8,17 +8,20 @@ datasource db {
 }
 
 model Project {
-  id           String                @id @default(cuid())
-  name         String
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
-  tests        Test[]
-  environments Environment[]
-  channels     NotificationChannel[]
-  suites       Suite[]
-  schedules    Schedule[]
-  members      ProjectMember[]
-  authStates   ProjectAuthState[]
+  id                  String                @id @default(cuid())
+  name                String
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  tests               Test[]
+  environments        Environment[]
+  channels            NotificationChannel[]
+  suites              Suite[]
+  suiteRuns           SuiteRun[]
+  schedules           Schedule[]
+  members             ProjectMember[]
+  authStates          ProjectAuthState[]
+  databaseConnections DatabaseConnection[]
+  variables           ProjectVariable[]
 }
 
 model User {
@@ -96,10 +99,14 @@ model TestRun {
   dataCaseName           String?
   dataCaseIndex          Int?
   dataCaseVariables      Json?
+  variablesSnapshot      String?
+  runInputsSnapshot      String?
   authStateId            String?
   batchId                String?
   batch                  TestRunBatch?     @relation(fields: [batchId], references: [id], onDelete: SetNull)
   batchOrder             Int?
+  suiteRunId             String?
+  suiteOrder             Int?
   currentStep            Int?
   totalSteps             Int?
   environmentId          String?
@@ -110,8 +117,11 @@ model TestRun {
   schedule               Schedule?         @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
   authState              ProjectAuthState? @relation("AuthRefreshRuns", fields: [authStateId], references: [id], onDelete: SetNull)
   refreshedAuthState     ProjectAuthState? @relation("RefreshedAuthRun")
+  suiteRun               SuiteRun?         @relation(fields: [suiteRunId], references: [id], onDelete: SetNull)
 
+  @@unique([suiteRunId, suiteOrder])
   @@index([authStateId])
+  @@index([suiteRunId, suiteOrder])
 }
 
 model TestRunBatch {
@@ -135,14 +145,46 @@ model TestRunBatch {
 }
 
 model Suite {
-  id        String     @id @default(cuid())
-  name      String
-  projectId String
-  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  testIds   Json       @default("[]")
-  schedules Schedule[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id              String             @id @default(cuid())
+  name            String
+  projectId       String
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testIds         Json               @default("[]")
+  executionMode   SuiteExecutionMode @default(INDEPENDENT)
+  executionConfig Json               @default("{}")
+  schedules       Schedule[]
+  runs            SuiteRun[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+}
+
+model SuiteRun {
+  id               String             @id @default(cuid())
+  suiteId          String?
+  projectId        String
+  suiteName        String
+  environmentId    String?
+  scheduleId       String?
+  triggeredBy      String?
+  executionMode    SuiteExecutionMode
+  status           SuiteRunStatus     @default(PENDING)
+  configSnapshot   Json
+  outputSnapshot   String?
+  outputMetadata   Json               @default("[]")
+  currentOrder     Int                @default(-1)
+  error            String?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  handoffExpiresAt DateTime?
+  createdAt        DateTime           @default(now())
+  suite            Suite?             @relation(fields: [suiteId], references: [id], onDelete: SetNull)
+  project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  schedule         Schedule?          @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  testRuns         TestRun[]
+
+  @@index([projectId, createdAt])
+  @@index([status, currentOrder])
+  @@index([handoffExpiresAt])
 }
 
 model Schedule {
@@ -161,6 +203,7 @@ model Schedule {
   lastRunAt     DateTime?
   createdAt     DateTime     @default(now())
   runs          TestRun[]
+  suiteRuns     SuiteRun[]
 }
 
 model Environment {
@@ -175,6 +218,44 @@ model Environment {
   authStates ProjectAuthState[]
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
+}
+
+model ProjectVariable {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  type        String
+  value       String
+  secret      Boolean  @default(false)
+  description String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model DatabaseConnection {
+  id                    String               @id @default(cuid())
+  projectId             String
+  project               Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name                  String
+  provider              DatabaseProvider
+  host                  String
+  port                  Int
+  database              String
+  username              String
+  encryptedCredentials  String
+  ssl                   Boolean              @default(true)
+  accessMode            DatabaseAccessMode   @default(READ_ONLY)
+  lastCheckedAt         DateTime?
+  lastSuccessfulCheckAt DateTime?
+  lastCheckStatus       DatabaseCheckStatus?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([projectId])
 }
 
 model ProjectAuthState {
@@ -242,6 +323,19 @@ enum RunStatus {
   FAILED
 }
 
+enum SuiteExecutionMode {
+  INDEPENDENT
+  SEQUENTIAL
+}
+
+enum SuiteRunStatus {
+  PENDING
+  RUNNING
+  PASSED
+  FAILED
+  CANCELLED
+}
+
 enum RunMode {
   NORMAL
   AUTH_REFRESH
@@ -270,4 +364,20 @@ enum ProjectRole {
 enum ProjectMemberStatus {
   ACTIVE
   PENDING
+}
+
+enum DatabaseProvider {
+  POSTGRESQL
+  MYSQL
+  SUPABASE
+}
+
+enum DatabaseAccessMode {
+  READ_ONLY
+  READ_WRITE
+}
+
+enum DatabaseCheckStatus {
+  CONNECTED
+  FAILED
 }
