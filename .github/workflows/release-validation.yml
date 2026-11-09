@@ -81,7 +81,13 @@ jobs:
         run: npm run test:e2e
 
       - name: Run integration scenarios
-        run: env REDIS_PORT=56379 npm run test:e2e:isolated:integration -- --grep-invert='Mixed Check runs Generate, HTTP, SQL, Browser, and cleanup in sequence'
+        run: env REDIS_PORT=56379 npm run test:e2e:isolated:integration -- --grep-invert='Mixed Check runs Generate, HTTP, SQL, Browser, and cleanup in sequence|HTTP steps execute in the worker, preserve captured types, and render safe run details|Sequential Suite recovers after its worker is killed during the second Check|startup recovery queues a committed next Check and a queued Check waits for worker startup'
+
+      - name: Run API testing integration
+        run: env REDIS_PORT=56379 npm run test:e2e:isolated:integration -- e2e/tests/integration/api-testing.integration.spec.ts
+
+      - name: Run worker restart integration
+        run: env REDIS_PORT=56379 npm run test:e2e:isolated:integration -- e2e/tests/integration/suite-worker-restart.integration.spec.ts
 
       - name: Run isolated mixed-check integration
         run: env REDIS_PORT=56379 npm run test:e2e:isolated:integration -- e2e/tests/integration/mixed-check.integration.spec.ts
