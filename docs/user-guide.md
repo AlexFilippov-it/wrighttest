@@ -6,7 +6,7 @@ Create a project, open **Checks**, then **New Check**. Set a start URL and add s
 
 ## HTTP/API Checks
 
-Add an **HTTP Request** step to a normal Check and configure its method, URL, query parameters, headers, body, authentication and timeout. Use `{{VARIABLE}}` references in supported fields. Add response assertions for status, response time, headers, JSON or text; capture a response value for later steps. HTTP 4xx/5xx responses are evaluated by the configured assertions rather than automatically failing the step. Credentials and captured secret values are redacted in results. Requests are subject to the server-side outbound destination policy; private/VPC targets require administrator-configured exact-host allowlisting.
+Add an **HTTP Request** step to a normal Check and configure its method, URL, query parameters, headers, body, authentication and timeout. Use `{{VARIABLE}}` references in supported fields. Add response assertions for status, response time, headers, JSON or text; capture a response value for later steps. HTTP 4xx/5xx responses are evaluated by the configured assertions rather than automatically failing the step. Credentials and captured secret values are redacted in results. Requests are subject to the server-side outbound destination policy; private/VPC targets require administrator-configured exact-host allowlisting. Never put credentials in URL query parameters.
 
 ## Generate and reuse test data
 
@@ -23,10 +23,6 @@ Use Browser, SQL or HTTP capture configuration to save an observed value. Later 
 Create a project Database Connection with the least-privilege database account. Select Read Only unless writes are essential. Add an SQL step with named bound parameters; avoid embedding credentials or user-controlled SQL fragments.
 
 SQL steps run in the existing Check worker and share the Check's variable context with HTTP and Browser steps. Database passwords are encrypted at rest and are not returned by the API or MCP. Use disposable or staging databases for write-capable checks.
-
-## HTTP API Testing
-
-Add an HTTP Request step, choose method and URL, configure parameters, headers and body, then add response assertions/captures. Reference environment and run variables with `{{NAME}}`. Public HTTP/HTTPS destinations are allowed by default; private destinations require administrator-configured exact host allowlisting. Never put credentials in URL query parameters.
 
 ## Sequential Suites and handoff
 
