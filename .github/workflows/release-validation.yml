@@ -75,7 +75,7 @@ jobs:
         run: npx dotenv -e .env -- npm exec -w backend prisma generate
 
       - name: Install Chromium for the host E2E runner
-        run: npx playwright install --with-deps chromium
+        run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
 
       - name: Run E2E smoke
         run: npm run test:e2e
