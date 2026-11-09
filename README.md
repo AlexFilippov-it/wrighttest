@@ -17,11 +17,12 @@
 - **Visual Recorder** - record browser interactions through Playwright Inspector; Docker deployments expose the headed browser through noVNC
 - **Smart Locators** - uses `getByRole`, `getByLabel`, `href` instead of fragile CSS paths
 - **Assertions Builder** - configure visibility, text, value, URL, title, checked state, and element-count assertions
+- **HTTP/API checks** - send HTTP requests with variables, response assertions, and typed capture in regular Checks
 - **Device Presets** - run desktop 1280px by default or emulate iPhone 15, Pixel 7, iPad and other devices
-- **Environments and authentication** - use project-scoped variables and optionally reuse encrypted Playwright storage state per environment
+- **Environments, variables, and authentication** - combine typed project, environment, test-data, run-input, and runtime values; optionally reuse encrypted Playwright storage state per environment
 - **Database checks** - connect PostgreSQL, MySQL, or Supabase PostgreSQL databases; run bounded, parameterized SQL steps and verify results inside existing Checks and Suites ([setup and limits](./docs/database-testing.md))
 - **Data-driven checks** - define named scenario cases, run one selected case, or queue all enabled cases as a batch
-- **Suites and schedules** - group checks and run checks or suites manually or on a cron schedule
+- **Suites and schedules** - group checks; run independently or sequentially with explicit variable handoff; schedule checks and suites with cron
 - **Run results** - inspect step-level outcomes, screenshots, and Playwright traces in the built-in trace viewer
 - **Notifications** - Telegram and Slack alerts for failed runs
 - **Import and export** - import supported Playwright specs, export a single `.spec.ts`, or download a runnable Playwright project `.zip`
@@ -105,11 +106,18 @@ WRIGHTTEST_IMAGE_NAMESPACE=sacha1bu
 WRIGHTTEST_IMAGE_TAG=0.3.0
 ```
 
+As of 2026-11-09, the published application image tags are `0.3.0` and `latest`; the `0.4.0` Docker Hub tags are **not published yet**. After the v0.4.0 images are published, set `WRIGHTTEST_IMAGE_TAG=0.4.0` to pin all three application images to that version. Do not assume a GitHub merge makes Docker Hub images available.
+
+```dotenv
+# Use only after the 0.4.0 tag is visible for backend, frontend, and noVNC.
+WRIGHTTEST_IMAGE_TAG=0.4.0
+```
+
 The regular `docker-compose.yml` remains the source-of-truth development compose file and builds the same image names from the current Git checkout. `docker-compose.hub.yml` is the pull-only runtime variant for Docker Hub users.
 
 Publishing is automated by `.github/workflows/docker-publish.yml`:
 
-- publishing a GitHub Release such as `v0.3.0` publishes both `0.3.0` and `latest` for all three images;
+- publishing a GitHub Release such as `v0.4.0` publishes both `0.4.0` and `latest` for all three images;
 - a manual workflow run publishes the requested tag and can optionally update `latest` to the same image digest;
 - Docker Hub credentials are stored only in the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` GitHub Actions secrets;
 - `DOCKERHUB_NAMESPACE` is configured as a GitHub Actions repository variable.
@@ -242,9 +250,18 @@ If the host environment still reports missing Playwright libraries, run `sudo np
 
 ## 🔄 Updating
 
+For a source checkout, update the repository and rebuild the Compose images:
+
 ```bash
 git pull
 docker compose up --build -d
+```
+
+For Docker Hub images, pull the selected published tag and recreate the services:
+
+```bash
+docker compose -f docker-compose.hub.yml pull
+docker compose -f docker-compose.hub.yml up -d
 ```
 
 On first launch or after resetting volumes:

@@ -1,6 +1,6 @@
 # Release Checklist
 
-Current status: **CONDITIONAL PREPARATION** (Final Release Smoke, 2026-11-09). Smoke scenarios passed, but this document is not a release approval or a claim of complete security coverage.
+Current status: **RELEASE CANDIDATE PREPARATION** (2026-11-09). PR #8 is merged; CI and Release Validation passed on the merge commit. Security Gate 1 remains PARTIAL and three Moderate advisories remain. This is not a claim that a GitHub Release or Docker Hub images have been published.
 
 ## Security
 
@@ -41,4 +41,7 @@ Current status: **CONDITIONAL PREPARATION** (Final Release Smoke, 2026-11-09). S
 - [x] Recorded production dependency audit dated 2026-11-09: 0 High (3 Moderate); this result is historical and detailed reachability/risk disposition remains required before stable release.
 - [x] No confirmed Critical/High defect was found in the executed smoke scope. This is not equivalent to exhaustive security coverage; Gate 1 remains PARTIAL.
 - [ ] Re-run current dependency audit and required CI workflows before publishing; the previous audit recorded 3 Moderate advisories and 0 High, which may change over time.
+- [x] Merge PR #8 with the contributor's original commit preserved; the current `main` CI passed on merge commit `1a3119b`.
+- [x] Confirm Release Validation run [42592608099](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42592608099) passed on the PR #8 merge commit.
+- [ ] Publish the v0.4.0 GitHub Release and Docker Hub tags only after explicit release approval; the three image repositories currently have no `0.4.0` tag.
 - [ ] Obtain release approval before tag, registry publication or deployment.

@@ -1,12 +1,14 @@
 # Changelog
 
-## 0.4.0 (release candidate; not published)
+## 0.4.0 (merged to main; release not published)
 
-- Added project database connections and SQL steps, typed runtime/project variables, data-driven Checks, and sequential Suite Runs with explicit variable handoff.
-- Added HTTP Request steps with assertions and capture, plus a local stdio MCP server for project, Check, Suite, run, browser exploration, and safe database-connection metadata workflows.
+- Added HTTP/API testing with response assertions and capture, project database connections and SQL steps, typed variables, data-driven Checks, and sequential Suite Runs with explicit variable handoff.
+- Added a local stdio MCP server with 32 tools for project, Check, Suite, run, project-variable, database-connection metadata, and browser-exploration workflows.
 - Improved responsive application surfaces, Check editing, Run Results, interface localization, and step-level diagnostics.
 - Hardened artifact delivery, browser/API egress validation, secret handling, and production runtime configuration.
-- Final smoke evidence and accepted limitations are recorded in `docs/release/release-readiness-audit.md`, `docs/release/regression-matrix.md`, and `docs/release/known-limitations.md`. No Git tag or GitHub Release has been created.
+- Added `.gitattributes` rule `*.sh text eol=lf` via contributor `hendricktlv` to keep container shell scripts LF on Windows checkouts with `core.autocrlf=true`.
+- PR #9 CI and Release Validation passed before merge; CI and Release Validation also passed on the resulting `main` merge commit. Release smoke evidence and accepted limitations are recorded in `docs/release/release-readiness-audit.md`, `docs/release/regression-matrix.md`, and `docs/release/known-limitations.md`.
+- The v0.4.0 Git tag, GitHub Release, and Docker Hub image tags have not been published.
 
 ## 0.3.0 - 2026-11-03
 
