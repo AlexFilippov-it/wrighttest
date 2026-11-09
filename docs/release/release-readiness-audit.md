@@ -2,8 +2,8 @@
 
 Audit date: 2026-11-09
 
-Checkout: `codex/mcp-browser-exploration` at `8267e0e` (working tree contains user changes and Final Release Smoke evidence)
-Scope: local release preparation after Final Release Smoke. No remote Git synchronization, GitHub Actions, release, or deployment was performed.
+Checkout: historical evidence below was collected on `codex/mcp-browser-exploration` at `8267e0e`; documentation sync is based on `main` at `1a3119b`.
+Scope: retain the local smoke findings and append verified PR #8 / main workflow state. No tag, GitHub Release, image publication, or deployment was performed.
 
 ## Findings
 
@@ -57,3 +57,10 @@ Scope: local release preparation after Final Release Smoke. No remote Git synchr
 ## Verdict
 
 `FINAL SMOKE: PASS; RELEASE PREPARATION: CONDITIONAL`. The requested Compose, mixed Check, screenshot/trace viewer, Schedule, Sequential Suite, and worker-restart smoke scenarios passed. Security Gate 1 remains **PARTIAL** by explicit scope decision, not a full release sign-off. Three Moderate production dependency advisories remain; the full artifact-ticket lifecycle, broad scheduler/recovery matrix, and live GitHub Actions have not been verified in this pass. README and guides still require final consistency review before any publication. No Critical/High advisory was reported by the dated npm audit; re-run before publication because that result can become stale.
+
+## GitHub release synchronization (2026-11-09)
+
+- PR #9 was merged to `main` as merge commit `4123694da9515fec824715c6969114fe90acb474`. CI run [42589884288](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42589884288) and Release Validation run [42589884141](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42589884141) completed successfully on that commit.
+- PR #8 by `hendricktlv` added only `.gitattributes` rule `*.sh text eol=lf`. It was merged without squash/rebase as merge commit `1a3119b814b1ad7203da81399006423f0243492e`; the contributor commit remains in history.
+- PR #8 CI passed. Its Release Validation run was not green on the pre-PR #9 base because the E2E smoke reported 10 failures. This is retained as a failed historical check, not represented as a pass. On the final PR #8 merge commit, CI [42592608010](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42592608010) and Release Validation [42592608099](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42592608099) both completed successfully, including E2E smoke, integration, API testing, worker restart, and Mixed Check.
+- Docker Hub currently exposes `0.3.0` and `latest` for the three WrightTest images; `0.4.0` is not published. No Git tag or GitHub Release has been created.

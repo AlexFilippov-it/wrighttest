@@ -16,6 +16,23 @@
 5. Start with `docker compose up --build -d --wait` and inspect `docker compose ps` and service logs.
 6. Verify `http://localhost:${BACKEND_HOST_PORT}/health` and `/health/db`, then sign in with the configured `ADMIN_EMAIL` and `ADMIN_PASSWORD`.
 
+The source Compose file builds the backend, frontend and noVNC images from the checked-out source. It uses PostgreSQL 16 and Redis 7 upstream images. The default app ports come from `.env.example`; update the `*_HOST_PORT` values in `.env` when those host ports are already in use.
+
+### Docker Hub images
+
+`docker-compose.hub.yml` pulls the three WrightTest application images instead of building them. Use the same `.env` setup, then run:
+
+```bash
+docker compose -f docker-compose.hub.yml pull
+docker compose -f docker-compose.hub.yml up -d --wait
+```
+
+Set `WRIGHTTEST_IMAGE_NAMESPACE` and `WRIGHTTEST_IMAGE_TAG` in `.env` to pin the images. As of 2026-11-09, Docker Hub has `0.3.0` and `latest` tags for backend, frontend and noVNC; `0.4.0` has not been published. Do not select the `0.4.0` tag until the images are published.
+
+### Windows checkout and shell scripts
+
+The repository includes `.gitattributes` rule `*.sh text eol=lf`. Git therefore checks container shell scripts out with LF line endings even when Windows Git is configured with `core.autocrlf=true`; this prevents `/bin/sh^M` and similar startup errors in Linux containers. This fix is included in PR #8 by contributor `hendricktlv`. If an existing clone already contains CRLF copies, make a backup and re-clone or re-check out the affected scripts after updating the repository before rebuilding.
+
 Database, Redis and VNC/noVNC host ports bind to loopback by default. Keep them off public interfaces; expose only frontend/reverse-proxy entry points. Containers still communicate over the private Compose network.
 
 The backend runs Prisma migrations and seed initialization as part of startup. Do not point a first-time install at an existing database without a verified backup and migration plan.
@@ -27,6 +44,8 @@ Run PostgreSQL 16 and Redis 7 locally, configure root `.env` with `DATABASE_URL`
 ## Updates and backup
 
 Back up PostgreSQL and the Compose volumes for screenshots, traces and authentication state before upgrades. Pull the intended source/image version, review its release notes, apply migrations, then start services and verify health before routing user traffic. Restore into an isolated environment first when validating backups. No automatic rollback of schema migrations is promised.
+
+For source-based upgrades, update the Git checkout and run `docker compose up --build -d --wait`. For Docker Hub upgrades, set the intended already-published `WRIGHTTEST_IMAGE_TAG`, then run `docker compose -f docker-compose.hub.yml pull` and `docker compose -f docker-compose.hub.yml up -d --wait`. A merged Git version does not imply that its Docker images have been published.
 
 ## MCP
 

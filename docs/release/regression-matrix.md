@@ -28,7 +28,7 @@ Run date: 2026-11-09. Phase 8.2 evidence is labeled as historical where applicab
 | Authentication throttling | Full UI logs and backend route config | PASS / NOT REPRODUCED | Login route remains 10 requests/5 minutes. Observed 429 came from the general global API cap during full smoke, fixed only in disposable harness with `RATE_LIMIT_MAX=1000`; no production setting was changed. |
 | Security advisories | `npm audit --omit=dev` | PARTIAL | 3 Moderate, 0 High through `@fastify/static` → `glob` → `minimatch`; see audit/known limitations. |
 | Git hygiene | `git diff --check`; scoped diff and secret review | PASS | Runtime E2E outputs use unique temporary directories. Existing user modifications remain in the worktree and must not be staged unintentionally. |
-| GitHub Actions | CI / Release Validation | SKIPPED | No remote workflow was triggered. |
+| GitHub Actions (Phase 8.3 checkout) | CI / Release Validation | NOT RUN | No remote workflow was triggered for that checkout. |
 
 ## Final Release Smoke (2026-11-09)
 
@@ -63,6 +63,16 @@ Run date: 2026-11-09. Phase 8.2 evidence is labeled as historical where applicab
 | CI | GitHub Actions CI and Release Validation | NOT RUN | Push/PR not authorized; no workflow was claimed as passed. |
 
 `NOT RUN` is an open gate, not a pass. The combined DB integration command failure is recorded separately from the passing targeted integration tests.
+
+## GitHub release synchronization (2026-11-09)
+
+| Area | Scenario | Result | Evidence / limits |
+|---|---|---|---|
+| PR #9 on main | CI and Release Validation | PASS | Both workflows completed successfully on merge commit `4123694da9515fec824715c6969114fe90acb474`: [CI](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42589884288), [Release Validation](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42589884141). |
+| PR #8 | `.gitattributes` LF rule | MERGED | `hendricktlv`'s original commit is preserved in merge commit `1a3119b814b1ad7203da81399006423f0243492e`. PR CI passed. The PR's Release Validation failed 10 E2E smoke tests on the then-current pre-PR #9 base; that result is not counted as a pass. |
+| Current main after PR #8 | CI | PASS | [CI run 42592608010](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42592608010) passed on `1a3119b814b1ad7203da81399006423f0243492e`. |
+| Current main after PR #8 | Release Validation | PASS | [Run 42592608099](https://github.com/AlexFilippov-it/wrighttest/actions/runs/42592608099) passed on `1a3119b814b1ad7203da81399006423f0243492e`, including E2E smoke, integration scenarios, API testing, worker restart, and Mixed Check. |
+| Docker Hub | v0.4.0 image tags | NOT PUBLISHED | Read-only registry check found `0.3.0` and `latest`; `0.4.0` was absent for backend, frontend, and noVNC. |
 
 ## Security Gate 1 (2026-11-09)
 
