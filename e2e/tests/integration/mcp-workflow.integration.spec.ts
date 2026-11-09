@@ -59,7 +59,7 @@ test('stdio MCP client lists projects, creates and runs a check, then reads the 
 
     const toolList = await client.listTools();
     const toolNames = toolList.tools.map((tool) => tool.name);
-    expect(toolNames).toHaveLength(24);
+    expect(toolNames).toHaveLength(32);
     expect(toolNames).toEqual(expect.arrayContaining([
       'browser_start', 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill',
       'browser_select', 'browser_screenshot', 'browser_wait', 'browser_close'
