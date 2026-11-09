@@ -8,7 +8,7 @@ test('Owner can create and inspect project variables on desktop and mobile', asy
 
   await expect(page.getByRole('heading', { name: 'Project Variables' })).toBeVisible();
   await page.getByRole('button', { name: 'Add variable' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Create project variable' });
+  const dialog = page.locator('.ant-modal').filter({ hasText: 'Create project variable' });
   await dialog.getByLabel('Name').fill('E2E_LABEL');
   await dialog.getByRole('textbox', { name: /Value/ }).fill('from UI');
   const createResponsePromise = page.waitForResponse((response) =>

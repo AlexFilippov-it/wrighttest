@@ -13,7 +13,7 @@ import { testQueue } from '../src/queue/queue';
 import redis from '../src/redis';
 import { runRoutes } from '../src/routes/runs';
 
-const TRACES_DIR = path.resolve(process.env.TRACES_DIR || '../traces');
+const TRACES_DIR = path.resolve(process.env.TRACES_DIR || './traces');
 const require = createRequire(import.meta.url);
 const TRACE_TEST_URL = 'data:text/html,%3Ctitle%3EExample%20Domain%3C%2Ftitle%3E%3Ch1%3EExample%20Domain%3C%2Fh1%3E';
 

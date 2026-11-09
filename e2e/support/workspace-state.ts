@@ -31,7 +31,10 @@ const authCachePath = path.join(e2eStateDir, 'e2e-auth-sessions.json');
 
 const e2eApiRequestWindowMs = 60_000;
 // Keep browser/API smoke traffic below Fastify's unchanged 100 requests/minute limit.
-const e2eApiRequestLimit = 50;
+const configuredE2eApiRequestLimit = Number(process.env.E2E_API_REQUEST_LIMIT);
+const e2eApiRequestLimit = Number.isSafeInteger(configuredE2eApiRequestLimit) && configuredE2eApiRequestLimit > 0
+  ? configuredE2eApiRequestLimit
+  : 50;
 const e2eApiRequestTimestamps: number[] = [];
 let e2eApiRequestQueue: Promise<void> = Promise.resolve();
 

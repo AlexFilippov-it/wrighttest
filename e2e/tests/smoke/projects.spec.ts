@@ -9,7 +9,7 @@ test('system admin creates and opens a project from the Projects page', async ({
 
   try {
     await page.getByRole('button', { name: 'New Project' }).first().click();
-    const dialog = page.getByRole('dialog', { name: 'New Project' });
+    const dialog = page.locator('.ant-modal').filter({ hasText: 'New Project' });
     await dialog.getByLabel('Project name').fill(projectName);
     const projectListRefresh = page.waitForResponse(async (response) => {
       if (!response.url().endsWith('/projects') || response.request().method() !== 'GET' || response.status() !== 200) {
