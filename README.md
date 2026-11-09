@@ -18,7 +18,6 @@
 - **Smart Locators** - uses `getByRole`, `getByLabel`, `href` instead of fragile CSS paths
 - **Assertions Builder** - configure visibility, text, value, URL, title, checked state, and element-count assertions
 - **HTTP/API checks** - send HTTP requests with variables, response assertions, and typed capture in regular Checks
-- **SQL checks** - connect PostgreSQL/MySQL databases and use bounded, parameterized SQL steps
 - **Device Presets** - run desktop 1280px by default or emulate iPhone 15, Pixel 7, iPad and other devices
 - **Environments, variables, and authentication** - combine typed project, environment, test-data, run-input, and runtime values; optionally reuse encrypted Playwright storage state per environment
 - **Database checks** - connect PostgreSQL, MySQL, or Supabase PostgreSQL databases; run bounded, parameterized SQL steps and verify results inside existing Checks and Suites ([setup and limits](./docs/database-testing.md))
