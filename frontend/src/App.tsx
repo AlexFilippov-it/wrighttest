@@ -1,29 +1,30 @@
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
-import { useEffect, type ReactNode } from 'react';
-import { ConfigProvider } from 'antd';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { ConfigProvider, Spin } from 'antd';
 import enUS from 'antd/locale/en_US';
 import ruRU from 'antd/locale/ru_RU';
 import { useTranslation } from 'react-i18next';
 import { wrightTestTheme } from './design-system';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import ProjectsPage from './pages/ProjectsPage';
-import ProjectPage from './pages/ProjectPage';
-import RunsPage from './pages/RunsPage';
-import ScheduleHistoryPage from './pages/ScheduleHistoryPage';
-import SuitesPage from './pages/SuitesPage';
-import TestEditorPage from './pages/TestEditorPage';
-import RunResultPage from './pages/RunResultPage';
-import RunBatchResultPage from './pages/RunBatchResultPage';
 import AppShell from './shell/AppShell';
 import ProjectShell from './shell/ProjectShell';
-import NotFoundPage from './shell/NotFoundPage';
-import InstanceLanguagePage from './pages/InstanceLanguagePage';
-import ConnectionsPage from './pages/ConnectionsPage';
-import ProjectVariablesPage from './pages/ProjectVariablesPage';
-import SuiteRunResultPage from './pages/SuiteRunResultPage';
 import { loadInstanceLocale } from './localization/i18n';
+
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
+const ProjectPage = lazy(() => import('./pages/ProjectPage'));
+const RunsPage = lazy(() => import('./pages/RunsPage'));
+const ScheduleHistoryPage = lazy(() => import('./pages/ScheduleHistoryPage'));
+const SuitesPage = lazy(() => import('./pages/SuitesPage'));
+const TestEditorPage = lazy(() => import('./pages/TestEditorPage'));
+const RunResultPage = lazy(() => import('./pages/RunResultPage'));
+const RunBatchResultPage = lazy(() => import('./pages/RunBatchResultPage'));
+const NotFoundPage = lazy(() => import('./shell/NotFoundPage'));
+const InstanceLanguagePage = lazy(() => import('./pages/InstanceLanguagePage'));
+const ConnectionsPage = lazy(() => import('./pages/ConnectionsPage'));
+const ProjectVariablesPage = lazy(() => import('./pages/ProjectVariablesPage'));
+const SuiteRunResultPage = lazy(() => import('./pages/SuiteRunResultPage'));
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { token, ready } = useAuth();
@@ -58,6 +59,7 @@ function LocalizedRoutes() {
 
   return (
     <ConfigProvider theme={wrightTestTheme} locale={antLocale}>
+      <Suspense fallback={<Spin fullscreen /> }>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
@@ -94,6 +96,7 @@ function LocalizedRoutes() {
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
+      </Suspense>
     </ConfigProvider>
   );
 }

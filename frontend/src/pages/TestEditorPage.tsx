@@ -131,7 +131,7 @@ function validateRequiredStepFields(step: Step, t: (key: string) => string): Ste
       }
     }
     if (step.waitForResult && !step.assertion) return { message: t('connections.validation.waitNeedsAssertion') };
-    if (step.saveResultAs && step.saveColumn !== undefined && !step.saveColumn.trim()) return { message: t('connections.validation.saveColumnRequired') };
+    if (step.saveResultAs && (!step.saveResultType || step.saveResultType === 'column') && step.saveColumn !== undefined && !step.saveColumn.trim()) return { message: t('connections.validation.saveColumnRequired') };
     return null;
   }
 
@@ -332,7 +332,9 @@ export default function TestEditorPage() {
           setProjectName(project.name);
           setCurrentProjectRole(project.currentUserRole ?? null);
         })
-        .catch(() => setCurrentProjectRole(null));
+        .catch(() => {
+          setCurrentProjectRole(null);
+        });
       setValidationTraceViewerUrl(undefined);
       setValidationFeedback(null);
       setStepIssues([]);
@@ -1180,9 +1182,15 @@ export default function TestEditorPage() {
                       {t('editor.runAllCases')}
                     </Button>
                   )}
-                  <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
-                    {t('editor.startRecording')}
-                  </Button>
+                  {recording ? (
+                    <Button icon={<StopOutlined />} onClick={handleStopRecording} danger disabled={isReadOnly}>
+                      {t('editor.stopRecording')}
+                    </Button>
+                  ) : (
+                    <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
+                      {t('editor.startRecording')}
+                    </Button>
+                  )}
                   {exportTrigger}
                   <Button type="primary" loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors || shouldBlockRunAllCases} onClick={handleValidateAndSave}>
                     {isEdit ? t('common.saveChanges') : t('editor.createCheck')}
@@ -1354,21 +1362,9 @@ export default function TestEditorPage() {
                   <Space wrap size={[8, 8]}>
                     {stepSummaryBadges}
                   </Space>
-                      {!recording ? (
-                        <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
-                          {t('editor.startRecording')}
-                        </Button>
-                      ) : (
-                        <Button icon={<StopOutlined />} onClick={handleStopRecording} danger disabled={isReadOnly}>
-                          {t('editor.stopRecording')}
-                        </Button>
-                      )}
-                      <Button onClick={() => setSteps((current) => [...current, { action: 'goto', value: '' }])} disabled={isReadOnly}>
-                        {t('editor.addStep')}
-                      </Button>
-                      <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => void handleRunCheck()} disabled={isReadOnly || saving || validating || hasTestDataErrors || shouldBlockSelectedCaseRun}>
-                        {t('editor.runCheck')}
-                      </Button>
+                  <Button onClick={() => setSteps((current) => [...current, { action: 'goto', value: '' }])} disabled={isReadOnly}>
+                    {t('editor.addStep')}
+                  </Button>
                 </Space>
               }
               style={{
@@ -1416,11 +1412,7 @@ export default function TestEditorPage() {
 
                 {steps.length > 0 ? (
                   <StepEditor
-                    databaseConnections={databaseConnections}
-                    projectId={currentProjectId}
-                    defaultDatabaseConnectionId={!isEdit ? searchParams.get('databaseConnectionId') ?? undefined : undefined}
                     steps={steps}
-                    testDataVariableNames={testDataVariableNames}
                     onChange={handleStepsChange}
                     readOnly={isReadOnly}
                     stepIssues={stepIssues}
@@ -1440,15 +1432,6 @@ export default function TestEditorPage() {
                         {t('editor.noStepsDescription')}
                       </Text>
                       <Space wrap>
-                        {!recording ? (
-                          <Button icon={<VideoCameraOutlined />} onClick={handleStartRecording} disabled={isReadOnly}>
-                            {t('editor.startRecording')}
-                          </Button>
-                        ) : (
-                          <Button icon={<StopOutlined />} onClick={handleStopRecording} danger disabled={isReadOnly}>
-                            {t('editor.stopRecording')}
-                          </Button>
-                        )}
                         <Button type="dashed" onClick={() => setSteps([{ action: 'goto', value: '' }])} disabled={isReadOnly}>
                           {t('editor.addStep')}
                         </Button>
@@ -1462,33 +1445,6 @@ export default function TestEditorPage() {
         </Row>
       </Content>
 
-      <div
-        style={{
-          position: 'sticky',
-          bottom: 0,
-          zIndex: 8,
-          marginTop: 12,
-          borderTop: '1px solid #e5e7eb',
-          background: 'rgba(255, 255, 255, 0.96)',
-          backdropFilter: 'blur(14px)',
-          boxShadow: '0 -10px 30px rgba(15, 23, 42, 0.08)'
-        }}
-      >
-        <div style={{ maxWidth: 1180, margin: '0 auto', padding: '14px 32px' }}>
-          <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
-            <Space wrap>
-              <Button onClick={() => confirmLeave(() => navigate(-1))}>{t('common.cancel')}</Button>
-              {exportTrigger}
-            </Space>
-            <Space wrap>
-              <Button onClick={handleValidateAndSave} loading={saving || validating} disabled={isReadOnly || !isDirty || saving || validating || hasTestDataErrors || shouldBlockRunAllCases}>
-                {isEdit ? t('common.saveChanges') : t('editor.createCheck')}
-              </Button>
-            </Space>
-          </Space>
-        </div>
-      </div>
-      <div style={{ height: 96 }} />
       <AppFooter bottomPadding={24} />
       <Modal
         title={t('editor.selectEnvironmentForRecording')}
